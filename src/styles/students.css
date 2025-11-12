@@ -28,14 +28,14 @@ body {
   left: 0;
   right: 0;
   height: 70px;
-  background: #5a67d8;
+  background: #fff;
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 30px;
   z-index: 1000;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.001);
 }
 .top-left {
   display: flex;
@@ -47,6 +47,7 @@ body {
 }
 .uni {
   font-size: 20px;
+  color: #2d3748;
   font-weight: 600;
 }
 .search-box {
@@ -97,14 +98,21 @@ body {
   cursor: pointer;
 }
 .get-in-touch {
-  background: #fff;
-  color: #5a67d8;
+  background:#4299e1;
+  color: #fff;
   border: none;
   padding: 8px 20px;
   border-radius: 8px;
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
+}
+.cont{
+    background-color: #fff;
+    width: 100%;
+    position: relative;
+    left: 280px;
+    top: 90px;
 }
 
 /* ---------- SIDEBAR ---------- */
@@ -114,9 +122,11 @@ body {
   top: 70px;
   width: 260px;
   bottom: 0;
-  background: #4c51bf;
+  background: #fff;
   color: #fff;
   padding-top: 30px;
+  box-shadow: 4px 0 12px rgba(0, 0, 0, 0.008);
+  
 }
 .sidebar ul {
   list-style: none;
@@ -129,12 +139,13 @@ body {
   font-size: 15px;
   cursor: pointer;
   transition: 0.2s;
+  color: #434d5d;
 }
 .sidebar li:hover {
   background: rgba(255, 255, 255, 0.1);
 }
 .sidebar li.active {
-  background: #5a67d8;
+  background: #4299e1;
   border-left: 4px solid #fff;
 }
 .sidebar i {
@@ -593,15 +604,17 @@ body {
   .search-box input {
     padding: 10px 40px 10px 35px;
     border: 1px solid #ddd;
-    border-radius: 8px;
-    width: 250px;
+    border-radius: 40px;
+    width: 400px;
     font-size: 14px;
+    position: relative;
+    left: 80px;
   }
   
   .search-btn {
     position: absolute;
-    right: 8px;
-    background: #5a67d8;
+    left: 430px;
+    background: #fff;
     color: white;
     border: none;
     width: 32px;
@@ -617,7 +630,13 @@ body {
   .search-btn:hover {
     background: #4349b3;
   }
+  .bx-search{
+      color: #929496;
+  }
   
+  .bx-bell{
+      color:  #929496;
+  }
   /* Top Row: Chart | Donuts | Profile */
   .top-row {
     display: flex;
