@@ -34,13 +34,13 @@ export default function TeacherDashboard() {
   ];
 
   const workingHours = [
-    { day: "Mon", hours: 8 },
-    { day: "Tue", hours: 6 },
-    { day: "Wed", hours: 7 },
-    { day: "Thu", hours: 5 },
-    { day: "Fri", hours: 4 },
-    { day: "Sat", hours: 0 },
-    { day: "Sun", hours: 0 },
+    { day: "Mon", hours: 8, online: true },
+    { day: "Tue", hours: 6, online: true },
+    { day: "Wed", hours: 7, online: true },
+    { day: "Thu", hours: 5, online: true },
+    { day: "Fri", hours: 4, online: true },
+    { day: "Sat", hours: 0, online: false },
+    { day: "Sun", hours: 0, online: false },
   ];
 
   const groupChats = [
@@ -124,40 +124,10 @@ export default function TeacherDashboard() {
 
   return (
     <>
-      {/* --------------------------------------------------------------
-          GLOBAL STYLES – plain CSS (no Tailwind, no duplicate rules)
-      -------------------------------------------------------------- */}
-      <style>{`
-        * { box-sizing: border-box; }
-        body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }
-
-        /* 4K baseline */
-        .header { padding:0 48px; }
-        .sidebar { width:${sidebarOpen ? "320px" : "88px"}; padding:40px 0; }
-        .main { margin-left:${sidebarOpen ? "320px" : "88px"}; padding:48px; }
-
-        /* 2560px */
-        @media (max-width:2560px) {
-          .header { padding:0 32px; }
-          .sidebar { padding:32px 0; }
-          .main { padding:32px; }
-        }
-
-        /* 1920px */
-        @media (max-width:1920px) {
-          .header { padding:0 24px; }
-          .sidebar { width:${sidebarOpen ? "280px" : "80px"}; padding:24px 0; }
-          .main { margin-left:${sidebarOpen ? "280px" : "80px"}; padding:24px; }
-        }
-
-        /* 1440px */
-        @media (max-width:1440px) {
-          .main { padding:20px; }
-        }
-      `}</style>
-
       <div
         style={{
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
           backgroundColor: "#f9fafb",
           minHeight: "100vh",
           backgroundImage:
@@ -165,966 +135,1031 @@ export default function TeacherDashboard() {
           backgroundSize: "40px 40px",
         }}
       >
-        {/* ---------- HEADER ---------- */}
-        <header
-          className="header"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: "80px",
-            backgroundColor: "#fff",
-            borderBottom: "1px solid #e5e7eb",
-            display: "flex",
-            alignItems: "center",
-            zIndex: 50,
-            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "40px",
-              flex: 1,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  backgroundColor: "#6d28d9",
-                  borderRadius: 12,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  position: "relative",
-                }}
-              >
-                <div
-                  style={{
-                    width: 28,
-                    height: 28,
-                    border: "4px solid white",
-                    borderTop: "none",
-                    borderLeft: "none",
-                    transform: "rotate(-45deg)",
-                    position: "absolute",
-                  }}
-                />
+        {/* Header */}
+        <header className="header">
+          <div className="header-content">
+            <div className="logo-section">
+              <div className="logo-icon">
+                <div className="logo-shape"></div>
               </div>
-              <span style={{ fontSize: 24, fontWeight: 700, color: "#111827" }}>
-                Axicube
-              </span>
-              <span style={{ fontSize: 14, color: "#6b7280" }}>
-                Available for work
-              </span>
-              <button
-                style={{
-                  backgroundColor: "#f3f4f6",
-                  border: "none",
-                  borderRadius: 8,
-                  padding: "6px 12px",
-                  fontSize: 13,
-                  color: "#374151",
-                }}
-              >
-                Follow
-              </button>
+              <span className="logo-text">Axicube</span>
+              <span className="status">Available for work</span>
+              <button className="follow-btn">Follow</button>
             </div>
-
-            <div style={{ display: "flex", gap: 12, marginLeft: "auto" }}>
-              {[Search, Bell, Menu].map((Icon, i) => (
-                <button
-                  key={i}
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 12,
-                    backgroundColor: "#f3f4f6",
-                    border: "none",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Icon size={20} color="#6b7280" />
-                </button>
-              ))}
-              <button
-                style={{
-                  backgroundColor: "#4f46e5",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 12,
-                  padding: "0 32px",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  height: 44,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                Get in touch
+            <div className="header-actions">
+              <button className="icon-btn">
+                <Search size={20} />
               </button>
+              <button className="icon-btn">
+                <Bell size={20} />
+              </button>
+              <button className="icon-btn">
+                <Menu size={20} />
+              </button>
+              <button className="get-in-touch">Get in touch</button>
             </div>
           </div>
         </header>
 
-        {/* ---------- SIDEBAR ---------- */}
-        <aside
-          className="sidebar"
-          style={{
-            position: "fixed",
-            top: 80,
-            left: 0,
-            height: "calc(100vh - 80px)",
-            backgroundColor: "#fff",
-            borderRight: "1px solid #e5e7eb",
-            transition: "width .3s cubic-bezier(.4,0,.2,1)",
-            boxShadow: "2px 0 10px rgba(0,0,0,.05)",
-          }}
-        >
-          <div style={{ padding: "0 32px", marginBottom: 40 }}>
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 12,
-                backgroundColor: "#f3f4f6",
-                border: "none",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                marginLeft: sidebarOpen ? "auto" : 0,
-              }}
-            >
-              {sidebarOpen ? (
-                <ChevronLeft size={18} color="#6b7280" />
-              ) : (
-                <ChevronRight size={18} color="#6b7280" />
-              )}
-            </button>
-          </div>
-
-          <nav style={{ padding: "0 24px" }}>
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setSelectedMenu(item.id)}
-                  style={{
-                    width: "100%",
-                    padding: sidebarOpen ? "16px 20px" : "16px",
-                    marginBottom: 8,
-                    borderRadius: 16,
-                    backgroundColor:
-                      selectedMenu === item.id ? "#eef2ff" : "transparent",
-                    border: "none",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 16,
-                    color: selectedMenu === item.id ? "#4f46e5" : "#6b7280",
-                    fontSize: 15,
-                    fontWeight: selectedMenu === item.id ? 600 : 500,
-                  }}
-                >
-                  <Icon size={20} />
-                  {sidebarOpen && <span>{item.label}</span>}
-                </button>
-              );
-            })}
-          </nav>
-
-          {sidebarOpen && (
-            <div
-              style={{ position: "absolute", bottom: 40, left: 32, right: 32 }}
-            >
-              <div
-                style={{
-                  backgroundColor: "#eef2ff",
-                  borderRadius: 24,
-                  padding: 32,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 20,
-                  boxShadow: "0 4px 6px -1px rgba(0,0,0,.1)",
-                }}
+        <div className="layout">
+          {/* Sidebar */}
+          <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
+            <div className="sidebar-toggle">
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="toggle-btn"
               >
-                <div
-                  style={{
-                    width: 96,
-                    height: 96,
-                    backgroundColor: "#c7d2fe",
-                    borderRadius: "50%",
-                    backgroundSize: "cover",
-                  }}
-                />
-                <button
-                  style={{
-                    backgroundColor: "#4f46e5",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: 16,
-                    padding: "14px 28px",
-                    fontSize: 15,
-                    fontWeight: 600,
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 10,
-                  }}
-                >
-                  <Plus size={18} /> Create new class chat now
-                </button>
-                <button
-                  style={{
-                    background: "transparent",
-                    color: "#4f46e5",
-                    border: "none",
-                    fontSize: 15,
-                    fontWeight: 600,
-                  }}
-                >
-                  Create class
-                </button>
-              </div>
-              <div
-                style={{
-                  marginTop: 24,
-                  fontSize: 13,
-                  color: "#9ca3af",
-                  textAlign: "center",
-                }}
-              >
-                © Atwood School
-              </div>
+                {sidebarOpen ? (
+                  <ChevronLeft size={18} />
+                ) : (
+                  <ChevronRight size={18} />
+                )}
+              </button>
             </div>
-          )}
-        </aside>
 
-        {/* ---------- MAIN CONTENT ---------- */}
-        <main className="main">
-          {/* Welcome */}
-          <div style={{ marginBottom: 40 }}>
-            <h1
-              style={{
-                fontSize: 36,
-                fontWeight: 700,
-                color: "#111827",
-                margin: "0 0 8px",
-              }}
-            >
-              Welcome back, Anna
-            </h1>
-            <p style={{ fontSize: 18, color: "#6b7280" }}>June 06, Wednesday</p>
-          </div>
-
-          {/* Progress Card */}
-          <div
-            style={{
-              backgroundColor: "#4f46e5",
-              borderRadius: 24,
-              padding: 40,
-              marginBottom: 40,
-              color: "#fff",
-              display: "flex",
-              alignItems: "center",
-              gap: 32,
-              boxShadow: "0 10px 15px -3px rgba(79,70,229,.3)",
-            }}
-          >
-            <div
-              style={{
-                width: 140,
-                height: 140,
-                backgroundColor: "rgba(255,255,255,.15)",
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <svg
-                width={100}
-                height={100}
-                viewBox="0 0 36 36"
-                style={{ transform: "rotate(-90deg)" }}
-              >
-                <circle
-                  cx={18}
-                  cy={18}
-                  r={16}
-                  fill="none"
-                  stroke="rgba(255,255,255,.3)"
-                  strokeWidth={3.5}
-                />
-                <circle
-                  cx={18}
-                  cy={18}
-                  r={16}
-                  fill="none"
-                  stroke="#fff"
-                  strokeWidth={3.5}
-                  strokeDasharray="75 100"
-                />
-              </svg>
-              <div
-                style={{
-                  position: "absolute",
-                  fontSize: 24,
-                  fontWeight: 700,
-                }}
-              >
-                73%
-              </div>
-            </div>
-            <div>
-              <h2 style={{ fontSize: 28, fontWeight: 700, margin: "0 0 12px" }}>
-                Your students average progress is 73%
-              </h2>
-              <p style={{ fontSize: 18, opacity: 0.95 }}>
-                Level up your students to improve your teacher rank!
-              </p>
-            </div>
-          </div>
-
-          {/* Top Grid */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gap: 32,
-              marginBottom: 40,
-            }}
-          >
-            {/* Working Hours */}
-            <div
-              style={{
-                backgroundColor: "#fff",
-                borderRadius: 24,
-                padding: 32,
-                boxShadow: "0 4px 6px -1px rgba(0,0,0,.1)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 32,
-                }}
-              >
-                <h3 style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>
-                  Working Hours
-                </h3>
-                <span style={{ fontSize: 15, color: "#6b7280" }}>
-                  01 - 08 June 2022
-                </span>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "flex-end",
-                  gap: 16,
-                  height: 140,
-                  marginBottom: 24,
-                }}
-              >
-                {workingHours.map((d, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      flex: 1,
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: 12,
-                    }}
+            <nav className="sidebar-nav">
+              {menuItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setSelectedMenu(item.id)}
+                    className={`nav-item ${
+                      selectedMenu === item.id ? "active" : ""
+                    }`}
                   >
-                    <div
-                      style={{
-                        height: `${d.hours * 17.5}px`,
-                        width: "100%",
-                        backgroundColor: d.hours ? "#10b981" : "#e5e7eb",
-                        borderRadius: 6,
-                      }}
-                    />
-                    <span style={{ fontSize: 13, color: "#6b7280" }}>
-                      {d.day}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 15,
-                  color: "#6b7280",
-                }}
-              >
-                <span>Total</span>
-                <span>38h 15m</span>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 24,
-                  marginTop: 12,
-                  fontSize: 15,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div
-                    style={{
-                      width: 14,
-                      height: 14,
-                      backgroundColor: "#10b981",
-                      borderRadius: 3,
-                    }}
-                  />
-                  <span style={{ color: "#6b7280" }}>Online</span>
+                    <div className="nav-icon">
+                      <Icon size={20} />
+                    </div>
+                    {sidebarOpen && <span>{item.label}</span>}
+                  </button>
+                );
+              })}
+            </nav>
+
+            {sidebarOpen && (
+              <div className="sidebar-footer">
+                <div className="create-card">
+                  <div className="avatar-placeholder"></div>
+                  <button className="create-chat-btn">
+                    <Plus size={18} /> Create new class chat now
+                  </button>
+                  <button className="create-class-link">Create class</button>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div
-                    style={{
-                      width: 14,
-                      height: 14,
-                      backgroundColor: "#e5e7eb",
-                      borderRadius: 3,
-                    }}
+                <div className="copyright">© Atwood School</div>
+              </div>
+            )}
+          </aside>
+
+          {/* Main Content */}
+          <main className="main-content">
+            {/* Welcome */}
+            <div className="welcome">
+              <h1>Welcome back, Anna</h1>
+              <p>June 06, Wednesday</p>
+            </div>
+
+            {/* Progress Card */}
+            <div className="progress-card">
+              <div className="progress-ring">
+                <svg viewBox="0 0 36 36" className="ring-svg">
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r="16"
+                    fill="none"
+                    stroke="rgba(255,255,255,0.3)"
+                    strokeWidth="3.5"
                   />
-                  <span style={{ color: "#6b7280" }}>Offline</span>
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r="16"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="3.5"
+                    strokeDasharray="75 100"
+                  />
+                </svg>
+                <div className="ring-text">73%</div>
+              </div>
+              <div>
+                <h2>Your students average progress is 73%</h2>
+                <p>Level up your students to improve your teacher rank!</p>
+              </div>
+            </div>
+
+            {/* Top Grid */}
+            <div className="top-grid">
+              {/* Working Hours */}
+              <div className="card working-hours">
+                <div className="card-header">
+                  <h3>Working Hours</h3>
+                  <span>01 - 08 June 2022</span>
+                </div>
+                <div className="bar-chart">
+                  {workingHours.map((day, i) => (
+                    <div key={i} className="bar-item">
+                      <div
+                        className="bar"
+                        style={{
+                          height: `${day.hours * 17.5}px`,
+                          backgroundColor:
+                            day.hours > 0 ? "#10b981" : "#e5e7eb",
+                        }}
+                      ></div>
+                      <span>{day.day}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="total">
+                  Total <strong>38h 15m</strong>
+                </div>
+                <div className="legend">
+                  <div>
+                    <div className="dot online"></div> Online
+                  </div>
+                  <div>
+                    <div className="dot offline"></div> Offline
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Group Chats */}
-            <div
-              style={{
-                backgroundColor: "#fff",
-                borderRadius: 24,
-                padding: 32,
-                boxShadow: "0 4px 6px -1px rgba(0,0,0,.1)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 32,
-                }}
-              >
-                <h3 style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>
-                  Group chats
-                </h3>
-                <a
-                  href="#"
-                  style={{
-                    fontSize: 15,
-                    color: "#6366f1",
-                    textDecoration: "none",
-                  }}
-                >
-                  View all
-                </a>
-              </div>
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 20 }}
-              >
-                {groupChats.map((c) => (
-                  <div
-                    key={c.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 16,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 56,
-                        height: 56,
-                        backgroundColor: "#f3f4f6",
-                        borderRadius: 16,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <MessageSquare size={24} color="#6b7280" />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginBottom: 4,
-                        }}
-                      >
-                        <h4
-                          style={{
-                            fontSize: 15,
-                            fontWeight: 600,
-                            color: "#111827",
-                            margin: 0,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            maxWidth: 150,
-                          }}
-                        >
-                          {c.name}
-                        </h4>
-                        <span style={{ fontSize: 13, color: "#9ca3af" }}>
-                          {c.time}
-                        </span>
+              {/* Group Chats */}
+              <div className="card group-chats">
+                <div className="card-header">
+                  <h3>Group chats</h3>
+                  <a href="#" className="view-all">
+                    View all
+                  </a>
+                </div>
+                <div className="chat-list">
+                  {groupChats.map((chat) => (
+                    <div key={chat.id} className="chat-item">
+                      <div className="chat-icon">
+                        <MessageSquare size={24} />
                       </div>
-                      <p
-                        style={{
-                          fontSize: 14,
-                          color: "#6b7280",
-                          margin: 0,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {c.message}
-                      </p>
-                    </div>
-                    {c.unread > 0 && (
-                      <div
-                        style={{
-                          width: 24,
-                          height: 24,
-                          backgroundColor: "#ef4444",
-                          borderRadius: "50%",
-                          color: "#fff",
-                          fontSize: 13,
-                          fontWeight: 600,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        {c.unread}
+                      <div className="chat-info">
+                        <div className="chat-header">
+                          <h4>{chat.name}</h4>
+                          <span>{chat.time}</span>
+                        </div>
+                        <p>{chat.message}</p>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Calendar */}
-            <div
-              style={{
-                backgroundColor: "#fff",
-                borderRadius: 24,
-                padding: 32,
-                boxShadow: "0 4px 6px -1px rgba(0,0,0,.1)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 32,
-                }}
-              >
-                <span style={{ fontSize: 15, color: "#6b7280" }}>
-                  June 2022
-                </span>
-                <div style={{ display: "flex", gap: 12 }}>
-                  {[ChevronLeft, ChevronRight].map((Icon, i) => (
-                    <button
-                      key={i}
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 12,
-                        backgroundColor: "#f3f4f6",
-                        border: "none",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Icon size={18} color="#6b7280" />
-                    </button>
+                      {chat.unread > 0 && (
+                        <div className="unread-badge">{chat.unread}</div>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(7,1fr)",
-                  gap: 12,
-                  marginBottom: 12,
-                }}
-              >
-                {["S", "M", "T", "W", "T", "F", "S"].map((d) => (
-                  <div
-                    key={d}
-                    style={{
-                      textAlign: "center",
-                      fontSize: 13,
-                      color: "#9ca3af",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {d}
+
+              {/* Calendar */}
+              <div className="card calendar">
+                <div className="card-header">
+                  <span>June 2022</span>
+                  <div className="nav-buttons">
+                    <button>
+                      <ChevronLeft size={18} />
+                    </button>
+                    <button>
+                      <ChevronRight size={18} />
+                    </button>
                   </div>
-                ))}
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(7,1fr)",
-                  gap: 12,
-                }}
-              >
-                {Array.from({ length: 35 }, (_, i) => {
-                  const day = i - 4;
-                  const current = day === 6;
-                  const event = [6, 13, 16, 20, 27].includes(day);
-                  return (
-                    <div
-                      key={i}
-                      style={{
-                        height: 40,
-                        borderRadius: 12,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 14,
-                        fontWeight: current ? 700 : 500,
-                        color: day > 0 && day <= 30 ? "#111827" : "transparent",
-                        backgroundColor: current
-                          ? "#4f46e5"
-                          : event
-                          ? "#eef2ff"
-                          : "transparent",
-                        color: current ? "#fff" : event ? "#4f46e5" : "#111827",
-                      }}
-                    >
-                      {day > 0 && day <= 30 && day}
+                </div>
+                <div className="calendar-grid">
+                  {["S", "M", "T", "W", "T", "F", "S"].map((d) => (
+                    <div key={d} className="day-header">
+                      {d}
                     </div>
-                  );
-                })}
+                  ))}
+                  {Array.from({ length: 35 }, (_, i) => {
+                    const day = i - 4;
+                    const isCurrent = day === 6;
+                    const hasEvent = [6, 13, 16, 20, 27].includes(day);
+                    return (
+                      <div
+                        key={i}
+                        className={`calendar-day ${
+                          isCurrent ? "current" : ""
+                        } ${hasEvent ? "event" : ""}`}
+                      >
+                        {day > 0 && day <= 30 && day}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Bottom Grid */}
-          <div
-            style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 32 }}
-          >
-            {/* Student Tests */}
-            <div
-              style={{
-                backgroundColor: "#fff",
-                borderRadius: 24,
-                padding: 32,
-                boxShadow: "0 4px 6px -1px rgba(0,0,0,.1)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 32,
-                }}
-              >
-                <h3 style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>
-                  Student tests
-                </h3>
-                <a
-                  href="#"
-                  style={{
-                    fontSize: 15,
-                    color: "#6366f1",
-                    textDecoration: "none",
-                  }}
-                >
-                  All tests
-                </a>
-              </div>
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 20 }}
-              >
-                {studentTests.map((t) => (
-                  <div
-                    key={t.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 20,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 56,
-                        height: 56,
-                        backgroundColor: "#f3f4f6",
-                        borderRadius: 16,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <FileText size={24} color="#6b7280" />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <h4
-                        style={{
-                          fontSize: 15,
-                          fontWeight: 600,
-                          color: "#111827",
-                          margin: "0 0 6px",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {t.name}
-                      </h4>
+            {/* Bottom Grid */}
+            <div className="bottom-grid">
+              {/* Student Tests */}
+              <div className="card student-tests">
+                <div className="card-header">
+                  <h3>Student tests</h3>
+                  <a href="#" className="view-all">
+                    All tests
+                  </a>
+                </div>
+                <div className="test-list">
+                  {studentTests.map((test) => (
+                    <div key={test.id} className="test-item">
+                      <div className="test-icon">
+                        <FileText size={24} />
+                      </div>
+                      <div className="test-info">
+                        <h4>{test.name}</h4>
+                        <div className="test-meta">
+                          <span>
+                            <Clock size={16} /> Deadline {test.deadline}
+                          </span>
+                          <span>
+                            <Users size={16} /> {test.student}
+                          </span>
+                        </div>
+                      </div>
                       <div
-                        style={{
-                          display: "flex",
-                          gap: 24,
-                          fontSize: 14,
-                          color: "#6b7280",
-                        }}
+                        className={`status ${test.status
+                          .toLowerCase()
+                          .replace(" ", "-")}`}
                       >
-                        <span
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                          }}
-                        >
-                          <Clock size={16} /> Deadline {t.deadline}
-                        </span>
-                        <span
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                          }}
-                        >
-                          <Users size={16} /> {t.student}
-                        </span>
+                        {test.status === "Active" && (
+                          <CheckCircle size={22} color="#10b981" />
+                        )}
+                        {test.status === "Reviewed" && (
+                          <CheckCircle size={22} color="#f59e0b" />
+                        )}
+                        {test.status === "Not reviewed" && (
+                          <AlertCircle size={22} color="#ef4444" />
+                        )}
+                        <span>{test.status}</span>
                       </div>
                     </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                      }}
-                    >
-                      {t.status === "Active" && (
-                        <CheckCircle size={22} color="#10b981" />
-                      )}
-                      {t.status === "Reviewed" && (
-                        <CheckCircle size={22} color="#f59e0b" />
-                      )}
-                      {t.status === "Not reviewed" && (
-                        <AlertCircle size={22} color="#ef4444" />
-                      )}
-                      <span
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 600,
-                          color:
-                            t.status === "Active"
-                              ? "#10b981"
-                              : t.status === "Reviewed"
-                              ? "#f59e0b"
-                              : "#ef4444",
-                        }}
-                      >
-                        {t.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Upcoming Classes */}
-            <div
-              style={{
-                backgroundColor: "#fff",
-                borderRadius: 24,
-                padding: 32,
-                boxShadow: "0 4px 6px -1px rgba(0,0,0,.1)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 32,
-                }}
-              >
-                <h3 style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>
-                  Upcoming Classes
-                </h3>
-                <a
-                  href="#"
-                  style={{
-                    fontSize: 15,
-                    color: "#6366f1",
-                    textDecoration: "none",
-                  }}
-                >
-                  View all
-                </a>
-              </div>
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 20 }}
-              >
-                {upcomingClasses.map((c) => (
-                  <div
-                    key={c.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 20,
-                      padding: 20,
-                      backgroundColor: "#f9fafb",
-                      borderRadius: 16,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 56,
-                        height: 56,
-                        backgroundColor:
-                          c.status === "active" ? "#10b981" : "#e5e7eb",
-                        borderRadius: 16,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {c.status === "active" ? (
-                        <CheckCircle size={24} color="#fff" />
-                      ) : (
-                        <Clock size={24} color="#6b7280" />
-                      )}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <h4
-                        style={{
-                          fontSize: 15,
-                          fontWeight: 600,
-                          color: "#111827",
-                          margin: "0 0 6px",
-                        }}
-                      >
-                        {c.time} {c.name}
-                      </h4>
-                      <p style={{ fontSize: 14, color: "#6b7280", margin: 0 }}>
-                        {c.location}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Fixed Profile Card */}
-          <div
-            style={{
-              position: "fixed",
-              top: 100,
-              right: 48,
-              width: 320,
-              backgroundColor: "#fff",
-              borderRadius: 24,
-              padding: 32,
-              boxShadow: "0 10px 15px -3px rgba(0,0,0,.1)",
-              display: "flex",
-              alignItems: "center",
-              gap: 20,
-              zIndex: 40,
-            }}
-          >
-            <div
-              style={{
-                width: 72,
-                height: 72,
-                backgroundColor: "#e0e7ff",
-                borderRadius: "50%",
-                backgroundSize: "cover",
-              }}
-            />
-            <div style={{ flex: 1 }}>
-              <h4
-                style={{
-                  fontSize: 18,
-                  fontWeight: 700,
-                  color: "#111827",
-                  margin: "0 0 6px",
-                }}
-              >
-                Anna Wilson
-              </h4>
-              <p
-                style={{
-                  fontSize: 14,
-                  color: "#6b7280",
-                  margin: "0 0 12px",
-                }}
-              >
-                annawilson@gmail.com
-              </p>
-              <div style={{ display: "flex", gap: 24, fontSize: 14 }}>
-                <div>
-                  <span style={{ fontWeight: 700, color: "#111827" }}>
-                    Rank 14
-                  </span>{" "}
-                  / 100
+                  ))}
                 </div>
-                <div>
-                  <span style={{ fontWeight: 700, color: "#111827" }}>
-                    Classes: 7
-                  </span>
+              </div>
+
+              {/* Upcoming Classes */}
+              <div className="card upcoming-classes">
+                <div className="card-header">
+                  <h3>Upcoming Classes</h3>
+                  <a href="#" className="view-all">
+                    View all
+                  </a>
+                </div>
+                <div className="class-list">
+                  {upcomingClasses.map((cls) => (
+                    <div key={cls.id} className="class-item">
+                      <div className={`class-status ${cls.status}`}>
+                        {cls.status === "active" ? (
+                          <CheckCircle size={24} />
+                        ) : (
+                          <Clock size={24} />
+                        )}
+                      </div>
+                      <div>
+                        <h4>
+                          {cls.time} {cls.name}
+                        </h4>
+                        <p>{cls.location}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
-            <button
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 12,
-                backgroundColor: "#f3f4f6",
-                border: "none",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <ArrowRight size={18} color="#6b7280" />
+          </main>
+
+          {/* Profile Card */}
+          <div className="profile-card">
+            <div className="profile-avatar"></div>
+            <div className="profile-info">
+              <h4>Anna Wilson</h4>
+              <p>annawilson@gmail.com</p>
+              <div className="stats">
+                <div>
+                  <strong>Rank 14</strong> / 100
+                </div>
+                <div>
+                  <strong>Classes: 7</strong>
+                </div>
+              </div>
+            </div>
+            <button className="profile-arrow">
+              <ArrowRight size={18} />
             </button>
           </div>
-        </main>
+        </div>
+
+        <style jsx>{`
+          /* Base Styles */
+          .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 80px;
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            z-index: 50;
+            padding: 0 48px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+          }
+          .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+          }
+          .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+          }
+          .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: #6d28d9;
+            border-radius: 12px;
+            position: relative;
+          }
+          .logo-shape {
+            width: 28px;
+            height: 28px;
+            border: 4px solid white;
+            border-top: none;
+            border-left: none;
+            transform: rotate(-45deg);
+            position: absolute;
+            top: 10px;
+            left: 10px;
+          }
+          .logo-text {
+            font-size: 24px;
+            font-weight: 700;
+            color: #111827;
+            letter-spacing: -0.5px;
+          }
+          .status {
+            font-size: 14px;
+            color: #6b7280;
+            font-weight: 500;
+          }
+          .follow-btn {
+            background: #f3f4f6;
+            border: none;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 13px;
+            color: #374151;
+            font-weight: 500;
+          }
+          .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+          }
+          .icon-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: #f3f4f6;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
+          }
+          .get-in-touch {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 0 32px;
+            height: 44px;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+
+          .layout {
+            display: flex;
+            margin-top: 80px;
+          }
+          .sidebar {
+            width: 320px;
+            background: white;
+            border-right: 1px solid #e5e7eb;
+            height: calc(100vh - 80px);
+            position: fixed;
+            left: 0;
+            top: 80px;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 40px 0;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
+            z-index: 40;
+          }
+          .sidebar:not(.open) {
+            width: 88px;
+          }
+          .sidebar-toggle {
+            padding: 0 32px;
+            margin-bottom: 40px;
+          }
+          .toggle-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: #f3f4f6;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: auto;
+            color: #6b7280;
+          }
+          .sidebar-nav {
+            padding: 0 24px;
+          }
+          .nav-item {
+            width: 100%;
+            padding: 16px 20px;
+            margin-bottom: 8px;
+            border-radius: 16px;
+            background: transparent;
+            border: none;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            color: #6b7280;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.2s;
+          }
+          .nav-item.active,
+          .nav-item:hover {
+            background: #eef2ff;
+            color: #4f46e5;
+            font-weight: 600;
+          }
+          .nav-icon {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .sidebar-footer {
+            position: absolute;
+            bottom: 40px;
+            left: 32px;
+            right: 32px;
+          }
+          .create-card {
+            background: #eef2ff;
+            border-radius: 24px;
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+          }
+          .avatar-placeholder {
+            width: 96px;
+            height: 96px;
+            background: #c7d2fe;
+            border-radius: 50%;
+          }
+          .create-chat-btn {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            border-radius: 16px;
+            padding: 14px 28px;
+            font-size: 15px;
+            font-weight: 600;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
+          }
+          .create-class-link {
+            background: transparent;
+            color: #4f46e5;
+            border: none;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 0;
+          }
+          .copyright {
+            margin-top: 24px;
+            font-size: 13px;
+            color: #9ca3af;
+            text-align: center;
+            font-weight: 500;
+          }
+
+          .main-content {
+            margin-left: 320px;
+            padding: 48px;
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            flex: 1;
+          }
+          .sidebar:not(.open) ~ .main-content {
+            margin-left: 88px;
+          }
+
+          .welcome h1 {
+            font-size: 36px;
+            font-weight: 700;
+            color: #111827;
+            margin: 0 0 8px;
+            letter-spacing: -0.5px;
+          }
+          .welcome p {
+            font-size: 18px;
+            color: #6b7280;
+            margin: 0;
+            font-weight: 500;
+          }
+
+          .progress-card {
+            background: #4f46e5;
+            border-radius: 24px;
+            padding: 15px;
+            margin: 40px 0;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 32px;
+            box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3),
+              0 4px 6px -2px rgba(79, 70, 229, 0.2);
+            width: fit-content;
+          }
+          .progress-ring {
+            width: 140px;
+            height: 140px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+          }
+          .ring-svg {
+            transform: rotate(-90deg);
+            width: 100px;
+            height: 100px;
+          }
+          .ring-text {
+            position: absolute;
+            font-size: 24px;
+            font-weight: 700;
+          }
+          .progress-card h2 {
+            font-size: 28px;
+            font-weight: 700;
+            margin: 0 0 12px;
+            letter-spacing: -0.5px;
+          }
+          .progress-card p {
+            font-size: 18px;
+            margin: 0;
+            opacity: 0.95;
+            font-weight: 500;
+          }
+
+          .top-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr 1fr;
+            gap: 32px;
+            margin-bottom: 40px;
+          }
+          .card {
+            background: white;
+            border-radius: 24px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+              0 2px 4px -1px rgba(0, 0, 0, 0.06);
+          }
+          .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+          }
+          .card-header h3 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #111827;
+            margin: 0;
+          }
+          .view-all {
+            font-size: 15px;
+            color: #6366f1;
+            text-decoration: none;
+            font-weight: 600;
+          }
+
+          .bar-chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 16px;
+            height: 140px;
+            margin-bottom: 24px;
+          }
+          .bar-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+          }
+          .bar {
+            width: 40%;
+            border-radius: 6px;
+            transition: height 0.3s;
+          }
+          .total {
+            display: flex;
+            justify-content: space-between;
+            font-size: 15px;
+            color: #6b7280;
+            font-weight: 500;
+            margin-top: 20px;
+          }
+          .legend {
+            display: flex;
+            gap: 24px;
+            margin-top: 12px;
+            font-size: 15px;
+            color: #6b7280;
+            font-weight: 500;
+          }
+          .dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            display: inline-block;
+            margin-right: 8px;
+          }
+          .dot.online {
+            background: #10b981;
+          }
+          .dot.offline {
+            background: #e5e7eb;
+          }
+
+          .chat-list {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+          }
+          .chat-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 4px 0;
+          }
+          .chat-icon {
+            width: 56px;
+            height: 56px;
+            background: #f3f4f6;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            color: #6b7280;
+          }
+          .chat-info {
+            flex: 1;
+            min-width: 0;
+          }
+          .chat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 4px;
+          }
+          .chat-header h4 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #111827;
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 150px;
+          }
+          .chat-header span {
+            font-size: 13px;
+            color: #9ca3af;
+            font-weight: 500;
+          }
+          .chat-info p {
+            font-size: 14px;
+            color: #6b7280;
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .unread-badge {
+            width: 24px;
+            height: 24px;
+            background: #ef4444;
+            border-radius: 50%;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+          }
+
+          .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            margin-bottom: 12px;
+          }
+          .day-header {
+            text-align: center;
+            font-size: 13px;
+            color: #9ca3af;
+            font-weight: 600;
+          }
+          .calendar-day {
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 500;
+          }
+          .calendar-day.current {
+            background: #4f46e5;
+            color: white;
+            font-weight: 700;
+          }
+          .calendar-day.event {
+            background: #eef2ff;
+            color: #4f46e5;
+          }
+
+          .bottom-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 32px;
+            align-items: start;
+          }
+          .test-list,
+          .class-list {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+          }
+          .test-item,
+          .class-item {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 8px 0;
+          }
+          .test-icon {
+            width: 56px;
+            height: 56px;
+            background: #f3f4f6;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
+            flex-shrink: 0;
+          }
+          .test-info h4 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #111827;
+            margin: 0 0 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .test-meta {
+            display: flex;
+            gap: 24px;
+            font-size: 14px;
+            color: #6b7280;
+            font-weight: 500;
+          }
+          .test-meta span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            font-weight: 600;
+          }
+          .status.active {
+            color: #10b981;
+          }
+          .status.reviewed {
+            color: #f59e0b;
+          }
+          .status.not-reviewed {
+            color: #ef4444;
+          }
+
+          .class-status {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+          }
+          .class-status.active {
+            background: #10b981;
+            color: white;
+          }
+          .class-status.upcoming {
+            background: #e5e7eb;
+            color: #6b7280;
+          }
+          .class-item h4 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #111827;
+            margin: 0 0 6px;
+          }
+          .class-item p {
+            font-size: 14px;
+            color: #6b7280;
+            margin: 0;
+            font-weight: 500;
+          }
+
+          .profile-card {
+            position: fixed;
+            top: 100px;
+            right: 48px;
+            width: 320px;
+            background: white;
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+              0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            z-index: 40;
+          }
+          .profile-avatar {
+            width: 72px;
+            height: 72px;
+            background: #e0e7ff;
+            border-radius: 50%;
+            flex-shrink: 0;
+          }
+          .profile-info h4 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #111827;
+            margin: 0 0 6px;
+          }
+          .profile-info p {
+            font-size: 14px;
+            color: #6b7280;
+            margin: 0 0 12px;
+            font-weight: 500;
+          }
+          .stats {
+            display: flex;
+            gap: 24px;
+            font-size: 14px;
+          }
+          .stats strong {
+            color: #111827;
+            font-weight: 700;
+          }
+          .profile-arrow {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: #f3f4f6;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
+            flex-shrink: 0;
+          }
+
+          /* Responsive */
+          @media (max-width: 1440px) {
+            .header {
+              padding: 0 32px;
+            }
+            .main-content {
+              padding: 32px;
+            }
+            .sidebar {
+              width: 280px;
+              padding: 32px 0;
+            }
+            .sidebar:not(.open) {
+              width: 80px;
+            }
+            .main-content {
+              margin-left: 280px;
+            }
+            .sidebar:not(.open) ~ .main-content {
+              margin-left: 80px;
+            }
+            .top-grid {
+              grid-template-columns: 1fr 1.3fr 1fr;
+              gap: 24px;
+            }
+          }
+
+          @media (max-width: 1024px) {
+            .top-grid {
+              grid-template-columns: 1fr;
+            }
+            .bottom-grid {
+              grid-template-columns: 1fr;
+            }
+            .progress-card {
+              width: 100%;
+            }
+          }
+
+          @media (max-width: 768px) {
+            .header {
+              padding: 0 16px;
+            }
+            .main-content {
+              padding: 16px;
+              margin-left: 80px !important;
+            }
+            .sidebar {
+              width: 80px;
+              padding: 16px 0;
+            }
+            .sidebar.open {
+              width: 100%;
+            }
+            .welcome h1 {
+              font-size: 28px;
+            }
+            .progress-card {
+              flex-direction: column;
+              text-align: center;
+              gap: 16px;
+              padding: 24px;
+            }
+            .progress-ring {
+              width: 120px;
+              height: 120px;
+            }
+          }
+
+          @media (max-width: 640px) {
+            .header-actions {
+              gap: 8px;
+            }
+            .get-in-touch {
+              display: none;
+            }
+            .profile-card {
+              position: relative;
+              top: 0;
+              right: 0;
+              width: 100%;
+              margin: 24px 0;
+            }
+          }
+        `}</style>
       </div>
     </>
   );
