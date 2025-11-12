@@ -856,6 +856,7 @@ export default function TeacherDashboard() {
             align-items: center;
             gap: 12px;
             min-width: 0;
+            height: 100px;
           }
           .bar {
             width: 40%;
@@ -1322,6 +1323,7 @@ export default function TeacherDashboard() {
               flex-direction: column;
               text-align: center;
               gap: 12px;
+              display: none;
             }
             .profile-avatar {
               width: 56px;
