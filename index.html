@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vite + React + TS</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx">
+      document.addEventListener("DOMContentLoaded", function() {
+        const canvas = document.getElementById('progressChart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#5a67d8';
+        ctx.beginPath();
+        ctx.moveTo(30, 90);
+        ctx.quadraticCurveTo(80, 60, 130, 70);
+        ctx.quadraticCurveTo(180, 80, 230, 50);
+        ctx.quadraticCurveTo(280, 30, 330, 65);
+        ctx.quadraticCurveTo(360, 85, 380, 75);
+        ctx.stroke();
+      });
+    </script>
+  </body>
+</html>

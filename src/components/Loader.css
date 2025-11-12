@@ -1,0 +1,43 @@
+/* src/components/Loader.css */
+.loader-inline,
+.loader-fullscreen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loader-fullscreen {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.92);
+  z-index: 9999;
+  backdrop-filter: blur(4px);
+}
+
+.loader {
+  position: relative;
+  width: var(--loader-size, 60px);
+  height: var(--loader-size, 60px);
+}
+
+.dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  animation: pulse 1.4s ease-in-out infinite both;
+}
+
+.dot-1 { background:#4fd1c5; top:24px; left:0px;   animation-delay:0s; }
+.dot-2 { background:#68d391; top:0px;  left:12px; animation-delay:.1s; }
+.dot-3 { background:#4fd1c5; top:12px; left:24px; animation-delay:.2s; }
+.dot-4 { background:#fbbf24; top:36px; left:12px; animation-delay:.3s; }
+.dot-5 { background:#f56565; top:24px; left:36px; animation-delay:.4s; }
+
+@keyframes pulse {
+  0%, 100% { transform: translateY(0) scale(1); opacity: .7; }
+  50%      { transform: translateY(-6px) scale(1.15); opacity: 1; }
+}
+
+@media (max-width: 480px) { .loader-inline { --loader-size: 48px; } }
+@media (min-width: 1920px) { .loader-inline { --loader-size: 80px; } }

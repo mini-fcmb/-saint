@@ -1,0 +1,308 @@
+/* src/styles/signup.css */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.signup-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  z-index: 9999;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background-color:#f8fbfc;
+  ;
+  opacity: 0.96;
+  backdrop-filter: blur(6px);
+}
+
+/* Compact card */
+.signup-card {
+  position: relative;
+  background: rgb(255, 255, 255);
+  border-radius: 24px;
+  width: 90%;
+  max-width: 380px;
+  padding: 24px 20px;               
+  color: #fff;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  max-height: 96vh;                 
+  overflow-y: hidden;                 
+}
+
+.close-btn {
+  position: absolute;
+  top: 28px;
+  right: 14px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: rgb(131, 128, 128);
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.close-btn:hover {
+  background: rgba(40, 38, 38, 0.1);
+  color:rgb(19, 18, 18);
+}
+
+/* Compact tabs */
+.tabs {
+  display: flex;
+  background: rgba(88, 86, 86, 0.08);
+  border-radius: 50px;
+  border: 1px solid rgb(221, 216, 216);
+  padding: 3px;
+  margin-bottom: 16px;
+  margin-left: -4px;
+  width: fit-content;
+}
+.tab {
+  flex: none;
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 7px 14px;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: 0.2s;
+  min-width: 74px;
+}
+.tab.active {
+  background:rgb(47, 47, 244);
+  color:#f1f1f1;
+  font-weight: 600;
+}
+
+/* Compact form */
+.signup-form h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 14px;
+  text-align: left;
+}
+
+
+.signup-form input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(89, 88, 88, 0.15);
+  border-radius: 12px;
+  padding: 10px 12px;        
+  color: #fff;
+  font-size: 14px;           
+  outline: none;
+  transition: 0.2s;
+}
+.signup-form input::placeholder {
+  color: #888;
+  font-size: 13.5px;
+}
+.signup-form input:focus {
+  border-color: #6c5ce7;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Name row */
+.name-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* Phone row */
+.phone-row {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(89, 88, 88, 0.15);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  height: 5%;
+}
+.phone-row .country {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  color: #ccc;
+  font-size: 13.5px;
+}
+.phone-row .country img {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.phone-row input {
+  border: none;
+  background: transparent;
+  flex: 1;
+  padding: 10px 0 10px 6px;  /* Reduced padding */
+  font-size: 14px;
+}
+
+/* Tight spacing */
+.signup-form > input,
+.signup-form > .name-row,
+.signup-form > .phone-row {
+  margin-bottom: 12px;
+}
+
+/* Create button */
+.create-btn {
+  width: 100%;
+  background: rgb(47, 47, 244);
+  color:#f1f1f1;
+  font-weight: 600;
+  font-size: 14.5px;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: 0.2s;
+}
+.create-btn:hover {
+  background: rgb(76, 95, 103);
+}
+
+/* Divider */
+.divider {
+  text-align: center;
+  margin: 9px 0 10px;
+  position: relative;
+  color: #888;
+  font-size: 11.5px;
+}
+.divider::before {
+  content: "";
+  position: absolute;
+  inset: 50% 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+}
+.divider span {
+  background: rgba(30, 30, 46, 0.96);
+  padding: 0 10px;
+}
+
+/* Social buttons */
+.social-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.social {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background:  rgba(29, 27, 27, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.social:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color:rgb(47, 47, 244) ;
+}
+.social img {
+  width: 20px;
+  height: 20px;
+}
+
+/* Terms */
+.terms {
+  text-align: center;
+  font-size: 11.5px;
+  color: #888;
+  line-height: 1.4;
+}
+.terms a {
+  color: rgb(47, 47, 244);
+  text-decoration: none;
+}
+.terms a:hover {
+  text-decoration: underline;
+}
+
+/* Mobile */
+/* Mobile */
+@media (max-width: 480px) {
+  .signup-card {
+    width: 70%;             /* make it take most of the screen */
+    max-width: none;        /* remove fixed max-width */
+    padding: 12px 14px;     /* smaller padding */
+    border-radius: 16px;
+    max-height: 90vh;       /* ensure it doesn’t overflow screen */
+    overflow-y: hidden;       /* allow scroll if content too tall */
+  }
+
+  .name-row {
+    grid-template-columns: 2fr;  /* stack name inputs vertically */
+    gap: 8px;
+  }
+
+  .tab {
+    font-size: 9.5px;
+    padding: 6px 10px;
+    min-width: 60px;  /* smaller tabs to fit better */
+  }
+
+  .signup-form input,
+  .phone-row input {
+    padding: 8px 10px;  /* reduce input padding */
+    height: 24px;
+    margin-top: 0px;
+  }
+
+  .phone-row {
+    height: 24px;           /* let height grow with content */
+    padding: 3px 0;
+  }
+
+  .create-btn {
+    padding: 8px;
+    font-size: 11.5px;
+  }
+
+  .social {
+    width: 30px;
+    height: 30px;
+  }
+
+  .divider {
+    font-size: 8px;
+  }
+
+  .terms {
+    font-size: 8px;
+  }
+  .close-btn{
+    position: absolute;
+    top: 14px;
+  }
+}
