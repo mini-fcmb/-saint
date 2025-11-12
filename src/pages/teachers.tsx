@@ -14,13 +14,10 @@ import {
   ChevronRight,
   ChevronLeft,
   Clock,
-  BarChart3,
   Plus,
-  Eye,
-  Download,
   CheckCircle,
   AlertCircle,
-  XCircle,
+  ArrowRight,
 } from "lucide-react";
 
 export default function TeacherDashboard() {
@@ -127,81 +124,110 @@ export default function TeacherDashboard() {
 
   return (
     <>
+      {/* --------------------------------------------------------------
+          GLOBAL STYLES – plain CSS (no Tailwind, no duplicate rules)
+      -------------------------------------------------------------- */}
+      <style>{`
+        * { box-sizing: border-box; }
+        body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }
+
+        /* 4K baseline */
+        .header { padding:0 48px; }
+        .sidebar { width:${sidebarOpen ? "320px" : "88px"}; padding:40px 0; }
+        .main { margin-left:${sidebarOpen ? "320px" : "88px"}; padding:48px; }
+
+        /* 2560px */
+        @media (max-width:2560px) {
+          .header { padding:0 32px; }
+          .sidebar { padding:32px 0; }
+          .main { padding:32px; }
+        }
+
+        /* 1920px */
+        @media (max-width:1920px) {
+          .header { padding:0 24px; }
+          .sidebar { width:${sidebarOpen ? "280px" : "80px"}; padding:24px 0; }
+          .main { margin-left:${sidebarOpen ? "280px" : "80px"}; padding:24px; }
+        }
+
+        /* 1440px */
+        @media (max-width:1440px) {
+          .main { padding:20px; }
+        }
+      `}</style>
+
       <div
         style={{
-          fontFamily: "Inter, system-ui, sans-serif",
-          backgroundColor: "#f8f9fa",
+          backgroundColor: "#f9fafb",
           minHeight: "100vh",
+          backgroundImage:
+            "radial-gradient(circle at 1px 1px, #e5e7eb 1px, transparent 0)",
+          backgroundSize: "40px 40px",
         }}
       >
-        {/* Header */}
+        {/* ---------- HEADER ---------- */}
         <header
+          className="header"
           style={{
             position: "fixed",
             top: 0,
             left: 0,
             right: 0,
             height: "80px",
-            backgroundColor: "#ffffff",
+            backgroundColor: "#fff",
             borderBottom: "1px solid #e5e7eb",
-            zIndex: 50,
             display: "flex",
             alignItems: "center",
-            padding: "0 40px",
+            zIndex: 50,
+            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
           }}
         >
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "32px",
+              gap: "40px",
               flex: 1,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
               <div
                 style={{
-                  width: "48px",
-                  height: "48px",
-                  backgroundColor: "#6e56cf",
-                  borderRadius: "12px",
+                  width: 48,
+                  height: 48,
+                  backgroundColor: "#6d28d9",
+                  borderRadius: 12,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  position: "relative",
                 }}
               >
                 <div
                   style={{
-                    width: "24px",
-                    height: "24px",
-                    border: "3px solid white",
+                    width: 28,
+                    height: 28,
+                    border: "4px solid white",
                     borderTop: "none",
                     borderLeft: "none",
                     transform: "rotate(-45deg)",
+                    position: "absolute",
                   }}
-                ></div>
+                />
               </div>
-              <span
-                style={{ fontSize: "20px", fontWeight: 600, color: "#1f2937" }}
-              >
+              <span style={{ fontSize: 24, fontWeight: 700, color: "#111827" }}>
                 Axicube
               </span>
-              <span
-                style={{
-                  fontSize: "14px",
-                  color: "#6b7280",
-                  marginLeft: "8px",
-                }}
-              >
+              <span style={{ fontSize: 14, color: "#6b7280" }}>
                 Available for work
               </span>
               <button
                 style={{
                   backgroundColor: "#f3f4f6",
                   border: "none",
-                  borderRadius: "8px",
-                  padding: "4px 8px",
-                  fontSize: "12px",
+                  borderRadius: 8,
+                  padding: "6px 12px",
+                  fontSize: 13,
                   color: "#374151",
                 }}
               >
@@ -209,61 +235,37 @@ export default function TeacherDashboard() {
               </button>
             </div>
 
-            <div style={{ display: "flex", gap: "8px", marginLeft: "auto" }}>
-              <button
-                style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "12px",
-                  backgroundColor: "#f3f4f6",
-                  border: "none",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Search size={20} color="#6b7280" />
-              </button>
-              <button
-                style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "12px",
-                  backgroundColor: "#f3f4f6",
-                  border: "none",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Bell size={20} color="#6b7280" />
-              </button>
-              <button
-                style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "12px",
-                  backgroundColor: "#f3f4f6",
-                  border: "none",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Menu size={20} color="#6b7280" />
-              </button>
+            <div style={{ display: "flex", gap: 12, marginLeft: "auto" }}>
+              {[Search, Bell, Menu].map((Icon, i) => (
+                <button
+                  key={i}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 12,
+                    backgroundColor: "#f3f4f6",
+                    border: "none",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Icon size={20} color="#6b7280" />
+                </button>
+              ))}
               <button
                 style={{
                   backgroundColor: "#4f46e5",
-                  color: "white",
+                  color: "#fff",
                   border: "none",
-                  borderRadius: "12px",
-                  padding: "0 24px",
-                  fontSize: "14px",
-                  fontWeight: 500,
+                  borderRadius: 12,
+                  padding: "0 32px",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  height: 44,
                   display: "flex",
                   alignItems: "center",
-                  gap: "8px",
+                  gap: 8,
                 }}
               >
                 Get in touch
@@ -272,171 +274,244 @@ export default function TeacherDashboard() {
           </div>
         </header>
 
-        <div style={{ display: "flex", marginTop: "80px" }}>
-          {/* Sidebar */}
-          <aside
-            style={{
-              width: sidebarOpen ? "280px" : "80px",
-              backgroundColor: "#ffffff",
-              borderRight: "1px solid #e5e7eb",
-              height: "calc(100vh - 80px)",
-              position: "fixed",
-              left: 0,
-              top: "80px",
-              transition: "width 0.3s ease",
-              padding: "32px 0",
-            }}
-          >
-            <div style={{ padding: "0 24px", marginBottom: "32px" }}>
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
+        {/* ---------- SIDEBAR ---------- */}
+        <aside
+          className="sidebar"
+          style={{
+            position: "fixed",
+            top: 80,
+            left: 0,
+            height: "calc(100vh - 80px)",
+            backgroundColor: "#fff",
+            borderRight: "1px solid #e5e7eb",
+            transition: "width .3s cubic-bezier(.4,0,.2,1)",
+            boxShadow: "2px 0 10px rgba(0,0,0,.05)",
+          }}
+        >
+          <div style={{ padding: "0 32px", marginBottom: 40 }}>
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                backgroundColor: "#f3f4f6",
+                border: "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginLeft: sidebarOpen ? "auto" : 0,
+              }}
+            >
+              {sidebarOpen ? (
+                <ChevronLeft size={18} color="#6b7280" />
+              ) : (
+                <ChevronRight size={18} color="#6b7280" />
+              )}
+            </button>
+          </div>
+
+          <nav style={{ padding: "0 24px" }}>
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setSelectedMenu(item.id)}
+                  style={{
+                    width: "100%",
+                    padding: sidebarOpen ? "16px 20px" : "16px",
+                    marginBottom: 8,
+                    borderRadius: 16,
+                    backgroundColor:
+                      selectedMenu === item.id ? "#eef2ff" : "transparent",
+                    border: "none",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 16,
+                    color: selectedMenu === item.id ? "#4f46e5" : "#6b7280",
+                    fontSize: 15,
+                    fontWeight: selectedMenu === item.id ? 600 : 500,
+                  }}
+                >
+                  <Icon size={20} />
+                  {sidebarOpen && <span>{item.label}</span>}
+                </button>
+              );
+            })}
+          </nav>
+
+          {sidebarOpen && (
+            <div
+              style={{ position: "absolute", bottom: 40, left: 32, right: 32 }}
+            >
+              <div
                 style={{
-                  width: "32px",
-                  height: "32px",
-                  borderRadius: "8px",
-                  backgroundColor: "#f3f4f6",
-                  border: "none",
+                  backgroundColor: "#eef2ff",
+                  borderRadius: 24,
+                  padding: 32,
                   display: "flex",
+                  flexDirection: "column",
                   alignItems: "center",
-                  justifyContent: "center",
-                  marginLeft: sidebarOpen ? "auto" : "0",
+                  gap: 20,
+                  boxShadow: "0 4px 6px -1px rgba(0,0,0,.1)",
                 }}
               >
-                {sidebarOpen ? (
-                  <ChevronLeft size={16} />
-                ) : (
-                  <ChevronRight size={16} />
-                )}
-              </button>
+                <div
+                  style={{
+                    width: 96,
+                    height: 96,
+                    backgroundColor: "#c7d2fe",
+                    borderRadius: "50%",
+                    backgroundSize: "cover",
+                  }}
+                />
+                <button
+                  style={{
+                    backgroundColor: "#4f46e5",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 16,
+                    padding: "14px 28px",
+                    fontSize: 15,
+                    fontWeight: 600,
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 10,
+                  }}
+                >
+                  <Plus size={18} /> Create new class chat now
+                </button>
+                <button
+                  style={{
+                    background: "transparent",
+                    color: "#4f46e5",
+                    border: "none",
+                    fontSize: 15,
+                    fontWeight: 600,
+                  }}
+                >
+                  Create class
+                </button>
+              </div>
+              <div
+                style={{
+                  marginTop: 24,
+                  fontSize: 13,
+                  color: "#9ca3af",
+                  textAlign: "center",
+                }}
+              >
+                © Atwood School
+              </div>
             </div>
+          )}
+        </aside>
 
-            <nav style={{ padding: "0 16px" }}>
-              {menuItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setSelectedMenu(item.id)}
-                    style={{
-                      width: "100%",
-                      padding: sidebarOpen ? "12px 16px" : "12px",
-                      marginBottom: "8px",
-                      borderRadius: "12px",
-                      backgroundColor:
-                        selectedMenu === item.id ? "#eef2ff" : "transparent",
-                      border: "none",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "12px",
-                      color: selectedMenu === item.id ? "#4f46e5" : "#6b7280",
-                      fontSize: "14px",
-                      fontWeight: selectedMenu === item.id ? 500 : 400,
-                    }}
-                  >
-                    <Icon size={20} />
-                    {sidebarOpen && <span>{item.label}</span>}
-                  </button>
-                );
-              })}
-            </nav>
+        {/* ---------- MAIN CONTENT ---------- */}
+        <main className="main">
+          {/* Welcome */}
+          <div style={{ marginBottom: 40 }}>
+            <h1
+              style={{
+                fontSize: 36,
+                fontWeight: 700,
+                color: "#111827",
+                margin: "0 0 8px",
+              }}
+            >
+              Welcome back, Anna
+            </h1>
+            <p style={{ fontSize: 18, color: "#6b7280" }}>June 06, Wednesday</p>
+          </div>
 
-            {sidebarOpen && (
+          {/* Progress Card */}
+          <div
+            style={{
+              backgroundColor: "#4f46e5",
+              borderRadius: 24,
+              padding: 40,
+              marginBottom: 40,
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              gap: 32,
+              boxShadow: "0 10px 15px -3px rgba(79,70,229,.3)",
+            }}
+          >
+            <div
+              style={{
+                width: 140,
+                height: 140,
+                backgroundColor: "rgba(255,255,255,.15)",
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <svg
+                width={100}
+                height={100}
+                viewBox="0 0 36 36"
+                style={{ transform: "rotate(-90deg)" }}
+              >
+                <circle
+                  cx={18}
+                  cy={18}
+                  r={16}
+                  fill="none"
+                  stroke="rgba(255,255,255,.3)"
+                  strokeWidth={3.5}
+                />
+                <circle
+                  cx={18}
+                  cy={18}
+                  r={16}
+                  fill="none"
+                  stroke="#fff"
+                  strokeWidth={3.5}
+                  strokeDasharray="75 100"
+                />
+              </svg>
               <div
                 style={{
                   position: "absolute",
-                  bottom: "32px",
-                  left: "24px",
-                  right: "24px",
+                  fontSize: 24,
+                  fontWeight: 700,
                 }}
               >
-                <div
-                  style={{
-                    backgroundColor: "#eef2ff",
-                    borderRadius: "16px",
-                    padding: "24px",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "16px",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "80px",
-                      height: "80px",
-                      backgroundColor: "#c7d2fe",
-                      borderRadius: "50%",
-                      backgroundImage:
-                        'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2780%27 height=%2780%27 viewBox=%270 0 80 80%27%3E%3Ccircle cx=%2740%27 cy=%2740%27 r=%2738%27 fill=%27%23c7d2fe%27/%3E%3C/svg%3E")',
-                      backgroundSize: "cover",
-                    }}
-                  ></div>
-                  <button
-                    style={{
-                      backgroundColor: "#4f46e5",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "12px",
-                      padding: "12px 24px",
-                      fontSize: "14px",
-                      fontWeight: 500,
-                      width: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <Plus size={16} />
-                    Create new class chat now
-                  </button>
-                  <button
-                    style={{
-                      backgroundColor: "transparent",
-                      color: "#4f46e5",
-                      border: "none",
-                      fontSize: "14px",
-                      fontWeight: 500,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                    }}
-                  >
-                    Create class
-                  </button>
-                </div>
-                <div
-                  style={{
-                    marginTop: "16px",
-                    fontSize: "12px",
-                    color: "#9ca3af",
-                    textAlign: "center",
-                  }}
-                >
-                  © Atwood School
-                </div>
+                73%
               </div>
-            )}
-          </aside>
+            </div>
+            <div>
+              <h2 style={{ fontSize: 28, fontWeight: 700, margin: "0 0 12px" }}>
+                Your students average progress is 73%
+              </h2>
+              <p style={{ fontSize: 18, opacity: 0.95 }}>
+                Level up your students to improve your teacher rank!
+              </p>
+            </div>
+          </div>
 
-          {/* Main Content */}
-          <main
+          {/* Top Grid */}
+          <div
             style={{
-              marginLeft: sidebarOpen ? "280px" : "80px",
-              padding: "40px",
-              transition: "margin-left 0.3s ease",
-              flex: 1,
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr",
+              gap: 32,
+              marginBottom: 40,
             }}
           >
-            {/* ...other sections remain unchanged... */}
-
-            {/* Calendar (fixed) */}
+            {/* Working Hours */}
             <div
               style={{
-                backgroundColor: "#ffffff",
-                borderRadius: "20px",
-                padding: "24px",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                backgroundColor: "#fff",
+                borderRadius: 24,
+                padding: 32,
+                boxShadow: "0 4px 6px -1px rgba(0,0,0,.1)",
               }}
             >
               <div
@@ -444,102 +519,303 @@ export default function TeacherDashboard() {
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  marginBottom: "24px",
+                  marginBottom: 32,
                 }}
               >
-                <span style={{ fontSize: "14px", color: "#6b7280" }}>
-                  June 2022
+                <h3 style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>
+                  Working Hours
+                </h3>
+                <span style={{ fontSize: 15, color: "#6b7280" }}>
+                  01 - 08 June 2022
                 </span>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <button
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "8px",
-                      backgroundColor: "#f3f4f6",
-                      border: "none",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <ChevronLeft size={16} color="#6b7280" />
-                  </button>
-                  <button
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "8px",
-                      backgroundColor: "#f3f4f6",
-                      border: "none",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <ChevronRight size={16} color="#6b7280" />
-                  </button>
-                </div>
               </div>
-
-              {/* Weekdays */}
               <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(7, 1fr)",
-                  gap: "8px",
-                  marginBottom: "8px",
+                  display: "flex",
+                  alignItems: "flex-end",
+                  gap: 16,
+                  height: 140,
+                  marginBottom: 24,
                 }}
               >
-                {["S", "M", "T", "W", "T", "F", "S"].map((day) => (
+                {workingHours.map((d, i) => (
                   <div
-                    key={day}
+                    key={i}
                     style={{
-                      textAlign: "center",
-                      fontSize: "12px",
-                      color: "#9ca3af",
-                      fontWeight: 500,
+                      flex: 1,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 12,
                     }}
                   >
-                    {day}
+                    <div
+                      style={{
+                        height: `${d.hours * 17.5}px`,
+                        width: "100%",
+                        backgroundColor: d.hours ? "#10b981" : "#e5e7eb",
+                        borderRadius: 6,
+                      }}
+                    />
+                    <span style={{ fontSize: 13, color: "#6b7280" }}>
+                      {d.day}
+                    </span>
                   </div>
                 ))}
               </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 15,
+                  color: "#6b7280",
+                }}
+              >
+                <span>Total</span>
+                <span>38h 15m</span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 24,
+                  marginTop: 12,
+                  fontSize: 15,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div
+                    style={{
+                      width: 14,
+                      height: 14,
+                      backgroundColor: "#10b981",
+                      borderRadius: 3,
+                    }}
+                  />
+                  <span style={{ color: "#6b7280" }}>Online</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div
+                    style={{
+                      width: 14,
+                      height: 14,
+                      backgroundColor: "#e5e7eb",
+                      borderRadius: 3,
+                    }}
+                  />
+                  <span style={{ color: "#6b7280" }}>Offline</span>
+                </div>
+              </div>
+            </div>
 
-              {/* Calendar Days */}
+            {/* Group Chats */}
+            <div
+              style={{
+                backgroundColor: "#fff",
+                borderRadius: 24,
+                padding: 32,
+                boxShadow: "0 4px 6px -1px rgba(0,0,0,.1)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 32,
+                }}
+              >
+                <h3 style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>
+                  Group chats
+                </h3>
+                <a
+                  href="#"
+                  style={{
+                    fontSize: 15,
+                    color: "#6366f1",
+                    textDecoration: "none",
+                  }}
+                >
+                  View all
+                </a>
+              </div>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 20 }}
+              >
+                {groupChats.map((c) => (
+                  <div
+                    key={c.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 16,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 56,
+                        height: 56,
+                        backgroundColor: "#f3f4f6",
+                        borderRadius: 16,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <MessageSquare size={24} color="#6b7280" />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: 4,
+                        }}
+                      >
+                        <h4
+                          style={{
+                            fontSize: 15,
+                            fontWeight: 600,
+                            color: "#111827",
+                            margin: 0,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            maxWidth: 150,
+                          }}
+                        >
+                          {c.name}
+                        </h4>
+                        <span style={{ fontSize: 13, color: "#9ca3af" }}>
+                          {c.time}
+                        </span>
+                      </div>
+                      <p
+                        style={{
+                          fontSize: 14,
+                          color: "#6b7280",
+                          margin: 0,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {c.message}
+                      </p>
+                    </div>
+                    {c.unread > 0 && (
+                      <div
+                        style={{
+                          width: 24,
+                          height: 24,
+                          backgroundColor: "#ef4444",
+                          borderRadius: "50%",
+                          color: "#fff",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {c.unread}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Calendar */}
+            <div
+              style={{
+                backgroundColor: "#fff",
+                borderRadius: 24,
+                padding: 32,
+                boxShadow: "0 4px 6px -1px rgba(0,0,0,.1)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 32,
+                }}
+              >
+                <span style={{ fontSize: 15, color: "#6b7280" }}>
+                  June 2022
+                </span>
+                <div style={{ display: "flex", gap: 12 }}>
+                  {[ChevronLeft, ChevronRight].map((Icon, i) => (
+                    <button
+                      key={i}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 12,
+                        backgroundColor: "#f3f4f6",
+                        border: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Icon size={18} color="#6b7280" />
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(7, 1fr)",
-                  gap: "8px",
+                  gridTemplateColumns: "repeat(7,1fr)",
+                  gap: 12,
+                  marginBottom: 12,
+                }}
+              >
+                {["S", "M", "T", "W", "T", "F", "S"].map((d) => (
+                  <div
+                    key={d}
+                    style={{
+                      textAlign: "center",
+                      fontSize: 13,
+                      color: "#9ca3af",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {d}
+                  </div>
+                ))}
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(7,1fr)",
+                  gap: 12,
                 }}
               >
                 {Array.from({ length: 35 }, (_, i) => {
                   const day = i - 4;
-                  const isCurrent = day === 6;
-                  const hasEvent = [6, 13, 16, 20, 27].includes(day);
-
-                  let textColor = "transparent";
-                  if (isCurrent) textColor = "white";
-                  else if (hasEvent) textColor = "#4f46e5";
-                  else if (day > 0 && day <= 30) textColor = "#1f2937";
-
+                  const current = day === 6;
+                  const event = [6, 13, 16, 20, 27].includes(day);
                   return (
                     <div
                       key={i}
                       style={{
-                        height: "32px",
-                        borderRadius: "8px",
+                        height: 40,
+                        borderRadius: 12,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        fontSize: "12px",
-                        backgroundColor: isCurrent
+                        fontSize: 14,
+                        fontWeight: current ? 700 : 500,
+                        color: day > 0 && day <= 30 ? "#111827" : "transparent",
+                        backgroundColor: current
                           ? "#4f46e5"
-                          : hasEvent
+                          : event
                           ? "#eef2ff"
                           : "transparent",
-                        color: textColor,
+                        color: current ? "#fff" : event ? "#4f46e5" : "#111827",
                       }}
                     >
                       {day > 0 && day <= 30 && day}
@@ -548,10 +824,307 @@ export default function TeacherDashboard() {
                 })}
               </div>
             </div>
+          </div>
 
-            {/* ...remaining sections like Student Tests, Upcoming Classes, User Profile remain unchanged... */}
-          </main>
-        </div>
+          {/* Bottom Grid */}
+          <div
+            style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 32 }}
+          >
+            {/* Student Tests */}
+            <div
+              style={{
+                backgroundColor: "#fff",
+                borderRadius: 24,
+                padding: 32,
+                boxShadow: "0 4px 6px -1px rgba(0,0,0,.1)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 32,
+                }}
+              >
+                <h3 style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>
+                  Student tests
+                </h3>
+                <a
+                  href="#"
+                  style={{
+                    fontSize: 15,
+                    color: "#6366f1",
+                    textDecoration: "none",
+                  }}
+                >
+                  All tests
+                </a>
+              </div>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 20 }}
+              >
+                {studentTests.map((t) => (
+                  <div
+                    key={t.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 20,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 56,
+                        height: 56,
+                        backgroundColor: "#f3f4f6",
+                        borderRadius: 16,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <FileText size={24} color="#6b7280" />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <h4
+                        style={{
+                          fontSize: 15,
+                          fontWeight: 600,
+                          color: "#111827",
+                          margin: "0 0 6px",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {t.name}
+                      </h4>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 24,
+                          fontSize: 14,
+                          color: "#6b7280",
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <Clock size={16} /> Deadline {t.deadline}
+                        </span>
+                        <span
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <Users size={16} /> {t.student}
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                      }}
+                    >
+                      {t.status === "Active" && (
+                        <CheckCircle size={22} color="#10b981" />
+                      )}
+                      {t.status === "Reviewed" && (
+                        <CheckCircle size={22} color="#f59e0b" />
+                      )}
+                      {t.status === "Not reviewed" && (
+                        <AlertCircle size={22} color="#ef4444" />
+                      )}
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color:
+                            t.status === "Active"
+                              ? "#10b981"
+                              : t.status === "Reviewed"
+                              ? "#f59e0b"
+                              : "#ef4444",
+                        }}
+                      >
+                        {t.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Upcoming Classes */}
+            <div
+              style={{
+                backgroundColor: "#fff",
+                borderRadius: 24,
+                padding: 32,
+                boxShadow: "0 4px 6px -1px rgba(0,0,0,.1)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 32,
+                }}
+              >
+                <h3 style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>
+                  Upcoming Classes
+                </h3>
+                <a
+                  href="#"
+                  style={{
+                    fontSize: 15,
+                    color: "#6366f1",
+                    textDecoration: "none",
+                  }}
+                >
+                  View all
+                </a>
+              </div>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 20 }}
+              >
+                {upcomingClasses.map((c) => (
+                  <div
+                    key={c.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 20,
+                      padding: 20,
+                      backgroundColor: "#f9fafb",
+                      borderRadius: 16,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 56,
+                        height: 56,
+                        backgroundColor:
+                          c.status === "active" ? "#10b981" : "#e5e7eb",
+                        borderRadius: 16,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {c.status === "active" ? (
+                        <CheckCircle size={24} color="#fff" />
+                      ) : (
+                        <Clock size={24} color="#6b7280" />
+                      )}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <h4
+                        style={{
+                          fontSize: 15,
+                          fontWeight: 600,
+                          color: "#111827",
+                          margin: "0 0 6px",
+                        }}
+                      >
+                        {c.time} {c.name}
+                      </h4>
+                      <p style={{ fontSize: 14, color: "#6b7280", margin: 0 }}>
+                        {c.location}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Fixed Profile Card */}
+          <div
+            style={{
+              position: "fixed",
+              top: 100,
+              right: 48,
+              width: 320,
+              backgroundColor: "#fff",
+              borderRadius: 24,
+              padding: 32,
+              boxShadow: "0 10px 15px -3px rgba(0,0,0,.1)",
+              display: "flex",
+              alignItems: "center",
+              gap: 20,
+              zIndex: 40,
+            }}
+          >
+            <div
+              style={{
+                width: 72,
+                height: 72,
+                backgroundColor: "#e0e7ff",
+                borderRadius: "50%",
+                backgroundSize: "cover",
+              }}
+            />
+            <div style={{ flex: 1 }}>
+              <h4
+                style={{
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: "#111827",
+                  margin: "0 0 6px",
+                }}
+              >
+                Anna Wilson
+              </h4>
+              <p
+                style={{
+                  fontSize: 14,
+                  color: "#6b7280",
+                  margin: "0 0 12px",
+                }}
+              >
+                annawilson@gmail.com
+              </p>
+              <div style={{ display: "flex", gap: 24, fontSize: 14 }}>
+                <div>
+                  <span style={{ fontWeight: 700, color: "#111827" }}>
+                    Rank 14
+                  </span>{" "}
+                  / 100
+                </div>
+                <div>
+                  <span style={{ fontWeight: 700, color: "#111827" }}>
+                    Classes: 7
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                backgroundColor: "#f3f4f6",
+                border: "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <ArrowRight size={18} color="#6b7280" />
+            </button>
+          </div>
+        </main>
       </div>
     </>
   );

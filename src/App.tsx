@@ -11,6 +11,7 @@ import SignIn from "./pages/login";
 import LoadingOverlay from "./components/LoadingOverlay";
 import { useLoading } from "./hooks/useLoading";
 import StudentDashboard from "./pages/students";
+import TeacherDashboard from "./pages/teachers";
 
 // Hook to show loader on route change
 function useRouteLoading() {
