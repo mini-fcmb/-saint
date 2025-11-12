@@ -543,7 +543,7 @@ export default function TeacherDashboard() {
             color: #6b7280;
           }
           .get-in-touch {
-            background: #4f46e5;
+            background: #4299e1;
             color: white;
             border: none;
             border-radius: 12px;
@@ -612,7 +612,7 @@ export default function TeacherDashboard() {
           }
           .nav-item.active,
           .nav-item:hover {
-            background: #eef2ff;
+            background: #4299e1;
             color: #4f46e5;
             font-weight: 600;
           }
@@ -646,7 +646,7 @@ export default function TeacherDashboard() {
             border-radius: 50%;
           }
           .create-chat-btn {
-            background: #4f46e5;
+            background: #4299e1;
             color: white;
             border: none;
             border-radius: 16px;
@@ -662,7 +662,7 @@ export default function TeacherDashboard() {
           }
           .create-class-link {
             background: transparent;
-            color: #4f46e5;
+            color: #4299e1;
             border: none;
             font-size: 15px;
             font-weight: 600;
@@ -704,7 +704,7 @@ export default function TeacherDashboard() {
           }
 
           .progress-card {
-            background: #4f46e5;
+            background: #4299e1;
             border-radius: 24px;
             padding: 15px;
             margin: 40px 0;
@@ -776,7 +776,7 @@ export default function TeacherDashboard() {
           }
           .view-all {
             font-size: 15px;
-            color: #6366f1;
+            color: #4299e1;
             text-decoration: none;
             font-weight: 600;
           }
