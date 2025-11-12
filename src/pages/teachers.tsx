@@ -460,16 +460,53 @@ export default function TeacherDashboard() {
             </button>
           </div>
         </div>
-
         <style jsx>{`
-          /* Base Styles */
+          /* ------------------------------------------------------------------ */
+          /* GLOBAL & BODY – NO HORIZONTAL OVERFLOW                             */
+          /* ------------------------------------------------------------------ */
+          * {
+            box-sizing: border-box;
+          }
+          html,
+          body {
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            width: 100%;
+          }
+          body {
+            background: #f9fafb;
+            background-image: radial-gradient(
+              circle at 1px 1px,
+              #e5e7eb 1px,
+              transparent 0
+            );
+            background-size: 40px 40px;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+              "Helvetica Neue", Arial, sans-serif;
+          }
+
+          /* ------------------------------------------------------------------ */
+          /* LAYOUT                                                             */
+          /* ------------------------------------------------------------------ */
+          .layout {
+            display: flex;
+            margin-top: 80px;
+            width: 100%;
+            overflow-x: hidden;
+          }
+
+          /* ------------------------------------------------------------------ */
+          /* HEADER (unchanged until mobile)                                    */
+          /* ------------------------------------------------------------------ */
           .header {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             height: 80px;
-            background: white;
+            background: #fff;
             border-bottom: 1px solid #e5e7eb;
             z-index: 50;
             padding: 0 48px;
@@ -479,43 +516,29 @@ export default function TeacherDashboard() {
           }
           .header-content {
             display: flex;
-            align-items: center;
             justify-content: space-between;
             width: 100%;
+            align-items: center;
+            min-width: 0;
           }
           .logo-section {
             display: flex;
             align-items: center;
             gap: 16px;
-          }
-          .logo-icon {
-            width: 48px;
-            height: 48px;
-            background: #6d28d9;
-            border-radius: 12px;
-            position: relative;
-          }
-          .logo-shape {
-            width: 28px;
-            height: 28px;
-            border: 4px solid white;
-            border-top: none;
-            border-left: none;
-            transform: rotate(-45deg);
-            position: absolute;
-            top: 10px;
-            left: 10px;
+            flex-shrink: 0;
           }
           .logo-text {
             font-size: 24px;
             font-weight: 700;
             color: #111827;
             letter-spacing: -0.5px;
+            white-space: nowrap;
           }
           .status {
             font-size: 14px;
             color: #6b7280;
             font-weight: 500;
+            white-space: nowrap;
           }
           .follow-btn {
             background: #f3f4f6;
@@ -525,11 +548,13 @@ export default function TeacherDashboard() {
             font-size: 13px;
             color: #374151;
             font-weight: 500;
+            white-space: nowrap;
           }
           .header-actions {
             display: flex;
             gap: 12px;
             align-items: center;
+            flex-shrink: 0;
           }
           .icon-btn {
             width: 44px;
@@ -541,28 +566,29 @@ export default function TeacherDashboard() {
             align-items: center;
             justify-content: center;
             color: #6b7280;
+            flex-shrink: 0;
           }
           .get-in-touch {
-            background: #4299e1;
-            color: white;
+            background: #4f46e5;
+            color: #fff;
             border: none;
             border-radius: 12px;
-            padding: 0 32px;
+            padding: 0 24px;
             height: 44px;
             font-size: 15px;
             font-weight: 600;
             display: flex;
             align-items: center;
             gap: 8px;
+            white-space: nowrap;
           }
 
-          .layout {
-            display: flex;
-            margin-top: 80px;
-          }
+          /* ------------------------------------------------------------------ */
+          /* SIDEBAR (unchanged until mobile)                                   */
+          /* ------------------------------------------------------------------ */
           .sidebar {
             width: 320px;
-            background: white;
+            background: #fff;
             border-right: 1px solid #e5e7eb;
             height: calc(100vh - 80px);
             position: fixed;
@@ -572,6 +598,7 @@ export default function TeacherDashboard() {
             padding: 40px 0;
             box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
             z-index: 40;
+            overflow-y: auto;
           }
           .sidebar:not(.open) {
             width: 88px;
@@ -586,10 +613,10 @@ export default function TeacherDashboard() {
             border-radius: 12px;
             background: #f3f4f6;
             border: none;
+            margin-left: auto;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-left: auto;
             color: #6b7280;
           }
           .sidebar-nav {
@@ -608,11 +635,17 @@ export default function TeacherDashboard() {
             color: #6b7280;
             font-size: 15px;
             font-weight: 500;
-            transition: all 0.2s;
+            transition: 0.2s;
+            min-width: 0;
+          }
+          .nav-item span {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
           .nav-item.active,
           .nav-item:hover {
-            background: #4299e1;
+            background: #eef2ff;
             color: #4f46e5;
             font-weight: 600;
           }
@@ -622,7 +655,9 @@ export default function TeacherDashboard() {
             display: flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
           }
+
           .sidebar-footer {
             position: absolute;
             bottom: 40px;
@@ -646,11 +681,11 @@ export default function TeacherDashboard() {
             border-radius: 50%;
           }
           .create-chat-btn {
-            background: #4299e1;
-            color: white;
+            background: #4f46e5;
+            color: #fff;
             border: none;
             border-radius: 16px;
-            padding: 14px 28px;
+            padding: 14px 20px;
             font-size: 15px;
             font-weight: 600;
             width: 100%;
@@ -662,7 +697,7 @@ export default function TeacherDashboard() {
           }
           .create-class-link {
             background: transparent;
-            color: #4299e1;
+            color: #4f46e5;
             border: none;
             font-size: 15px;
             font-weight: 600;
@@ -679,11 +714,17 @@ export default function TeacherDashboard() {
             font-weight: 500;
           }
 
+          /* ------------------------------------------------------------------ */
+          /* MAIN CONTENT (unchanged until mobile)                              */
+          /* ------------------------------------------------------------------ */
           .main-content {
             margin-left: 320px;
             padding: 48px;
             transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             flex: 1;
+            width: 100%;
+            min-width: 0;
+            overflow-x: hidden;
           }
           .sidebar:not(.open) ~ .main-content {
             margin-left: 88px;
@@ -695,6 +736,9 @@ export default function TeacherDashboard() {
             color: #111827;
             margin: 0 0 8px;
             letter-spacing: -0.5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
           .welcome p {
             font-size: 18px;
@@ -704,17 +748,18 @@ export default function TeacherDashboard() {
           }
 
           .progress-card {
-            background: #4299e1;
+            background: #4f46e5;
             border-radius: 24px;
             padding: 15px;
             margin: 40px 0;
-            color: white;
+            color: #fff;
             display: flex;
             align-items: center;
             gap: 32px;
             box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3),
               0 4px 6px -2px rgba(79, 70, 229, 0.2);
-            width: 71%;
+            width: 100%;
+            max-width: 800px;
           }
           .progress-ring {
             width: 140px;
@@ -725,6 +770,7 @@ export default function TeacherDashboard() {
             align-items: center;
             justify-content: center;
             position: relative;
+            flex-shrink: 0;
           }
           .ring-svg {
             transform: rotate(-90deg);
@@ -755,30 +801,45 @@ export default function TeacherDashboard() {
             gap: 32px;
             margin-bottom: 40px;
           }
+          .bottom-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 32px;
+            align-items: start;
+          }
+
           .card {
-            background: white;
+            background: #fff;
             border-radius: 24px;
             padding: 20px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
               0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            width: 100%;
+            overflow: hidden;
           }
           .card-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 8px;
           }
           .card-header h3 {
             font-size: 20px;
             font-weight: 700;
             color: #111827;
             margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
           .view-all {
             font-size: 15px;
-            color: #4299e1;
+            color: #4f46e5;
             text-decoration: none;
             font-weight: 600;
+            white-space: nowrap;
           }
 
           .bar-chart {
@@ -794,57 +855,38 @@ export default function TeacherDashboard() {
             flex-direction: column;
             align-items: center;
             gap: 12px;
+            min-width: 0;
           }
           .bar {
             width: 40%;
             border-radius: 6px;
             transition: height 0.3s;
-          }
-          .total {
-            display: flex;
-            justify-content: space-between;
-            font-size: 15px;
-            color: #6b7280;
-            font-weight: 500;
-            margin-top: 20px;
-          }
-          .legend {
-            display: flex;
-            gap: 24px;
-            margin-top: 12px;
-            font-size: 15px;
-            color: #6b7280;
-            font-weight: 500;
-            margin-left: 25px;
-          }
-          .dot {
-            width: 14px;
-            height: 14px;
-            border-radius: 3px;
-            display: inline-block;
-            margin-right: 8px;
-          }
-          .dot.online {
             background: #10b981;
-            margin-left: 0;
           }
-          .dot.offline {
-            background: #e5e7eb;
-            margin-left: 0;
+          .bar-item span {
+            font-size: 13px;
+            color: #6b7280;
           }
 
-          .chat-list {
+          .chat-list,
+          .test-list,
+          .class-list {
             display: flex;
             flex-direction: column;
             gap: 20px;
           }
-          .chat-item {
+          .chat-item,
+          .test-item,
+          .class-item {
             display: flex;
             align-items: center;
             gap: 16px;
             padding: 4px 0;
+            min-width: 0;
           }
-          .chat-icon {
+          .chat-icon,
+          .test-icon,
+          .class-status {
             width: 56px;
             height: 56px;
             background: #f3f4f6;
@@ -855,32 +897,28 @@ export default function TeacherDashboard() {
             flex-shrink: 0;
             color: #6b7280;
           }
-          .chat-info {
+          .chat-info,
+          .test-info {
             flex: 1;
             min-width: 0;
           }
-          .chat-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 4px;
-          }
-          .chat-header h4 {
-            font-size: 15px;
-            font-weight: 600;
-            color: #111827;
-            margin: 0;
+          .chat-header,
+          .test-info h4 {
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 150px;
           }
-          .chat-header span {
-            font-size: 13px;
-            color: #9ca3af;
-            font-weight: 500;
+          .chat-header h4,
+          .test-info h4,
+          .class-item h4 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #111827;
+            margin: 0 0 6px;
           }
-          .chat-info p {
+          .chat-info p,
+          .test-meta,
+          .class-item p {
             font-size: 14px;
             color: #6b7280;
             margin: 0;
@@ -893,7 +931,7 @@ export default function TeacherDashboard() {
             height: 24px;
             background: #ef4444;
             border-radius: 50%;
-            color: white;
+            color: #fff;
             font-size: 13px;
             font-weight: 600;
             display: flex;
@@ -925,7 +963,7 @@ export default function TeacherDashboard() {
           }
           .calendar-day.current {
             background: #4f46e5;
-            color: white;
+            color: #fff;
             font-weight: 700;
           }
           .calendar-day.event {
@@ -933,110 +971,12 @@ export default function TeacherDashboard() {
             color: #4f46e5;
           }
 
-          .bottom-grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 32px;
-            align-items: start;
-          }
-          .test-list,
-          .class-list {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-          }
-          .test-item,
-          .class-item {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            padding: 8px 0;
-          }
-          .test-icon {
-            width: 56px;
-            height: 56px;
-            background: #f3f4f6;
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #6b7280;
-            flex-shrink: 0;
-          }
-          .test-info h4 {
-            font-size: 15px;
-            font-weight: 600;
-            color: #111827;
-            margin: 0 0 6px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-          }
-          .test-meta {
-            display: flex;
-            gap: 24px;
-            font-size: 14px;
-            color: #6b7280;
-            font-weight: 500;
-          }
-          .test-meta span {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-          }
-          .status {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 14px;
-            font-weight: 600;
-          }
-          .status.active {
-            color: #10b981;
-          }
-          .status.reviewed {
-            color: #f59e0b;
-          }
-          .status.not-reviewed {
-            color: #ef4444;
-          }
-
-          .class-status {
-            width: 56px;
-            height: 56px;
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-          }
-          .class-status.active {
-            background: #10b981;
-            color: white;
-          }
-          .class-status.upcoming {
-            background: #e5e7eb;
-            color: #6b7280;
-          }
-          .class-item h4 {
-            font-size: 15px;
-            font-weight: 600;
-            color: #111827;
-            margin: 0 0 6px;
-          }
-          .class-item p {
-            font-size: 14px;
-            color: #6b7280;
-            margin: 0;
-            font-weight: 500;
-          }
-
           .profile-card {
             position: fixed;
             top: 100px;
             right: 48px;
             width: 320px;
-            background: white;
+            background: #fff;
             border-radius: 24px;
             padding: 32px;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
@@ -1045,6 +985,7 @@ export default function TeacherDashboard() {
             align-items: center;
             gap: 20px;
             z-index: 40;
+            max-width: calc(100vw - 96px);
           }
           .profile-avatar {
             width: 72px;
@@ -1058,6 +999,9 @@ export default function TeacherDashboard() {
             font-weight: 700;
             color: #111827;
             margin: 0 0 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
           .profile-info p {
             font-size: 14px;
@@ -1069,26 +1013,25 @@ export default function TeacherDashboard() {
             display: flex;
             gap: 24px;
             font-size: 14px;
+            flex-wrap: wrap;
           }
           .stats strong {
             color: #111827;
             font-weight: 700;
           }
-          .profile-arrow {
-            width: 40px;
-            height: 40px;
-            border-radius: 12px;
-            background: #f3f4f6;
-            border: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #6b7280;
-            flex-shrink: 0;
-          }
 
-          /* Responsive */
-          @media (max-width: 1440px) {
+          /* ------------------------------------------------------------------ */
+          /* RESPONSIVE – DESKTOP & TABLET (unchanged)                         */
+          /* ------------------------------------------------------------------ */
+          @media (min-width: 1400px) {
+            .sidebar {
+              width: 340px;
+            }
+            .main-content {
+              margin-left: 340px;
+            }
+          }
+          @media (max-width: 1399px) {
             .header {
               padding: 0 32px;
             }
@@ -1097,7 +1040,6 @@ export default function TeacherDashboard() {
             }
             .sidebar {
               width: 280px;
-              padding: 32px 0;
             }
             .sidebar:not(.open) {
               width: 80px;
@@ -1113,25 +1055,28 @@ export default function TeacherDashboard() {
               gap: 24px;
             }
           }
-
-          @media (max-width: 1024px) {
+          @media (max-width: 1199px) {
             .top-grid {
-              grid-template-columns: 1fr;
+              grid-template-columns: 1fr 1fr;
             }
             .bottom-grid {
               grid-template-columns: 1fr;
             }
             .progress-card {
-              width: 100%;
+              max-width: 100%;
+            }
+            .profile-card {
+              width: 280px;
+              right: 32px;
+              top: 90px;
             }
           }
-
-          @media (max-width: 768px) {
+          @media (max-width: 991px) {
             .header {
-              padding: 0 16px;
+              padding: 0 24px;
             }
             .main-content {
-              padding: 16px;
+              padding: 24px;
               margin-left: 80px !important;
             }
             .sidebar {
@@ -1154,14 +1099,13 @@ export default function TeacherDashboard() {
               width: 120px;
               height: 120px;
             }
-          }
-
-          @media (max-width: 640px) {
-            .header-actions {
-              gap: 8px;
+            .ring-svg {
+              width: 80px;
+              height: 80px;
             }
-            .get-in-touch {
-              display: none;
+            .top-grid {
+              grid-template-columns: 1fr;
+              gap: 20px;
             }
             .profile-card {
               position: relative;
@@ -1169,6 +1113,274 @@ export default function TeacherDashboard() {
               right: 0;
               width: 100%;
               margin: 24px 0;
+              max-width: none;
+            }
+          }
+
+          /* ------------------------------------------------------------------ */
+          /* MOBILE – FULLY FIXED (≤ 767px)                                    */
+          /* ------------------------------------------------------------------ */
+          @media (max-width: 767px) {
+            /* Header */
+            .header {
+              height: 70px;
+              padding: 0 12px;
+            }
+            .header-actions {
+              gap: 6px;
+            }
+            .icon-btn {
+              width: 38px;
+              height: 38px;
+            }
+            .get-in-touch,
+            .status,
+            .follow-btn {
+              display: none;
+            }
+            .logo-text {
+              font-size: 20px;
+            }
+
+            /* Sidebar → Bottom Nav */
+            .sidebar {
+              width: 100%;
+              height: 60px;
+              bottom: 0;
+              top: auto;
+              left: 0;
+              right: 0;
+              position: fixed;
+              padding: 0;
+              display: flex;
+              justify-content: space-around;
+              align-items: center;
+              background: #fff;
+              border-top: 1px solid #e5e7eb;
+              box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08);
+              z-index: 100;
+            }
+            .sidebar.open {
+              height: auto;
+              top: 70px;
+              bottom: auto;
+            }
+            .sidebar-toggle,
+            .sidebar-footer,
+            .sidebar-nav > * > span {
+              display: none;
+            }
+            .sidebar-nav {
+              display: flex;
+              width: 100%;
+              padding: 0;
+            }
+            .nav-item {
+              flex: 1;
+              justify-content: center;
+              padding: 0;
+              font-size: 0;
+              position: relative;
+            }
+            .nav-icon {
+              width: 48px;
+              height: 48px;
+            }
+            .nav-item.active::after {
+              content: "";
+              position: absolute;
+              bottom: 4px;
+              left: 50%;
+              transform: translateX(-50%);
+              width: 6px;
+              height: 6px;
+              background: #4f46e5;
+              border-radius: 50%;
+            }
+
+            /* Main Content */
+            .main-content {
+              margin-left: 0 !important;
+              padding: 12px 12px 72px 12px;
+              min-height: calc(100vh - 70px - 60px);
+            }
+            .welcome h1 {
+              font-size: 22px;
+            }
+            .welcome p {
+              font-size: 15px;
+            }
+
+            /* Progress Card */
+            .progress-card {
+              flex-direction: column;
+              text-align: center;
+              gap: 12px;
+              padding: 16px;
+              max-width: 100%;
+              margin: 24px 0;
+            }
+            .progress-ring {
+              width: 90px;
+              height: 90px;
+            }
+            .ring-svg {
+              width: 65px;
+              height: 65px;
+            }
+            .ring-text {
+              font-size: 18px;
+            }
+            .progress-card h2 {
+              font-size: 20px;
+            }
+            .progress-card p {
+              font-size: 14px;
+            }
+
+            /* Grids */
+            .top-grid,
+            .bottom-grid {
+              gap: 16px;
+            }
+            .top-grid {
+              grid-template-columns: 1fr;
+            }
+            .bottom-grid {
+              grid-template-columns: 1fr;
+            }
+
+            /* Cards */
+            .card {
+              padding: 12px;
+            }
+            .card-header {
+              flex-direction: column;
+              align-items: flex-start;
+              gap: 6px;
+              margin-bottom: 16px;
+            }
+            .card-header h3 {
+              font-size: 17px;
+            }
+            .view-all {
+              font-size: 14px;
+            }
+
+            /* Bar Chart */
+            .bar-chart {
+              height: 90px;
+              gap: 8px;
+              margin-top: 40px;
+            }
+            .bar {
+              width: 50%;
+            }
+
+            /* Lists */
+            .chat-item,
+            .test-item,
+            .class-item {
+              gap: 10px;
+            }
+            .chat-icon,
+            .test-icon,
+            .class-status {
+              width: 44px;
+              height: 44px;
+            }
+            .chat-header h4,
+            .test-info h4,
+            .class-item h4 {
+              font-size: 14px;
+            }
+            .chat-info p,
+            .test-meta,
+            .class-item p {
+              font-size: 13px;
+            }
+            .unread-badge {
+              width: 20px;
+              height: 20px;
+              font-size: 11px;
+            }
+
+            /* Calendar */
+            .calendar-day {
+              height: 32px;
+              font-size: 12px;
+            }
+
+            /* Profile Card */
+            .profile-card {
+              position: relative;
+              top: 0;
+              right: 0;
+              width: 100%;
+              margin: 20px 0 0;
+              padding: 16px;
+              flex-direction: column;
+              text-align: center;
+              gap: 12px;
+            }
+            .profile-avatar {
+              width: 56px;
+              height: 56px;
+            }
+            .profile-info h4 {
+              font-size: 16px;
+            }
+            .stats {
+              justify-content: center;
+              gap: 12px;
+              font-size: 13px;
+            }
+          }
+
+          /* Extra small phones (< 576px) – tighter */
+          @media (max-width: 575px) {
+            .header {
+              padding: 0 8px;
+            }
+            .icon-btn {
+              width: 36px;
+              height: 36px;
+            }
+            .main-content {
+              padding: 10px 10px 70px 10px;
+            }
+            .progress-card {
+              padding: 12px;
+            }
+            .card {
+              padding: 10px;
+            }
+            .bar-chart {
+              height: 70px;
+            }
+            .chat-icon,
+            .test-icon,
+            .class-status {
+              width: 40px;
+              height: 40px;
+            }
+            .chat-header h4,
+            .test-info h4,
+            .class-item h4 {
+              font-size: 13px;
+            }
+            .chat-info p,
+            .test-meta,
+            .class-item p {
+              font-size: 12px;
+            }
+            .calendar-day {
+              height: 28px;
+              font-size: 11px;
+            }
+            .profile-avatar {
+              width: 48px;
+              height: 48px;
             }
           }
         `}</style>
