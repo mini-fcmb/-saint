@@ -6,10 +6,11 @@ import {
   useLocation,
   useNavigationType,
 } from "react-router-dom";
-import Signup from "./pages/Signup";
-import SignIn from "./pages/SignIn";
+import Signup from "./pages/signup";
+import SignIn from "./pages/login";
 import LoadingOverlay from "./components/LoadingOverlay";
 import { useLoading } from "./hooks/useLoading";
+import StudentDashboard from "./pages/students";
 
 // Hook to show loader on route change
 function useRouteLoading() {
@@ -36,9 +37,9 @@ export default function App() {
     <>
       <LoadingOverlay />
       <Routes>
-        <Route path="/" element={<Signup />} />
-        <Route path="/login" element={<SignIn />} />
-        {/* Add more routes here */}
+        {/*<Route path="/" element={<Signup />} />
+        <Route path="/login" element={<SignIn />} />*/}
+        <Route path="/" element={<StudentDashboard />} />
       </Routes>
     </>
   );
