@@ -705,7 +705,7 @@ export default function TeacherDashboard() {
             gap: 32px;
             box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3),
               0 4px 6px -2px rgba(79, 70, 229, 0.2);
-            width: fit-content;
+            width: 71%;
           }
           .progress-ring {
             width: 140px;
@@ -777,7 +777,7 @@ export default function TeacherDashboard() {
             align-items: flex-end;
             gap: 16px;
             height: 140px;
-            margin-bottom: 24px;
+            margin-top: 80px;
           }
           .bar-item {
             flex: 1;
@@ -806,6 +806,7 @@ export default function TeacherDashboard() {
             font-size: 15px;
             color: #6b7280;
             font-weight: 500;
+            margin-left: 25px;
           }
           .dot {
             width: 14px;
@@ -816,9 +817,11 @@ export default function TeacherDashboard() {
           }
           .dot.online {
             background: #10b981;
+            margin-left: 0;
           }
           .dot.offline {
             background: #e5e7eb;
+            margin-left: 0;
           }
 
           .chat-list {
