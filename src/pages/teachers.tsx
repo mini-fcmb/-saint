@@ -19,6 +19,7 @@ import {
   AlertCircle,
   ArrowRight,
 } from "lucide-react";
+import logo from "../assets/logo.png";
 
 export default function TeacherDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -139,10 +140,18 @@ export default function TeacherDashboard() {
         <header className="header">
           <div className="header-content">
             <div className="logo-section">
-              <div className="logo-icon">
-                <div className="logo-shape"></div>
-              </div>
-              <span className="logo-text">Axicube</span>
+              <img
+                src={logo}
+                style={{
+                  width: "36px",
+                  height: "36px",
+                  objectFit: "contain",
+                  borderRadius: "50%",
+                  display: "block",
+                }}
+              />
+
+              <span className="logo-text">SXaint</span>
               <span className="status">Available for work</span>
               <button className="follow-btn">Follow</button>
             </div>

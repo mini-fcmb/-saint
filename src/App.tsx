@@ -40,7 +40,7 @@ export default function App() {
       <Routes>
         {/*<Route path="/" element={<Signup />} />
         <Route path="/login" element={<SignIn />} />*/}
-        <Route path="/" element={<StudentDashboard />} />
+        <Route path="/" element={<TeacherDashboard />} />
       </Routes>
     </>
   );
