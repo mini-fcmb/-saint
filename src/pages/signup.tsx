@@ -1,8 +1,6 @@
 // src/pages/Signup.tsx
-"use client";
-
 import { useState, FormEvent } from "react";
-import { useRouter } from "next/router";
+import { useNavigate } from "react-router-dom";
 import {
   createUserWithEmailAndPassword,
   updateProfile,
@@ -13,7 +11,7 @@ import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import "../styles/signup.css";
 
 export default function Signup() {
-  const router = useRouter();
+  const navigate = useNavigate();
 
   const [userType, setUserType] = useState<"teacher" | "student">("teacher");
   const [firstName, setFirstName] = useState("");
@@ -67,7 +65,7 @@ export default function Signup() {
         alert("Student created!");
       }
 
-      router.push("/dashboard");
+      navigate("/dashboard");
     } catch (err: any) {
       alert(err.message);
     }
@@ -100,7 +98,7 @@ export default function Signup() {
         alert("Student – Google");
       }
 
-      router.push("/dashboard");
+      navigate("/dashboard");
     } catch (err: any) {
       alert(err.message);
     }
@@ -111,7 +109,7 @@ export default function Signup() {
       <div className="modal-backdrop"></div>
 
       <div className="signup-card">
-        <button className="close-btn" onClick={() => router.back()}>
+        <button className="close-btn" onClick={() => navigate(-1)}>
           ×
         </button>
 
