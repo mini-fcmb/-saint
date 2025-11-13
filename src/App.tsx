@@ -12,6 +12,8 @@ import LoadingOverlay from "./components/LoadingOverlay";
 import { useLoading } from "./hooks/useLoading";
 import StudentDashboard from "./pages/students";
 import TeacherDashboard from "./pages/teachers";
+import CreateQuestionModal from "./pages/uploadquiz";
+import QuizDashboard from "./pages/quiz";
 
 // Hook to show loader on route change
 function useRouteLoading() {
@@ -40,7 +42,7 @@ export default function App() {
       <Routes>
         {/*<Route path="/" element={<Signup />} />
         <Route path="/login" element={<SignIn />} />*/}
-        <Route path="/" element={<TeacherDashboard />} />
+        <Route path="/" element={<Signup />} />
       </Routes>
     </>
   );
