@@ -91,11 +91,6 @@ const GetStartedDashboard: React.FC = () => {
     return () => clearTimeout(timer);
   }, [currentScene]);
 
-  const restart = () => {
-    setCurrentScene(0);
-    setProgress(0);
-  };
-
   const progressDots = scenes.map((_, i) => (
     <div key={i} className={`dot ${i === currentScene ? "active" : ""}`} />
   ));
@@ -129,11 +124,12 @@ const GetStartedDashboard: React.FC = () => {
               />
             </div>
             <div className="progress-dots">{progressDots}</div>
-            <button onClick={restart} className="restart-btn">
-              Restart
+            <button className="restart-btn">
+              {" "}
+              <Link to={"/login"}>Login</Link>{" "}
             </button>
             <button className="getstarted-btn">
-              <Link to="/signup"> Get Started</Link>
+              <Link to={"/signup"}> Get Started</Link>
             </button>
           </div>
         </div>
@@ -178,7 +174,7 @@ const GetStartedDashboard: React.FC = () => {
                   {index === scenes.length - 1 && (
                     <div className="cta-section">
                       <button className="cta-btn">
-                        <Link to="/signup"> Get Started Now</Link>
+                        {/*<Link to="/signup"> Get Started Now</Link>*/}
                       </button>
                       <p className="cta-subtext">
                         Join 50,000+ users transforming education

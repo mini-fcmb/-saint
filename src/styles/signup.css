@@ -1,13 +1,12 @@
 /* src/styles/signup.css */
-*,
-*::before,
-*::after {
+.signup-page *,
+.signup-page *::before,
+.signup-page *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
-
-.signup-modal {
+ .signup-page .signup-modal {
   position: fixed;
   inset: 0;
   display: flex;
@@ -17,30 +16,30 @@
   z-index: 9999;
 }
 
-.modal-backdrop {
+.signup-page .modal-backdrop {
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, #0d0d1a 0%, #1a1a2e 50%, #16213e 100%);
+  background: #fff;
   opacity: 0.96;
   backdrop-filter: blur(6px);
 }
 
 /* Compact card */
-.signup-card {
+.signup-page .signup-card {
   position: relative;
-  background: rgba(30, 30, 46, 0.96);
+  background: whitesmoke;
   border-radius: 24px;
   width: 90%;
   max-width: 380px;
   padding: 24px 20px;               /* Reduced padding */
   color: #fff;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 100px 1000px rgba(0, 0, 0, 0.3);
   max-height: 90vh;                 /* More room */
   overflow-y: auto;                 /* Scroll only if needed */
   -webkit-overflow-scrolling: touch;
 }
 
-.close-btn {
+.signup-page .close-btn {
   position: absolute;
   top: 12px;
   right: 12px;
@@ -56,26 +55,26 @@
   justify-content: center;
   border-radius: 50%;
 }
-.close-btn:hover {
+.signup-page .close-btn:hover {
   background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  color: rgb(72, 68, 68);
 }
 
 /* Compact tabs */
-.tabs {
+.signup-page .tabs {
   display: flex;
-  background: rgba(255, 255, 255, 0.08);
+  background:rgb(223, 217, 217);
   border-radius: 50px;
   padding: 3px;
   margin-bottom: 16px;
   margin-left: -4px;
   width: fit-content;
 }
-.tab {
+.signup-page .tab {
   flex: none;
   background: none;
   border: none;
-  color: #aaa;
+  color: #1e1e2e;
   font-size: 13.5px;
   font-weight: 500;
   padding: 7px 14px;
@@ -84,43 +83,43 @@
   transition: 0.2s;
   min-width: 74px;
 }
-.tab.active {
-  background: #fff;
-  color: #000;
+.signup-page .tab.active {
+  background: #4299e1;
+  color:whitesmoke;
   font-weight: 600;
 }
 
 /* Compact form */
-.signup-form h2 {
+.signup-page .signup-form h2 {
   font-size: 20px;
   font-weight: 600;
   margin-bottom: 14px;
   text-align: left;
+  color: #1e1e2e;
 }
 
 /* Compact inputs */
-.signup-form input {
+.signup-page .signup-form input {
   width: 100%;
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgb(223, 217, 217);
   border-radius: 12px;
   padding: 11px 14px;               /* Smaller padding */
-  color: #fff;
   font-size: 14px;                  /* Smaller font */
   outline: none;
   transition: 0.2s;
 }
-.signup-form input::placeholder {
+.signup-page .signup-form input::placeholder {
   color: #888;
   font-size: 13.5px;
 }
-.signup-form input:focus {
+.signup-page .signup-form input:focus {
   border-color: #6c5ce7;
   background: rgba(255, 255, 255, 0.12);
 }
 
 /* Name row */
-.name-row {
+.signup-page .name-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
@@ -128,7 +127,7 @@
 }
 
 /* Phone row */
-.phone-row {
+.signup-page .phone-row {
   display: flex;
   align-items: center;
   background: rgba(255, 255, 255, 0.08);
@@ -137,22 +136,23 @@
   margin-bottom: 12px;
   overflow: hidden;
 }
-.phone-row .country {
+.signup-page .phone-row .country {
   display: flex;
   align-items: center;
   gap: 5px;
   padding: 0 10px;
   color: #ccc;
   font-size: 13.5px;
+ 
 }
-.phone-row .country img {
+.signup-page .phone-row .country img {
   width: 18px;
   height: 18px;
   border-radius: 50%;
   object-fit: cover;
 }
-.phone-row input {
-  border: none;
+.signup-page .phone-row input {
+  border: 1px solid  rgb(223, 217, 217);
   background: transparent;
   flex: 1;
   padding: 11px 0 11px 6px;
@@ -160,17 +160,17 @@
 }
 
 /* Tight spacing */
-.signup-form > input,
-.signup-form > .name-row,
-.signup-form > .phone-row {
+.signup-page .signup-form > input,
+.signup-page .signup-form > .name-row,
+.signup-page .signup-form > .phone-row {
   margin-bottom: 12px;
 }
 
 /* Create button */
-.create-btn {
+.signup-page .create-btn {
   width: 100%;
-  background: #fff;
-  color: #000;
+  background: #4299e1;
+  color: whitesmoke;
   font-weight: 600;
   font-size: 14.5px;
   padding: 12px;
@@ -180,105 +180,105 @@
   margin-top: 6px;
   transition: 0.2s;
 }
-.create-btn:hover {
+.signup-page .create-btn:hover {
   background: #f1f1f1;
 }
 
 /* Divider */
-.divider {
+.signup-page .divider {
   text-align: center;
   margin: 18px 0 12px;
   position: relative;
   color: #888;
   font-size: 12.5px;
 }
-.divider::before {
+.signup-page .divider::before {
   content: "";
   position: absolute;
   inset: 50% 0;
   height: 1px;
   background: rgba(255, 255, 255, 0.15);
 }
-.divider span {
+.signup-page .divider span {
   background: rgba(30, 30, 46, 0.96);
   padding: 0 10px;
 }
 
 /* Social buttons */
-.social-row {
+.signup-page .social-row {
   display: flex;
   justify-content: center;
   gap: 10px;
   margin-bottom: 14px;
 }
-.social {
+.signup-page .social {
   width: 44px;
   height: 44px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgb(223, 217, 217);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: 0.2s;
 }
-.social:hover {
+.signup-page .social:hover {
   background: rgba(255, 255, 255, 0.15);
   border-color: #6c5ce7;
 }
-.social img {
+.signup-page .social img {
   width: 20px;
   height: 20px;
 }
 
 /* Terms */
-.terms {
+.signup-page .terms {
   text-align: center;
   font-size: 11.5px;
   color: #888;
   line-height: 1.4;
 }
-.terms a {
-  color: #6c5ce7;
+.signup-page .terms a {
+  color: #4299e1;
   text-decoration: none;
 }
-.terms a:hover {
+.signup-page .terms a:hover {
   text-decoration: underline;
 }
 
 /* Mobile */
 @media (max-width: 480px) {
-  .signup-card {
+  .signup-page .signup-card {
     padding: 20px 16px;
     border-radius: 18px;
   }
-  .name-row {
+  .signup-page .name-row {
     grid-template-columns: 1fr;
   }
-  .tab {
+  .signup-page .tab {
     font-size: 13px;
     padding: 6px 11px;
     min-width: 68px;
   }
-  .signup-form input,
-  .phone-row input {
+  .signup-page .signup-form input,
+  .signup-page .phone-row input {
     padding: 10px 12px;
     font-size: 13.5px;
   }
-  .create-btn {
+  .signup-page .create-btn {
     padding: 11px;
     font-size: 14px;
   }
 }
 /* src/styles/signup.css – add at the end */
-.input-select {
+.signup-page .input-select {
    width: 100%;
    background: rgba(255, 255, 255, 0.08);
    border: 1px solid rgba(255, 255, 255, 0.15);
    border-radius: 12px;
    padding: 10px 12px;
-   color: #fff;
+   color: rgb(138, 138, 138);
    font-size: 14px;
    outline: none;
    appearance: none;
@@ -288,11 +288,11 @@
    background-size: 16px;
    cursor: pointer;
  }
- .input-select:focus {
+ .signup-page .input-select:focus {
    border-color: #6c5ce7;
    background: rgba(255, 255, 255, 0.12);
  }
- .input-select option {
+ .signup-page .input-select option {
    background: #1e1e2e;
    color: #fff;
  }

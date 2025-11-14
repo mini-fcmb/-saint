@@ -1,59 +1,169 @@
-"use client";
+// src/pages/Login.tsx
+import { useState, FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
+  User,
+} from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db, googleProvider } from "../firebase/config";
+import "../styles/signin.css"; // <-- same folder as signup.css
 
-import React from "react";
-import "../styles/signin.css";
+export default function Login() {
+  const navigate = useNavigate();
 
-export default function SignIn() {
+  const [userType, setUserType] = useState<"teacher" | "student">("teacher");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [adminCode, setAdminCode] = useState("");
+
+  /* ---------- EMAIL / PASSWORD ---------- */
+  const handleLogin = async (e: FormEvent) => {
+    e.preventDefault();
+
+    try {
+      // 1. Firebase Auth sign-in
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const user = cred.user;
+
+      // 2. Email verification check
+      if (!user.emailVerified) {
+        alert("Please verify your email before logging in.");
+        await auth.signOut();
+        return;
+      }
+
+      // 3. Teacher admin-code check
+      if (userType === "teacher" && adminCode !== "mini-fcmb") {
+        alert("Invalid Admin Code!");
+        await auth.signOut();
+        return;
+      }
+
+      // 4. Verify user exists in the correct collection
+      const col = userType === "teacher" ? "teachers" : "students";
+      const snap = await getDoc(doc(db, col, user.uid));
+
+      if (!snap.exists()) {
+        alert(`No ${userType} account found with this email.`);
+        await auth.signOut();
+        return;
+      }
+
+      // Success!
+      navigate("/dashboard");
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  /* ---------- GOOGLE (admin code still required for teacher) ---------- */
+  const handleGoogle = async () => {
+    try {
+      const res = await signInWithPopup(auth, googleProvider);
+      const user = res.user;
+
+      // Email verification (Google always verified)
+      if (!user.emailVerified) {
+        alert("Google account email not verified.");
+        return;
+      }
+
+      if (userType === "teacher" && adminCode !== "mini-fcmb") {
+        alert("Invalid Admin Code for Teacher!");
+        return;
+      }
+
+      const col = userType === "teacher" ? "teachers" : "students";
+      const snap = await getDoc(doc(db, col, user.uid));
+
+      if (!snap.exists()) {
+        alert(`No ${userType} account linked to this Google profile.`);
+        return;
+      }
+
+      navigate("/dashboard");
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   return (
-    <div className="signin-container">
-      {/* Background Decorative Shapes */}
-      <div className="bg-shape bg-shape-1"></div>
-      <div className="bg-shape bg-shape-2"></div>
-      <div className="bg-shape bg-shape-3"></div>
+    <div className="login-page">
+      <div className="login-modal">
+        <div className="modal-backdrop"></div>
 
-      {/* Logo */}
-      <div className="logo">
-        <span className="logo-icon">Snowflake</span>
-      </div>
+        <div className="login-card">
+          <button className="close-btn" onClick={() => navigate(-1)}>
+            ×
+          </button>
 
-      {/* Sign In Card */}
-      <div className="signin-card">
-        <h1 className="signin-title">Sign In</h1>
-
-        <form className="signin-form">
-          <input
-            type="text"
-            placeholder="fka/2022/183"
-            className="signin-input"
-            defaultValue="fka/2022/183"
-          />
-          <div className="password-wrapper">
-            <input
-              type="password"
-              placeholder="••••••••"
-              className="signin-input password-input"
-              defaultValue="••••••••"
-            />
-            <span className="eye-icon">Eye</span>
+          <div className="tabs">
+            <button
+              className={`tab ${userType === "teacher" ? "active" : ""}`}
+              onClick={() => setUserType("teacher")}
+            >
+              Teacher
+            </button>
+            <button
+              className={`tab ${userType === "student" ? "active" : ""}`}
+              onClick={() => setUserType("student")}
+            >
+              Student
+            </button>
           </div>
 
-          <a href="#" className="forgot-password">
-            Forgot Password?
-          </a>
+          <form onSubmit={handleLogin} className="login-form">
+            <h2>Sign Into your account</h2>
 
-          <button type="submit" className="signin-btn">
-            SIGN IN
-          </button>
-        </form>
+            <input
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
 
-        <p className="register-text">
-          Don't have an account?{" "}
-          <a href="#" className="register-link">
-            Register Now
-          </a>
-        </p>
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
 
-        <footer className="signin-footer">© 2015 Listacc Ltd</footer>
+            {userType === "teacher" && (
+              <input
+                type="password"
+                placeholder="Admin Code"
+                value={adminCode}
+                onChange={(e) => setAdminCode(e.target.value)}
+                required
+              />
+            )}
+
+            <button type="submit" className="login-btn">
+              Log in
+            </button>
+          </form>
+
+          <div className="divider">OR SIGN IN WITH</div>
+
+          <div className="social-row">
+            <button onClick={handleGoogle} className="social google">
+              <img src="/icons/google.svg" alt="Google" />
+            </button>
+            <button className="social apple">
+              <img src="/icons/apple.svg" alt="Apple" />
+            </button>
+          </div>
+
+          <p className="terms">
+            Don’t have an account? <a href="/signup">Sign up</a>
+          </p>
+        </div>
       </div>
     </div>
   );
