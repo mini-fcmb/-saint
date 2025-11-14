@@ -4,12 +4,13 @@ import { useNavigate } from "react-router-dom";
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
-  GoogleAuthProvider,
-  User,
+  fetchSignInMethodsForEmail,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "../firebase/config";
-import "../styles/signin.css"; // <-- same folder as signup.css
+import "../styles/signin.css";
+
+const ADMIN_CODE = "mini-fcmb";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -24,25 +25,33 @@ export default function Login() {
     e.preventDefault();
 
     try {
-      // 1. Firebase Auth sign-in
+      // 1. Check if email exists in Firebase Auth
+      const methods = await fetchSignInMethodsForEmail(auth, email);
+      if (methods.length === 0) {
+        alert("No account found with this email. Please sign up.");
+        navigate("/signup");
+        return;
+      }
+
+      // 2. Try to sign in
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const user = cred.user;
 
-      // 2. Email verification check
+      // 3. Email verification check
       if (!user.emailVerified) {
         alert("Please verify your email before logging in.");
         await auth.signOut();
         return;
       }
 
-      // 3. Teacher admin-code check
-      if (userType === "teacher" && adminCode !== "mini-fcmb") {
+      // 4. Teacher admin-code check
+      if (userType === "teacher" && adminCode !== ADMIN_CODE) {
         alert("Invalid Admin Code!");
         await auth.signOut();
         return;
       }
 
-      // 4. Verify user exists in the correct collection
+      // 5. Verify user exists in correct Firestore collection
       const col = userType === "teacher" ? "teachers" : "students";
       const snap = await getDoc(doc(db, col, user.uid));
 
@@ -55,23 +64,32 @@ export default function Login() {
       // Success!
       navigate("/dashboard");
     } catch (err: any) {
-      alert(err.message);
+      // 6. Handle password error specifically
+      if (err.code === "auth/wrong-password") {
+        alert("Incorrect password. Please try again.");
+      } else if (err.code === "auth/user-not-found") {
+        alert("No account found with this email. Please sign up.");
+        navigate("/signup");
+      } else {
+        alert(err.message);
+      }
     }
   };
 
-  /* ---------- GOOGLE (admin code still required for teacher) ---------- */
+  /* ---------- GOOGLE ---------- */
   const handleGoogle = async () => {
     try {
       const res = await signInWithPopup(auth, googleProvider);
       const user = res.user;
 
-      // Email verification (Google always verified)
+      // Google emails are always verified
       if (!user.emailVerified) {
         alert("Google account email not verified.");
         return;
       }
 
-      if (userType === "teacher" && adminCode !== "mini-fcmb") {
+      // Admin code for teachers
+      if (userType === "teacher" && adminCode !== ADMIN_CODE) {
         alert("Invalid Admin Code for Teacher!");
         return;
       }
@@ -81,11 +99,13 @@ export default function Login() {
 
       if (!snap.exists()) {
         alert(`No ${userType} account linked to this Google profile.`);
+        await auth.signOut();
         return;
       }
 
       navigate("/dashboard");
     } catch (err: any) {
+      if (err.code === "auth/popup-closed-by-user") return;
       alert(err.message);
     }
   };
@@ -161,7 +181,7 @@ export default function Login() {
           </div>
 
           <p className="terms">
-            Don’t have an account? <a href="/signup">Sign up</a>
+            Don't have an account? <a href="/signup">Sign up</a>
           </p>
         </div>
       </div>
