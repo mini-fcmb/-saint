@@ -6,6 +6,7 @@ import {
   useLocation,
   useNavigationType,
 } from "react-router-dom";
+import Home from "./pages/Home";
 import Signup from "./pages/signup";
 import SignIn from "./pages/login";
 import LoadingOverlay from "./components/LoadingOverlay";
@@ -42,7 +43,7 @@ export default function App() {
       <Routes>
         {/*<Route path="/" element={<Signup />} />
         <Route path="/login" element={<SignIn />} />*/}
-        <Route path="/" element={<Signup />} />
+        <Route path="/" element={<Home />} />
       </Routes>
     </>
   );

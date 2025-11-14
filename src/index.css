@@ -1,151 +1,196 @@
-/* SchoolCater.css – updated for 4K + pixel-perfect match */
-* { margin:0; padding:0; box-sizing:border-box; }
+/* -------------------------------------------------
+   GetStartedDashboard.css – FULL REPLACEMENT
+   ------------------------------------------------- */
 
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background:#f8fbfc;
-  color:#333;
-}
+   * { margin:0; padding:0; box-sizing:border-box; }
 
-/* ------------------------------------------------------------------ */
-/* 4K & Large-Screen Scaling                                          */
-/* ------------------------------------------------------------------ */
-@media (min-width: 1921px) and (max-width: 2560px) {
-  .header-content,
-  .hero-content,
-  .features-header { max-width: 1600px; }
-
-  .hero-title   { font-size: 4.2rem; }
-  .hero-text    { max-width: 720px; }
-  .hero-description { font-size: 1.35rem; line-height:1.75; }
-
-  .image-placeholder { width:560px; height:510px; }
-  .laptop-screen { top:80px; left:110px; width:240px; height:160px; }
-  .person-laptop { top:55px; left:80px; width:300px; height:270px; }
-  .hand-tablet   { bottom:110px; right:55px; width:150px; height:200px; }
-  .hand-tablet::before { top:25px; left:20px; width:115px; height:155px; }
-  .books-stack   { bottom:80px; left:70px; width:110px; height:130px; }
-  .books-stack::before { top:-20px; left:12px; width:86px; height:25px; }
-  .books-stack::after  { top:-40px; left:6px;  width:98px; height:25px; }
-  .plant-left    { bottom:55px; left:30px; width:55px; height:80px; }
-  .plant-left::before { bottom:-20px; left:12px; width:32px; height:25px; }
-  .plant-right   { top:70px; right:45px; width:48px; height:70px; }
-  .plant-right::before { bottom:-16px; left:9px; width:30px; height:22px; }
-
-  .get-started-btn,
-  .try-free-btn { padding:1.1rem 2.2rem; font-size:1.15rem; }
-
-  .features-title   { font-size:2.8rem; }
-  .features-subtitle{ font-size:1.35rem; }
-}
-
-/* ------------------------------------------------------------------ */
-/* Existing styles (unchanged except tiny tweaks for exact match)     */
-/* ------------------------------------------------------------------ */
-.school-cater-container { width:100%; min-height:100vh;
-  background:linear-gradient(135deg,#e6f7ff 0%,#f0f9ff 100%);
-}
-
-/* Header */
-.header{background:rgba(255,255,255,.95);backdrop-filter:blur(10px);
-  box-shadow:0 2px 10px rgba(0,0,0,.05);position:sticky;top:0;z-index:100;}
-.header-content{max-width:1200px;margin:0 auto;padding:0 2rem;
-  display:flex;justify-content:space-between;align-items:center;height:70px;}
-.logo{display:flex;align-items:center;gap:10px;font-weight:700;
-  font-size:1.5rem;color:#1a5d8a;}
-.logo-icon{font-size:1.8rem;}
-.nav{display:flex;gap:2rem;align-items:center;}
-.nav-link{text-decoration:none;color:#4a5568;font-weight:500;
-  font-size:.95rem;transition:color .3s;position:relative;}
-.nav-link:hover{color:#1a5d8a;}
-.dropdown-trigger{display:flex;align-items:center;gap:4px;}
-.dropdown-arrow{font-size:.7rem;color:#a0aec0;}
-.header-actions{display:flex;align-items:center;gap:1.5rem;}
-.sign-in{text-decoration:none;color:#4a5568;font-weight:500;font-size:.95rem;}
-.try-free-btn{background:linear-gradient(135deg,#4fd1c5,#38b2ac);
-  color:#fff;border:none;padding:.6rem 1.2rem;border-radius:6px;
-  font-weight:600;font-size:.9rem;cursor:pointer;transition:all .3s;
-  box-shadow:0 2px 8px rgba(56,178,172,.3);}
-.try-free-btn:hover{transform:translateY(-2px);
-  box-shadow:0 4px 12px rgba(56,178,172,.4);}
-
-/* Hero */
-.hero{padding:4rem 2rem 6rem;}
-.hero-content{max-width:1200px;margin:0 auto;display:flex;
-  align-items:center;gap:4rem;justify-content:space-between;}
-.hero-text{flex:1;max-width:500px;}
-.hero-title{font-size:3.2rem;line-height:1.2;margin-bottom:1.5rem;
-  color:#1a202c;}
-.highlight{color:#38b2ac;font-style:italic;}
-.hero-description{font-size:1.1rem;line-height:1.7;color:#4a5568;
-  margin-bottom:2rem;}
-.get-started-btn{background:linear-gradient(135deg,#4fd1c5,#38b2ac);
-  color:#fff;border:none;padding:.9rem 1.8rem;border-radius:6px;
-  font-weight:600;font-size:1rem;cursor:pointer;transition:all .3s;
-  box-shadow:0 4px 12px rgba(56,178,172,.3);display:inline-flex;
-  align-items:center;gap:8px;}
-.get-started-btn:hover{transform:translateY(-3px);
-  box-shadow:0 8px 20px rgba(56,178,172,.4);}
-
-/* Hero image (CSS illustration) */
-.hero-image{flex:1;display:flex;justify-content:center;}
-.image-placeholder{position:relative;width:420px;height:380px;
-  background:#b2f5ea;border-radius:50%;overflow:hidden;
-  box-shadow:0 20px 40px rgba(178,245,234,.4);}
-.laptop-screen{position:absolute;top:60px;left:80px;width:180px;height:120px;
-  background:#e6fffa;border:8px solid #1a202c;border-radius:8px;
-  box-shadow:inset 0 0 20px rgba(0,0,0,.1);}
-.person-laptop{position:absolute;top:40px;left:60px;width:220px;height:200px;
-  background:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="25" r="12" fill="%23fdbcb4"/><path d="M35 40 L45 55 L40 70 L35 85 L40 90 L60 90 L65 85 L60 70 L55 55 L65 40 Z" fill="%2338b2ac"/></svg>') center/contain no-repeat;
-  transform:scale(.9);}
-.hand-tablet{position:absolute;bottom:80px;right:40px;width:120px;height:160px;
-  background:#fdbcb4;border-radius:20px;transform:rotate(-20deg);}
-.hand-tablet::before{content:'';position:absolute;top:20px;left:15px;
-  width:90px;height:120px;background:#fff;border:6px solid #1a202c;
-  border-radius:12px;}
-.books-stack{position:absolute;bottom:60px;left:50px;width:80px;height:100px;
-  background:linear-gradient(to right,#f687b3,#fbb6ce);border-radius:6px;
-  box-shadow:0 4px 8px rgba(0,0,0,.1);}
-.books-stack::before{content:'';position:absolute;top:-15px;left:8px;
-  width:64px;height:20px;background:#667eea;border-radius:4px;}
-.books-stack::after{content:'';position:absolute;top:-30px;left:4px;
-  width:72px;height:20px;background:#f093fb;border-radius:4px;}
-.plant-left{position:absolute;bottom:40px;left:20px;width:40px;height:60px;
-  background:#48bb78;border-radius:20px 20px 0 0;}
-.plant-left::before{content:'';position:absolute;bottom:-15px;left:8px;
-  width:24px;height:20px;background:#38a169;border-radius:50%;}
-.plant-right{position:absolute;top:50px;right:30px;width:35px;height:50px;
-  background:#68d391;border-radius:18px 18px 0 0;transform:rotate(15deg);}
-.plant-right::before{content:'';position:absolute;bottom:-12px;left:6px;
-  width:23px;height:18px;background:#48bb78;border-radius:50%;}
-
-/* Features */
-.features{padding:4rem 2rem 6rem;background:#fff;}
-.features-header{max-width:1200px;margin:0 auto;text-align:center;}
-.features-label{display:block;color:#38b2ac;font-weight:600;
-  font-size:.9rem;letter-spacing:2px;margin-bottom:.5rem;}
-.features-title{font-size:2.2rem;color:#1a202c;margin-bottom:1rem;line-height:1.3;}
-.features-subtitle{font-size:1.1rem;color:#718096;line-height:1.7;
-  max-width:800px;margin:0 auto;}
-
-/* ------------------------------------------------------------------ */
-/* Existing responsive breakpoints (unchanged)                        */
-/* ------------------------------------------------------------------ */
-@media (max-width:968px){
-  .hero-content{flex-direction:column;text-align:center;gap:3rem;}
-  .hero-text{max-width:100%;}
-  .hero-title{font-size:2.5rem;}
-  .image-placeholder{width:350px;height:320px;}
-}
-@media (max-width:768px){
-  .header-content{padding:0 1rem;flex-wrap:wrap;height:auto;padding:1rem 0;}
-  .nav{order:3;width:100%;justify-content:center;margin-top:1rem;gap:1.5rem;}
-  .header-actions{gap:1rem;}
-  .hero-title{font-size:2.2rem;}
-  .features-title{font-size:1.8rem;}
-}
-@media (max-width:480px){
-  .hero-title{font-size:1.9rem;}
-  .image-placeholder{width:280px;height:260px;}
-  .laptop-screen{width:140px;height:90px;top:50px;left:60px;}
-}
+   body {
+     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+     background:#fff;               /* pure white theme */
+     color:#1e293b;
+     overflow-x:hidden;
+   }
+   
+   /* ------------------- HEADER ------------------- */
+   .fixed-header{
+     position:fixed; top:0; left:0; right:0;
+     background:#fff; backdrop-filter:blur(16px);
+     z-index:1000; padding:1.2rem 2rem;
+     border-bottom:1px solid #e2e8f0;
+     box-shadow:0 4px 20px rgba(0,0,0,.05);
+   }
+   .header-content{
+     display:flex; justify-content:space-between; align-items:center;
+     max-width:1400px; margin:0 auto;
+   }
+   .logo-section{display:flex; align-items:center; gap:.8rem;}
+   .logo-placeholder{
+     width:50px; height:50px; background:#f1f5f9; border-radius:14px;
+     display:flex; align-items:center; justify-content:center;
+     font-weight:bold; color:#64748b; font-size:1.4rem;
+   }
+   .site-name{
+     font-size:2rem; font-weight:800;
+     background:linear-gradient(135deg,#3b82f6,#1e40af);
+     -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+   }
+   .progress-section{display:flex; align-items:center; gap:1.2rem;}
+   .progress-bar{width:220px; height:5px; background:#e2e8f0; border-radius:3px; overflow:hidden;}
+   .progress-fill{
+     height:100%; background:linear-gradient(90deg,#3b82f6,#1e40af);
+     transition:width .6s ease;
+   }
+   .progress-dots{display:flex; gap:.6rem;}
+   .dot{width:10px; height:10px; border-radius:50%; background:#cbd5e1; transition:all .3s;}
+   .dot.active{background:#3b82f6; transform:scale(1.3);}
+   .restart-btn,.getstarted-btn{
+     background:#1e40af; color:#fff; border:none; padding:.6rem 1.3rem;
+     border-radius:10px; cursor:pointer; font-weight:600; transition:.3s;
+   }
+   .restart-btn:hover,.getstarted-btn:hover{
+     background:#1d4ed8; transform:translateY(-2px);
+   }
+   .getstarted-btn{background:#3b82f6; padding:.7rem 1.5rem;}
+   
+   /* ------------------- MAIN ------------------- */
+   .main-content{
+     margin-top:90px; padding:2.5rem;
+     max-width:1400px; margin-left:auto; margin-right:auto;
+   }
+   .scene-wrapper{
+     position:relative; height:80vh; overflow:hidden;
+     border-radius:24px; background:#fff;
+     box-shadow:0 20px 60px rgba(0,0,0,.08);
+   }
+   
+   /* ---- SCENE (container) ---- */
+   .scene{
+     position:absolute; inset:0;               /* top/left/right/bottom = 0 */
+     opacity:0; visibility:hidden;
+     padding:3.5rem;
+     display:flex; align-items:center; justify-content:center;
+   }
+   .scene.active{ opacity:1; visibility:visible; }
+   
+   /* container entry – random direction */
+   .scene.active .scene-container{
+     animation:containerEnter 1.2s cubic-bezier(.25,.46,.45,.94) forwards;
+   }
+   
+   /* random direction keyframes */
+   @keyframes fromTop    {from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1}}
+   @keyframes fromLeft   {from{transform:translateX(-100%);opacity:0}to{transform:translateX(0);opacity:1}}
+   @keyframes fromBottom {from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+   @keyframes fromRight  {from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+   @keyframes fromTopLeft    {from{transform:translate(-100%,-100%);opacity:0}to{transform:translate(0,0);opacity:1}}
+   @keyframes fromTopRight   {from{transform:translate(100%,-100%);opacity:0}to{transform:translate(0,0);opacity:1}}
+   @keyframes fromBottomLeft {from{transform:translate(-100%,100%);opacity:0}to{transform:translate(0,0);opacity:1}}
+   @keyframes fromBottomRight{from{transform:translate(100%,100%);opacity:0}to{transform:translate(0,0);opacity:1}}
+   
+   .scene[data-direction="top"]      .scene-container{animation-name:fromTop;}
+   .scene[data-direction="left"]     .scene-container{animation-name:fromLeft;}
+   .scene[data-direction="bottom"]   .scene-container{animation-name:fromBottom;}
+   .scene[data-direction="right"]    .scene-container{animation-name:fromRight;}
+   .scene[data-direction="top-left"] .scene-container{animation-name:fromTopLeft;}
+   .scene[data-direction="top-right"] .scene-container{animation-name:fromTopRight;}
+   .scene[data-direction="bottom-left"] .scene-container{animation-name:fromBottomLeft;}
+   .scene[data-direction="bottom-right"] .scene-container{animation-name:fromBottomRight;}
+   
+   /* ---- INNER CONTENT (after container) ---- */
+   .scene.active .scene-title   {animation:slideUp .8s ease-out .6s both;}
+   .scene.active .scene-subtitle{animation:fadeIn .8s ease-out .8s both;}
+   .scene.active .scene-image img{animation:scaleIn 1s ease-out .9s both, float 3s infinite 1.9s;}
+   .scene.active .scene-description .word{animation:wordFade .4s ease-out both;}
+   .scene.active .feature-bullets li{animation:slideLeft .6s ease-out both;}
+   .scene.active .cta-section   {animation:pulseIn 1.2s ease-out 1.2s both;}
+   
+   /* inner keyframes */
+   @keyframes slideUp   {from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+   @keyframes fadeIn    {from{opacity:0}to{opacity:1}}
+   @keyframes scaleIn   {from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+   @keyframes float     {0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+   @keyframes wordFade  {from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+   @keyframes slideLeft {from{transform:translateX(30px);opacity:0}to{transform:translateX(0);opacity:1}}
+   @keyframes pulseIn   {from{transform:scale(.9);opacity:0}to{transform:scale(1);opacity:1}}
+   
+   /* stagger words */
+   .scene.active .scene-description .word:nth-child(1){animation-delay:1s;}
+   .scene.active .scene-description .word:nth-child(2){animation-delay:1.05s;}
+   .scene.active .scene-description .word:nth-child(3){animation-delay:1.1s;}
+   /* add more delays if you have longer sentences */
+   
+   /* stagger bullets */
+   .scene.active .feature-bullets li:nth-child(1){animation-delay:1.4s;}
+   .scene.active .feature-bullets li:nth-child(2){animation-delay:1.5s;}
+   .scene.active .feature-bullets li:nth-child(3){animation-delay:1.6s;}
+   .scene.active .feature-bullets li:nth-child(4){animation-delay:1.7s;}
+   
+   /* ---- LAYOUT ---- */
+   .scene-inner{
+     display:grid; grid-template-columns:1fr 1fr; gap:4rem;
+     align-items:center; width:100%;
+   }
+   .scene-image img{
+     width:100%; height:320px; object-fit:cover; border-radius:18px;
+     box-shadow:0 12px 40px rgba(59,130,246,.2);
+   }
+   .scene-title{
+     font-size:3.2rem; font-weight:800; color:#1e293b; margin-bottom:1rem;
+   }
+   .scene-subtitle{
+     font-size:1.6rem; color:#475569; margin-bottom:2rem;
+   }
+   .scene-description{
+     font-size:1.15rem; color:#64748b; line-height:1.9; margin-bottom:2rem;
+   }
+   .feature-bullets{
+     list-style:none;
+   }
+   .feature-bullets li{
+     padding:.6rem 0; color:#3b82f6; font-weight:500;
+     padding-left:2.2rem; position:relative;
+   }
+   .feature-bullets li::before{
+     content:'Check'; position:absolute; left:0; color:#3b82f6; font-weight:bold;
+   }
+   
+   /* ---- CTA ---- */
+   .cta-section{
+     text-align:center; margin-top:3rem;
+   }
+   .cta-btn{
+     background:linear-gradient(135deg,#3b82f6,#1e40af); color:#fff;
+     border:none; padding:1.6rem 3.2rem; font-size:1.6rem;
+     border-radius:14px; cursor:pointer;
+     box-shadow:0 12px 32px rgba(59,130,246,.35);
+   }
+   .cta-btn:hover{
+     transform:translateY(-6px);
+     box-shadow:0 18px 44px rgba(59,130,246,.5);
+   }
+   .cta-subtext{
+     margin-top:1rem; color:#64748b; font-size:1.25rem;
+   }
+   
+   /* ---- FOOTER ---- */
+   .footer{
+     background:#f8fafc; text-align:center; padding:2.5rem;
+     border-top:1px solid #e2e8f0; color:#64748b;
+   }
+   .footer a{color:#3b82f6; text-decoration:none;}
+   
+   /* ---- RESPONSIVE ---- */
+   @media (max-width:1024px){
+     .scene-inner{grid-template-columns:1fr; text-align:center;}
+     .scene-text{text-align:center;}
+     .header-content{flex-direction:column; gap:1rem;}
+     .progress-section{width:100%; justify-content:space-between;}
+   }
+   @media (max-width:768px){
+     .main-content{padding:1.5rem;}
+     .scene-wrapper{height:75vh; border-radius:16px;}
+     .scene{padding:2rem 1.2rem;}
+     .scene-title{font-size:2.3rem;}
+     .scene-subtitle{font-size:1.3rem;}
+     .cta-btn{padding:1.2rem 2.4rem; font-size:1.3rem;}
+   }

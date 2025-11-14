@@ -462,7 +462,7 @@ export default function TeacherDashboard() {
         </div>
         <style jsx>{`
           /* ------------------------------------------------------------------ */
-          /* GLOBAL & BODY – NO HORIZONTAL OVERFLOW                             */
+          /* GLOBAL & BODY - NO HORIZONTAL OVERFLOW                             */
           /* ------------------------------------------------------------------ */
           * {
             box-sizing: border-box;

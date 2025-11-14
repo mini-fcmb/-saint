@@ -1,96 +1,194 @@
-"use client";
-
-import React from "react";
+import React, { useState, useEffect } from "react";
 import "../index.css";
 
-export default function Home() {
+const images = {
+  hero: "https://picsum.photos/seed/sxaint-hero/1200/600",
+  proctoring: "https://picsum.photos/seed/sxaint-proctor/800/500",
+  grading: "https://picsum.photos/seed/sxaint-grade/800/500",
+  questionBank: "https://picsum.photos/seed/sxaint-bank/800/500",
+  mobileTest: "https://picsum.photos/seed/sxaint-mobile/800/500",
+  analytics: "https://picsum.photos/seed/sxaint-analytics/800/500",
+};
+
+const directions = [
+  "top",
+  "left",
+  "bottom",
+  "right",
+  "top-left",
+  "top-right",
+  "bottom-left",
+  "bottom-right",
+];
+
+const GetStartedDashboard: React.FC = () => {
+  const [currentScene, setCurrentScene] = useState(0);
+  const [progress, setProgress] = useState(0);
+
+  const scenes = [
+    {
+      id: 0,
+      title: "Welcome to SXaint",
+      subtitle: "The future of secure testing.",
+      image: images.hero,
+      description:
+        "Empower educators with AI proctoring, instant analytics, and mobile exams. Trusted by 50,000+ institutions worldwide.",
+    },
+    {
+      id: 1,
+      title: "Create Exams in Minutes",
+      subtitle: "No coding. Just results.",
+      image: images.questionBank,
+      description:
+        "50,000+ questions. Drag & drop. MCQ, essay, math, multimedia. Real-time preview. Launch in under 5 minutes.",
+    },
+    {
+      id: 2,
+      title: "AI-Powered Proctoring",
+      subtitle: "Catch cheating instantly.",
+      image: images.proctoring,
+      description:
+        "Webcam + eye tracking. Tab switch alerts. Full session recording. GDPR & FERPA compliant. Exportable reports.",
+    },
+    {
+      id: 3,
+      title: "Instant Grading & Insights",
+      subtitle: "Results in seconds.",
+      image: images.grading,
+      description:
+        "Auto-grade MCQs. AI essay scoring. Interactive dashboards. Track trends. Identify weak topics.",
+    },
+    {
+      id: 4,
+      title: "Test Anywhere",
+      subtitle: "Mobile, tablet, desktop.",
+      image: images.mobileTest,
+      description:
+        "Offline mode. Auto-sync. Push alerts. Low-data mode. Start, pause, resume anytime.",
+    },
+    {
+      id: 5,
+      title: "Scale Without Limits",
+      subtitle: "From 10 to 100,000+ users.",
+      image: images.analytics,
+      description:
+        "LMS integration. White-label. 99.99% uptime. Admin, teacher, proctor roles.",
+    },
+  ];
+
+  const getRandomDirection = () =>
+    directions[Math.floor(Math.random() * directions.length)];
+
+  useEffect(() => {
+    const duration = currentScene === scenes.length - 1 ? 8000 : 4000; // CTA stays longer
+    const timer = setTimeout(() => {
+      const next = (currentScene + 1) % scenes.length;
+      setCurrentScene(next);
+      setProgress(((next + 1) / scenes.length) * 100);
+    }, duration);
+    return () => clearTimeout(timer);
+  }, [currentScene]);
+
+  const restart = () => {
+    setCurrentScene(0);
+    setProgress(0);
+  };
+
+  const progressDots = scenes.map((_, i) => (
+    <div key={i} className={`dot ${i === currentScene ? "active" : ""}`} />
+  ));
+
   return (
-    <>
-      <div className="school-cater-container">
-        {/* Header */}
-        <header className="header">
-          <div className="header-content">
-            <div className="logo">
-              <span className="logo-icon">❄️</span>
-              <span className="logo-text">School Cater</span>
+    <div className="dashboard-container">
+      {/* Fixed Header */}
+      <header className="fixed-header">
+        <div className="header-content">
+          <div className="logo-section">
+            {/* ← DROP YOUR LOGO HERE */}
+            <div className="logo-placeholder">
+              <span role="img" aria-label="logo">
+                LOGO
+              </span>
             </div>
-            <nav className="nav">
-              <a href="#" className="nav-link">
-                HOME
-              </a>
-              <div className="nav-dropdown">
-                <a href="#" className="nav-link dropdown-trigger">
-                  PRODUCT <span className="dropdown-arrow">▼</span>
-                </a>
-              </div>
-              <div className="nav-dropdown">
-                <a href="#" className="nav-link dropdown-trigger">
-                  AFFILIATE <span className="dropdown-arrow">▼</span>
-                </a>
-              </div>
-              <a href="#" className="nav-link">
-                RESULT CHECKER
-              </a>
-              <a href="#" className="nav-link">
-                CONTACT
-              </a>
-            </nav>
-            <div className="header-actions">
-              <a href="#" className="sign-in">
-                SIGN IN
-              </a>
-              <button className="try-free-btn">TRY IT FREE</button>
-            </div>
+            <h1 className="site-name">SXaint</h1>
           </div>
-        </header>
+          <div className="progress-section">
+            <div className="progress-bar">
+              <div
+                className="progress-fill"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="progress-dots">{progressDots}</div>
+            <button onClick={restart} className="restart-btn">
+              Restart
+            </button>
+            <button className="getstarted-btn">Get Started</button>
+          </div>
+        </div>
+      </header>
 
-        {/* Hero Section */}
-        <section className="hero">
-          <div className="hero-content">
-            <div className="hero-text">
-              <h1 className="hero-title">
-                School management at
-                <br />
-                <span className="highlight">your fingertips</span>
-              </h1>
-              <p className="hero-description">
-                School Cater puts enrollment, grading, billing and parent
-                <br />
-                communications on autopilot—so you spend less time on paperwork
-                <br />
-                and more time on teaching.
-              </p>
-              <button className="get-started-btn">GET STARTED ➜</button>
-            </div>
-            <div className="hero-image">
-              <div className="image-placeholder">
-                <div className="laptop-screen"></div>
-                <div className="person-laptop"></div>
-                <div className="hand-tablet"></div>
-                <div className="books-stack"></div>
-                <div className="plant-left"></div>
-                <div className="plant-right"></div>
-              </div>
-            </div>
-          </div>
-        </section>
+      {/* Main Animated Content */}
+      <main className="main-content">
+        <div className="scene-wrapper">
+          {scenes.map((scene, index) => {
+            const direction = getRandomDirection();
+            const isActive = index === currentScene;
 
-        {/* Features Section */}
-        <section className="features">
-          <div className="features-header">
-            <span className="features-label">| FEATURES |</span>
-            <h2 className="features-title">
-              All-in-One Tools Built for Every Role in Your School
-            </h2>
-            <p className="features-subtitle">
-              Whether you run the school, lead administrative teams or just want
-              a better learning
-              <br />
-              experience, School Cater has you covered.
-            </p>
-          </div>
-        </section>
-      </div>
-    </>
+            return (
+              <section
+                key={scene.id}
+                className={`scene ${isActive ? "active" : ""}`}
+                data-direction={direction}
+              >
+                <div className="scene-container">
+                  <div className="scene-inner">
+                    <div className="scene-image">
+                      <img src={scene.image} alt={scene.title} />
+                    </div>
+                    <div className="scene-text">
+                      <h2 className="scene-title">{scene.title}</h2>
+                      <p className="scene-subtitle">{scene.subtitle}</p>
+                      <div className="scene-description">
+                        {scene.description.split(" ").map((word, i) => (
+                          <span key={i} className="word">
+                            {word}{" "}
+                          </span>
+                        ))}
+                      </div>
+                      <ul className="feature-bullets">
+                        <li>Lightning-fast setup</li>
+                        <li>Secure & compliant</li>
+                        <li>24/7 support</li>
+                        <li>Free trial</li>
+                      </ul>
+                    </div>
+                  </div>
+                  {index === scenes.length - 1 && (
+                    <div className="cta-section">
+                      <button className="cta-btn">
+                        Start Your First Test Now
+                      </button>
+                      <p className="cta-subtext">
+                        Join 50,000+ users transforming education
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </main>
+
+      <footer className="footer">
+        <p>
+          © 2025 SXaint. All rights reserved. | <a href="#">Privacy</a> |{" "}
+          <a href="#">Terms</a>
+        </p>
+      </footer>
+    </div>
   );
-}
+};
+
+export default GetStartedDashboard;

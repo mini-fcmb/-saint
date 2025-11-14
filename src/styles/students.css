@@ -59,6 +59,8 @@ body {
   border: 1px solid #ddd;
   border-radius: 40px;
   font-size: 14px;
+  
+
 }
 .search-btn {
   position: absolute;
@@ -118,6 +120,7 @@ body {
   background: #fff;
   padding-top: 30px;
   box-shadow: 4px 0 12px rgba(0, 0, 0, 0.008);
+
 }
 .sidebar ul {
   list-style: none;
