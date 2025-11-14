@@ -1,7 +1,5 @@
-// ─────────────────────────────────────────────────────────────────────────────
-//  ONLY THE PARTS THAT CHANGED / WERE ADDED ARE MARKED WITH COMMENTS
-// ─────────────────────────────────────────────────────────────────────────────
-import { useState, FormEvent, useEffect } from "react";
+// src/pages/Signup.tsx
+import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   createUserWithEmailAndPassword,
@@ -11,6 +9,7 @@ import {
   User,
   fetchSignInMethodsForEmail,
 } from "firebase/auth";
+
 import { auth, db, googleProvider } from "../firebase/config";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import "../styles/signup.css";
@@ -108,7 +107,7 @@ export default function Signup() {
   };
 
   /* --------------------------------------------------------------
-     EMAIL / PASSWORD SIGNUP (unchanged)
+     EMAIL / PASSWORD SIGNUP – BLOCK DUPLICATE EMAIL
   -------------------------------------------------------------- */
   const handleSignup = async (e: FormEvent) => {
     e.preventDefault();
@@ -138,21 +137,35 @@ export default function Signup() {
       alert("Account created successfully! Welcome to your dashboard.");
       navigate("/dashboard");
     } catch (err: any) {
-      alert(err.message);
+      if (err.code === "auth/email-already-in-use") {
+        alert("This email is already registered. Please sign in instead.");
+        navigate("/login");
+      } else {
+        alert(err.message);
+      }
     }
   };
 
   /* --------------------------------------------------------------
-     GOOGLE SIGNUP – Step 1: Authenticate
+     GOOGLE SIGNUP – BLOCK IF EMAIL ALREADY EXISTS (ANY PROVIDER)
   -------------------------------------------------------------- */
   const handleGoogle = async () => {
     try {
       const res = await signInWithPopup(auth, googleProvider);
       const user = res.user;
 
+      // FINAL FIX: Block if email is 100% exists (password, google, etc.)
+      const methods = await fetchSignInMethodsForEmail(auth, user.email!);
+      if (methods.length > 0) {
+        alert("This email is already registered. Please sign in instead.");
+        await auth.signOut();
+        navigate("/login");
+        return;
+      }
+
+      // Proceed only if email is brand new
       setGoogleUser(user);
 
-      // ---- NEW: Open Google-Info modal with pre-filled data ----
       const [first = "", ...lastParts] = (user.displayName ?? "").split(" ");
       const last = lastParts.join(" ");
       setGoogleInfo({
@@ -162,7 +175,6 @@ export default function Signup() {
         className: "",
       });
 
-      // also pre-fill the main form (in case user cancels the modal)
       setFirstName(first);
       setLastName(last);
       setEmail(user.email ?? "");
@@ -170,7 +182,9 @@ export default function Signup() {
 
       setShowGoogleInfoModal(true);
     } catch (err: any) {
-      alert(err.message);
+      if (err.code !== "auth/popup-closed-by-user") {
+        alert(err.message);
+      }
     }
   };
 
@@ -179,10 +193,6 @@ export default function Signup() {
   -------------------------------------------------------------- */
   const confirmGoogleInfo = async () => {
     if (!googleUser) return;
-
-    // Split fullName into first/last for consistency with email-signup
-    const [first = "", ...lastParts] = googleInfo.fullName.split(" ");
-    const last = lastParts.join(" ");
 
     const base = {
       fullName: googleInfo.fullName,
@@ -199,14 +209,12 @@ export default function Signup() {
         await waitForVerification(googleUser);
       }
 
-      // ---- Teacher path → ask for admin code ----
       if (userType === "teacher") {
         setShowGoogleInfoModal(false);
         setShowAdminModal(true);
         return;
       }
 
-      // ---- Student path → finish ----
       alert("Account created successfully! Welcome to your dashboard.");
       setShowGoogleInfoModal(false);
       navigate("/dashboard");
@@ -219,8 +227,6 @@ export default function Signup() {
      GOOGLE – Step 3: Finalize after admin code (teacher only)
   -------------------------------------------------------------- */
   const finalizeGoogleLogin = async () => {
-    // This function is now only called from the admin-code modal
-    // (it just redirects – everything else was already saved)
     alert("Teacher account created successfully! Welcome to your dashboard.");
     setShowAdminModal(false);
     setAdminCodeInput("");
@@ -277,7 +283,7 @@ export default function Signup() {
   };
 
   // ────────────────────────────────────────────────────────────────────────
-  //  UI (unchanged except the two new modals at the bottom)
+  //  UI (unchanged)
   // ────────────────────────────────────────────────────────────────────────
   return (
     <>
@@ -405,7 +411,7 @@ export default function Signup() {
         </div>
       </div>
 
-      {/* ======== ADMIN CODE MODAL (unchanged) ======== */}
+      {/* ======== ADMIN CODE MODAL ======== */}
       {showAdminModal && (
         <div className="signup-page" style={{ zIndex: 1000 }}>
           <div className="signup-modal">
@@ -488,7 +494,7 @@ export default function Signup() {
         </div>
       )}
 
-      {/* ======== NEW: GOOGLE INFO CONFIRMATION MODAL ======== */}
+      {/* ======== GOOGLE INFO CONFIRMATION MODAL ======== */}
       {showGoogleInfoModal && (
         <div className="signup-page" style={{ zIndex: 1100 }}>
           <div className="signup-modal">
@@ -518,7 +524,6 @@ export default function Signup() {
                 We pulled the following from Google. Please verify / edit.
               </p>
 
-              {/* Full name */}
               <input
                 type="text"
                 placeholder="Full name"
@@ -536,7 +541,6 @@ export default function Signup() {
                 }}
               />
 
-              {/* Email */}
               <input
                 type="email"
                 placeholder="Email"
@@ -554,7 +558,6 @@ export default function Signup() {
                 }}
               />
 
-              {/* Phone */}
               <div className="phone-row" style={{ marginBottom: 12 }}>
                 <div className="country">
                   <img src="/flags/ng.svg" alt="NG" />
@@ -577,7 +580,6 @@ export default function Signup() {
                 />
               </div>
 
-              {/* Class */}
               <select
                 value={googleInfo.className}
                 onChange={(e) =>
