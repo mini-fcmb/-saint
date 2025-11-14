@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import "../index.css";
+import { Link } from "react-router-dom";
+import logo from "../assets/logo.png";
 
 const images = {
   hero: "https://picsum.photos/seed/sxaint-hero/1200/600",
@@ -106,9 +108,16 @@ const GetStartedDashboard: React.FC = () => {
           <div className="logo-section">
             {/* ← DROP YOUR LOGO HERE */}
             <div className="logo-placeholder">
-              <span role="img" aria-label="logo">
-                LOGO
-              </span>
+              <img
+                src={logo}
+                style={{
+                  width: "36px",
+                  height: "36px",
+                  objectFit: "contain",
+                  borderRadius: "50%",
+                  display: "block",
+                }}
+              />
             </div>
             <h1 className="site-name">SXaint</h1>
           </div>
@@ -123,7 +132,9 @@ const GetStartedDashboard: React.FC = () => {
             <button onClick={restart} className="restart-btn">
               Restart
             </button>
-            <button className="getstarted-btn">Get Started</button>
+            <button className="getstarted-btn">
+              <Link to="/signup"> Get Started</Link>
+            </button>
           </div>
         </div>
       </header>
@@ -167,7 +178,7 @@ const GetStartedDashboard: React.FC = () => {
                   {index === scenes.length - 1 && (
                     <div className="cta-section">
                       <button className="cta-btn">
-                        Start Your First Test Now
+                        <Link to="/signup"> Get Started Now</Link>
                       </button>
                       <p className="cta-subtext">
                         Join 50,000+ users transforming education
