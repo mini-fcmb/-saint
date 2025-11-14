@@ -18,6 +18,11 @@ const ADMIN_CODE = "mini-fcmb";
 const MAX_ADMIN_ATTEMPTS = 3;
 const ATTEMPT_KEY = "adminCodeAttempts";
 
+const DASHBOARD_ROUTES = {
+  teacher: "/teacher-dashboard",
+  student: "/student-dashboard",
+} as const;
+
 export default function Signup() {
   const navigate = useNavigate();
 
@@ -135,7 +140,7 @@ export default function Signup() {
       await waitForVerification(user);
 
       alert("Account created successfully! Welcome to your dashboard.");
-      navigate("/dashboard");
+      navigate(DASHBOARD_ROUTES[userType]);
     } catch (err: any) {
       if (err.code === "auth/email-already-in-use") {
         alert("This email is already registered. Please sign in instead.");
@@ -217,7 +222,7 @@ export default function Signup() {
 
       alert("Account created successfully! Welcome to your dashboard.");
       setShowGoogleInfoModal(false);
-      navigate("/dashboard");
+      navigate(DASHBOARD_ROUTES[userType]);
     } catch (err: any) {
       alert(err.message);
     }
@@ -230,7 +235,7 @@ export default function Signup() {
     alert("Teacher account created successfully! Welcome to your dashboard.");
     setShowAdminModal(false);
     setAdminCodeInput("");
-    navigate("/dashboard");
+    navigate(DASHBOARD_ROUTES[userType]);
   };
 
   /* --------------------------------------------------------------

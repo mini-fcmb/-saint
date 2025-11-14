@@ -61,10 +61,13 @@ export default function Login() {
         return;
       }
 
-      // Success!
-      navigate("/dashboard");
+      // Success! Redirect to correct dashboard
+      if (userType === "teacher") {
+        navigate("/teacher-dashboard");
+      } else {
+        navigate("/student-dashboard");
+      }
     } catch (err: any) {
-      // 6. Handle password error specifically
       if (err.code === "auth/wrong-password") {
         alert("Incorrect password. Please try again.");
       } else if (err.code === "auth/user-not-found") {
@@ -103,7 +106,12 @@ export default function Login() {
         return;
       }
 
-      navigate("/dashboard");
+      // Redirect to correct dashboard
+      if (userType === "teacher") {
+        navigate("/teacher-dashboard");
+      } else {
+        navigate("/student-dashboard");
+      }
     } catch (err: any) {
       if (err.code === "auth/popup-closed-by-user") return;
       alert(err.message);
