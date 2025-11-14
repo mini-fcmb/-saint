@@ -96,9 +96,9 @@ export default function Login() {
       }
 
       if (userType === "teacher") {
-        navigate("/teacher-dashboard");
+        navigate("/teachers");
       } else {
-        navigate("/student-dashboard");
+        navigate("/students");
       }
     } catch (err: any) {
       if (err.code === "auth/popup-closed-by-user") return;
