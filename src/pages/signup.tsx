@@ -19,8 +19,8 @@ const MAX_ADMIN_ATTEMPTS = 3;
 const ATTEMPT_KEY = "adminCodeAttempts";
 
 const DASHBOARD_ROUTES = {
-  teacher: "/teacher-dashboard",
-  student: "/student-dashboard",
+  teacher: "/teachers",
+  student: "/students",
 } as const;
 
 export default function Signup() {

@@ -1,4 +1,3 @@
-// src/pages/Login.tsx
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -20,12 +19,10 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [adminCode, setAdminCode] = useState("");
 
-  /* ---------- EMAIL / PASSWORD ---------- */
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
 
     try {
-      // 1. Check if email exists in Firebase Auth
       const methods = await fetchSignInMethodsForEmail(auth, email);
       if (methods.length === 0) {
         alert("No account found with this email. Please sign up.");
@@ -33,25 +30,21 @@ export default function Login() {
         return;
       }
 
-      // 2. Try to sign in
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const user = cred.user;
 
-      // 3. Email verification check
       if (!user.emailVerified) {
         alert("Please verify your email before logging in.");
         await auth.signOut();
         return;
       }
 
-      // 4. Teacher admin-code check
       if (userType === "teacher" && adminCode !== ADMIN_CODE) {
         alert("Invalid Admin Code!");
         await auth.signOut();
         return;
       }
 
-      // 5. Verify user exists in correct Firestore collection
       const col = userType === "teacher" ? "teachers" : "students";
       const snap = await getDoc(doc(db, col, user.uid));
 
@@ -61,11 +54,10 @@ export default function Login() {
         return;
       }
 
-      // Success! Redirect to correct dashboard
       if (userType === "teacher") {
-        navigate("/teacher-dashboard");
+        navigate("/teachers");
       } else {
-        navigate("/student-dashboard");
+        navigate("/students");
       }
     } catch (err: any) {
       if (err.code === "auth/wrong-password") {
@@ -79,19 +71,16 @@ export default function Login() {
     }
   };
 
-  /* ---------- GOOGLE ---------- */
   const handleGoogle = async () => {
     try {
       const res = await signInWithPopup(auth, googleProvider);
       const user = res.user;
 
-      // Google emails are always verified
       if (!user.emailVerified) {
         alert("Google account email not verified.");
         return;
       }
 
-      // Admin code for teachers
       if (userType === "teacher" && adminCode !== ADMIN_CODE) {
         alert("Invalid Admin Code for Teacher!");
         return;
@@ -106,7 +95,6 @@ export default function Login() {
         return;
       }
 
-      // Redirect to correct dashboard
       if (userType === "teacher") {
         navigate("/teacher-dashboard");
       } else {
