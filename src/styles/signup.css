@@ -182,6 +182,8 @@
 }
 .signup-page .create-btn:hover {
   background: #f1f1f1;
+  color: #4299e1;
+  border: 1px solid #4299e1;
 }
 
 /* Divider */
@@ -293,6 +295,6 @@
    background: rgba(255, 255, 255, 0.12);
  }
  .signup-page .input-select option {
-   background: #1e1e2e;
-   color: #fff;
+   background: whitesmoke;
+   color: #1e1e2e;
  }

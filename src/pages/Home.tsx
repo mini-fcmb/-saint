@@ -124,13 +124,12 @@ const GetStartedDashboard: React.FC = () => {
               />
             </div>
             <div className="progress-dots">{progressDots}</div>
-            <button className="restart-btn">
-              {" "}
-              <Link to={"/login"}>Login</Link>{" "}
-            </button>
-            <button className="getstarted-btn">
-              <Link to={"/signup"}> Get Started</Link>
-            </button>
+            <Link to={"/login"}>
+              <button className="restart-btn">Login</button>
+            </Link>
+            <Link to={"/signup"}>
+              <button className="getstarted-btn">Get Started</button>
+            </Link>
           </div>
         </div>
       </header>
@@ -173,9 +172,10 @@ const GetStartedDashboard: React.FC = () => {
                   </div>
                   {index === scenes.length - 1 && (
                     <div className="cta-section">
-                      <button className="cta-btn">
-                        {/*<Link to="/signup"> Get Started Now</Link>*/}
-                      </button>
+                      <Link to="/signup">
+                        {" "}
+                        <button className="cta-btn">Get Started Now</button>
+                      </Link>
                       <p className="cta-subtext">
                         Join 50,000+ users transforming education
                       </p>

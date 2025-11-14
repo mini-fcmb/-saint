@@ -131,6 +131,8 @@
 }
 .login-page .login-btn:hover {
   background: #f1f1f1;
+  color: #4299e1;
+  border: 1px solid #4299e1;
 }
 
 /* Divider & Social (same as signup) */
