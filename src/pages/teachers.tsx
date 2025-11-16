@@ -20,6 +20,10 @@ import {
   AlertCircle,
   ArrowRight,
   X,
+  ChevronLeft as LeftIcon,
+  ChevronRight as RightIcon,
+  Trash2,
+  CloudUpload,
 } from "lucide-react";
 import logo from "../assets/logo.png";
 import { useFirebaseStore } from "../stores/useFirebaseStore";
@@ -35,6 +39,513 @@ interface Student {
   last: string;
   email: string;
   progress: number;
+}
+
+interface AnswerOption {
+  text: string;
+  correct: boolean;
+}
+
+/* ------------------------------------------------------------------ */
+/*  CreateQuizModal Component                                         */
+/* ------------------------------------------------------------------ */
+interface CreateQuizModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+function CreateQuizModal({ isOpen, onClose }: CreateQuizModalProps) {
+  const [answers, setAnswers] = useState<AnswerOption[]>([
+    { text: "Graduate scheme Investment ESG Analyst", correct: true },
+    { text: "Banking Operations", correct: false },
+    { text: "Blockchain", correct: false },
+    { text: "Business Analyst", correct: false },
+  ]);
+  const [question, setQuestion] = useState("");
+  const [category, setCategory] = useState("");
+  const [isActive, setIsActive] = useState(true);
+
+  const handleAddAnswer = () => {
+    setAnswers([...answers, { text: "", correct: false }]);
+  };
+
+  const handleRemoveAnswer = (index: number) => {
+    if (answers.length > 1) {
+      const newAnswers = answers.filter((_, i) => i !== index);
+      if (answers[index].correct && newAnswers.length > 0) {
+        newAnswers[0].correct = true;
+      }
+      setAnswers(newAnswers);
+    }
+  };
+
+  const handleAnswerChange = (index: number, text: string) => {
+    const newAnswers = [...answers];
+    newAnswers[index].text = text;
+    setAnswers(newAnswers);
+  };
+
+  const handleCorrectAnswerChange = (index: number) => {
+    const newAnswers = answers.map((answer, i) => ({
+      ...answer,
+      correct: i === index,
+    }));
+    setAnswers(newAnswers);
+  };
+
+  const handleSave = () => {
+    console.log("Saving quiz:", { question, category, answers, isActive });
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="modal-header">
+          <h2>Create Quiz</h2>
+          <button className="close-btn" onClick={onClose}>
+            <X size={24} />
+          </button>
+        </div>
+
+        {/* Form Body */}
+        <div className="modal-body">
+          {/* Category */}
+          <div className="form-group">
+            <label>Category</label>
+            <select
+              className="select-input"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            >
+              <option value="">Select a category</option>
+              <option value="Graduate">Graduate</option>
+              <option value="New Test">New Test</option>
+              <option value="Work experience">Work experience</option>
+            </select>
+          </div>
+
+          {/* Question */}
+          <div className="form-group">
+            <label>Question</label>
+            <input
+              type="text"
+              placeholder="Write here..."
+              className="text-input"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+            />
+          </div>
+
+          {/* File Upload */}
+          <div className="form-group">
+            <label>Attach file (optional)</label>
+            <div className="file-upload">
+              <div className="upload-area">
+                <CloudUpload size={48} color="#6b7280" />
+                <p>Choose a file or drag & drop it here.</p>
+                <span>PDF, PNG formats, up to 10 MB</span>
+              </div>
+              <button className="browse-btn">Browse File</button>
+            </div>
+          </div>
+
+          {/* Answer Options */}
+          <div className="form-group">
+            <label>Answer</label>
+            <div className="answers-list">
+              {answers.map((answer, index) => (
+                <div key={index} className="answer-item">
+                  <input
+                    type="radio"
+                    name="correct"
+                    checked={answer.correct}
+                    onChange={() => handleCorrectAnswerChange(index)}
+                    className="radio-input"
+                  />
+                  <input
+                    type="text"
+                    value={answer.text}
+                    onChange={(e) => handleAnswerChange(index, e.target.value)}
+                    className="answer-input"
+                    placeholder="Enter answer option..."
+                  />
+                  <button
+                    className="remove-answer"
+                    onClick={() => handleRemoveAnswer(index)}
+                    disabled={answers.length <= 1}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button className="add-more-btn" onClick={handleAddAnswer}>
+              <Plus size={16} /> Add More
+            </button>
+          </div>
+
+          {/* Status */}
+          <div className="form-group status-group">
+            <label>Status</label>
+            <div className="status-toggle">
+              <input
+                type="checkbox"
+                id="status"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+              />
+              <label htmlFor="status" className="toggle-label">
+                <span className="toggle-slider"></span>
+              </label>
+              <span className="status-text">
+                {isActive ? "Active" : "Inactive"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="modal-footer">
+          <button className="nav-btn prev">
+            <LeftIcon size={16} /> Previous
+          </button>
+          <div className="right-actions">
+            <button className="action-btn cancel" onClick={onClose}>
+              Cancel
+            </button>
+            <button className="action-btn save" onClick={handleSave}>
+              Save
+            </button>
+            <button className="action-btn next">
+              Next <RightIcon size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        .modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: 20px;
+        }
+
+        .modal-content {
+          background: white;
+          border-radius: 24px;
+          width: 100%;
+          max-width: 600px;
+          max-height: 90vh;
+          overflow-y: auto;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+          /* Hide scrollbar but keep functionality */
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+
+        .modal-content::-webkit-scrollbar {
+          display: none;
+        }
+
+        .modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 32px 32px 0;
+          margin-bottom: 24px;
+          position: sticky;
+          top: 0;
+          background: white;
+          z-index: 10;
+        }
+
+        .modal-header h2 {
+          font-size: 24px;
+          font-weight: 700;
+          color: #111827;
+          margin: 0;
+        }
+
+        .close-btn {
+          background: none;
+          border: none;
+          color: #6b7280;
+          cursor: pointer;
+          padding: 8px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .close-btn:hover {
+          background: #f3f4f6;
+        }
+
+        .modal-body {
+          padding: 0 32px;
+        }
+
+        .form-group {
+          margin-bottom: 24px;
+        }
+
+        .form-group label {
+          display: block;
+          font-size: 14px;
+          font-weight: 600;
+          color: #374151;
+          margin-bottom: 8px;
+        }
+
+        .select-input,
+        .text-input {
+          width: 100%;
+          padding: 12px 16px;
+          border: 2px solid #e5e7eb;
+          border-radius: 12px;
+          font-size: 14px;
+          transition: border-color 0.2s;
+        }
+
+        .select-input:focus,
+        .text-input:focus {
+          outline: none;
+          border-color: #4f46e5;
+        }
+
+        .file-upload {
+          border: 2px dashed #d1d5db;
+          border-radius: 12px;
+          padding: 32px;
+          text-align: center;
+        }
+
+        .upload-area {
+          margin-bottom: 16px;
+        }
+
+        .upload-area p {
+          font-size: 14px;
+          color: #374151;
+          margin: 8px 0 4px;
+        }
+
+        .upload-area span {
+          font-size: 12px;
+          color: #6b7280;
+        }
+
+        .browse-btn {
+          background: #4f46e5;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 16px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .answers-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          margin-bottom: 16px;
+          max-height: 200px;
+          overflow-y: auto;
+          /* Hide scrollbar but keep functionality */
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+
+        .answers-list::-webkit-scrollbar {
+          display: none;
+        }
+
+        .answer-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .radio-input {
+          margin: 0;
+        }
+
+        .answer-input {
+          flex: 1;
+          padding: 8px 12px;
+          border: 1px solid #d1d5db;
+          border-radius: 8px;
+          font-size: 14px;
+        }
+
+        .remove-answer {
+          background: none;
+          border: none;
+          color: #ef4444;
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .remove-answer:disabled {
+          color: #d1d5db;
+          cursor: not-allowed;
+        }
+
+        .remove-answer:not(:disabled):hover {
+          background: #fef2f2;
+        }
+
+        .add-more-btn {
+          background: none;
+          border: 1px dashed #d1d5db;
+          border-radius: 8px;
+          padding: 8px 16px;
+          color: #4f46e5;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin: 0 auto;
+        }
+
+        .add-more-btn:hover {
+          background: #f8faff;
+        }
+
+        .status-group {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .status-toggle {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .toggle-label {
+          position: relative;
+          display: inline-block;
+          width: 44px;
+          height: 24px;
+          background: #d1d5db;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: background-color 0.2s;
+        }
+
+        .toggle-label input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+        }
+
+        .toggle-slider {
+          position: absolute;
+          content: "";
+          height: 20px;
+          width: 20px;
+          left: 2px;
+          bottom: 2px;
+          background: white;
+          border-radius: 50%;
+          transition: transform 0.2s;
+        }
+
+        input:checked + .toggle-label {
+          background: #4f46e5;
+        }
+
+        input:checked + .toggle-label .toggle-slider {
+          transform: translateX(20px);
+        }
+
+        .status-text {
+          font-size: 14px;
+          color: #374151;
+          font-weight: 500;
+        }
+
+        .modal-footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 24px 32px 32px;
+          border-top: 1px solid #e5e7eb;
+          position: sticky;
+          bottom: 0;
+          background: white;
+          z-index: 10;
+        }
+
+        .nav-btn {
+          background: none;
+          border: 1px solid #d1d5db;
+          border-radius: 8px;
+          padding: 8px 16px;
+          font-size: 14px;
+          color: #374151;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .right-actions {
+          display: flex;
+          gap: 12px;
+        }
+
+        .action-btn {
+          padding: 8px 16px;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          border: none;
+        }
+
+        .cancel {
+          background: none;
+          color: #374151;
+          border: 1px solid #d1d5db;
+        }
+
+        .save {
+          background: #4f46e5;
+          color: white;
+        }
+
+        .next {
+          background: #10b981;
+          color: white;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+      `}</style>
+    </div>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -95,27 +606,29 @@ function ClassListPanel({
                 No students have signed up for your classes yet.
               </div>
             ) : (
-              students.map((s) => (
-                <div key={s.id} className="student-row">
-                  <div className="student-avatar">
-                    {s.first[0].toUpperCase()}
-                    {s.last[0].toUpperCase()}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div>
-                      <strong>
-                        {s.first} {s.last}
-                      </strong>
+              <div className="students-list">
+                {students.map((s) => (
+                  <div key={s.id} className="student-row">
+                    <div className="student-avatar">
+                      {s.first[0].toUpperCase()}
+                      {s.last[0].toUpperCase()}
                     </div>
-                    <div style={{ fontSize: "13px", color: "#6b7280" }}>
-                      {s.email}
+                    <div style={{ flex: 1 }}>
+                      <div>
+                        <strong>
+                          {s.first} {s.last}
+                        </strong>
+                      </div>
+                      <div style={{ fontSize: "13px", color: "#6b7280" }}>
+                        {s.email}
+                      </div>
+                    </div>
+                    <div style={{ fontWeight: 600, color: "#4f46e5" }}>
+                      {s.progress}%
                     </div>
                   </div>
-                  <div style={{ fontWeight: 600, color: "#4f46e5" }}>
-                    {s.progress}%
-                  </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
         </div>
@@ -133,6 +646,7 @@ export default function TeacherDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedMenu, setSelectedMenu] = useState("dashboard");
   const [classListOpen, setClassListOpen] = useState(false);
+  const [quizModalOpen, setQuizModalOpen] = useState(false);
 
   const {
     user,
@@ -142,7 +656,7 @@ export default function TeacherDashboard() {
     error,
     initializeAuth,
     refreshStudents,
-    signOutUser, // <-- NEW: expose sign-out from store
+    signOutUser,
   } = useFirebaseStore();
 
   /* --------------------- AUTH INITIALIZATION --------------------- */
@@ -156,11 +670,10 @@ export default function TeacherDashboard() {
   /* --------------------- LOGOUT HANDLER --------------------- */
   const handleLogout = async () => {
     try {
-      await signOutUser(); // Firebase sign-out
-      navigate("/login", { replace: true }); // redirect & replace history
+      await signOutUser();
+      navigate("/login", { replace: true });
     } catch (err) {
       console.error("Logout failed:", err);
-      // optional: toast/alert
     }
   };
 
@@ -277,7 +790,7 @@ export default function TeacherDashboard() {
 
   /* ------------------------------------------------------------------ */
   return (
-    <div className="app">
+    <div className={`app ${quizModalOpen ? "modal-open" : ""}`}>
       {/* ====================== HEADER ====================== */}
       <header className="header">
         <div className="header-content">
@@ -299,9 +812,8 @@ export default function TeacherDashboard() {
               <Menu size={20} />
             </button>
 
-            {/* ---- LOGOUT BUTTON (now functional) ---- */}
             <button className="get-in-touch" onClick={handleLogout}>
-              <i className="bx bx-log-out"></i> Logout
+              Logout
             </button>
           </div>
         </div>
@@ -347,10 +859,18 @@ export default function TeacherDashboard() {
             <div className="sidebar-footer">
               <div className="create-card">
                 <div className="avatar-placeholder"></div>
-                <button className="create-chat-btn">
+                <button
+                  className="create-chat-btn"
+                  onClick={() => setQuizModalOpen(true)}
+                >
                   <Plus size={18} /> create quiz
                 </button>
-                <button className="create-class-link">Create quiz</button>
+                <button
+                  className="create-class-link"
+                  onClick={() => setQuizModalOpen(true)}
+                >
+                  Create quiz
+                </button>
               </div>
               <div className="copyright">© SXaint MegaPend</div>
             </div>
@@ -358,7 +878,7 @@ export default function TeacherDashboard() {
         </aside>
 
         {/* ====================== MAIN CONTENT ====================== */}
-        <main className="main-content">
+        <main className={`main-content ${quizModalOpen ? "blurred" : ""}`}>
           {/* Welcome */}
           <div className="welcome">
             <h1>Welcome back, {firstName}</h1>
@@ -565,7 +1085,7 @@ export default function TeacherDashboard() {
         </main>
 
         {/* ====================== PROFILE CARD ====================== */}
-        <div className="profile-card">
+        <div className={`profile-card ${quizModalOpen ? "blurred" : ""}`}>
           <div className="profile-avatar">
             {firstName.charAt(0).toUpperCase()}
           </div>
@@ -587,11 +1107,27 @@ export default function TeacherDashboard() {
         </div>
       </div>
 
+      {/* ====================== QUIZ MODAL ====================== */}
+      <CreateQuizModal
+        isOpen={quizModalOpen}
+        onClose={() => setQuizModalOpen(false)}
+      />
+
       {/* ------------------------------------------------------------------ */}
-      {/*  ALL STYLES (unchanged)                                            */}
+      {/*  ALL STYLES                                                        */}
       {/* ------------------------------------------------------------------ */}
       <style jsx>{`
-        /* ... (all the original CSS you already had) ... */
+        .app.modal-open {
+          overflow: hidden;
+        }
+
+        .main-content.blurred,
+        .profile-card.blurred {
+          filter: blur(4px);
+          pointer-events: none;
+          user-select: none;
+        }
+
         .loading,
         .error {
           display: flex;
@@ -818,6 +1354,7 @@ export default function TeacherDashboard() {
           justify-content: center;
           gap: 10px;
           box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
+          cursor: pointer;
         }
         .create-class-link {
           background: transparent;
@@ -828,6 +1365,7 @@ export default function TeacherDashboard() {
           display: flex;
           align-items: center;
           gap: 6px;
+          cursor: pointer;
         }
         .copyright {
           margin-top: 24px;
@@ -839,7 +1377,8 @@ export default function TeacherDashboard() {
           margin-left: 320px;
           padding: 48px;
           flex: 1;
-          transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+            filter 0.3s ease;
         }
         .sidebar:not(.open) ~ .main-content {
           margin-left: 88px;
@@ -1074,6 +1613,7 @@ export default function TeacherDashboard() {
           align-items: center;
           gap: 20px;
           z-index: 40;
+          transition: filter 0.3s ease;
         }
         .profile-avatar {
           width: 72px;
@@ -1150,6 +1690,22 @@ export default function TeacherDashboard() {
           max-height: 90vh;
           overflow-y: auto;
           box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+          /* Hide scrollbar but keep functionality */
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .class-list-modal-content::-webkit-scrollbar {
+          display: none;
+        }
+        .students-list {
+          max-height: 400px;
+          overflow-y: auto;
+          /* Hide scrollbar but keep functionality */
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .students-list::-webkit-scrollbar {
+          display: none;
         }
         .modal-header {
           display: flex;
@@ -1190,7 +1746,7 @@ export default function TeacherDashboard() {
           padding: 20px 0;
         }
 
-        /* RESPONSIVE MEDIA QUERIES (unchanged) */
+        /* RESPONSIVE MEDIA QUERIES */
         @media (min-width: 1400px) {
           .sidebar {
             width: 340px;
