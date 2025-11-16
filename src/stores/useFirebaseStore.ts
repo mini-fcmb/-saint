@@ -6,6 +6,7 @@ import {
   onAuthStateChanged,
   User,
   Unsubscribe,
+  signOut,
 } from "firebase/auth";
 import {
   collection,
@@ -40,6 +41,7 @@ interface FirebaseStore {
   initializeAuth: () => Unsubscribe;
   refreshStudents: () => void;
   clearError: () => void;
+  signOutUser: () => Promise<void>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -55,7 +57,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
   let studentUnsub: Unsubscribe | null = null;
 
   const log = (msg: string) => {
-    const time = new Date().toISOString().slice(11, 19); // HH:MM:SS
+    const time = new Date().toISOString().slice(11, 19);
     console.log("[FB-Store]", msg);
     set((s) => ({ debug: [...s.debug, `[${time}] ${msg}`] }));
   };
@@ -75,18 +77,15 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
 
     let classLevels: string[] = [];
 
-    // Accept "teacher", "teachers", or no role
     const isTeacher = data.role === "teacher" || data.role === "teachers" || !data.role;
 
     if (isTeacher) {
-      // Try teaching array first
       if (Array.isArray(data.teaching)) {
         classLevels = data.teaching
           .map((t: any) => (t.classLevel ?? "").toString().trim())
           .filter(Boolean);
       }
 
-      // Fallback to className
       if (!classLevels.length && data.className) {
         const name = data.className.toString().trim();
         if (name) classLevels = [name];
@@ -127,6 +126,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
           };
         });
 
+        // FIXED: Removed stray '11'
         students.sort((a, b) =>
           `${a.first} ${a.last}`.localeCompare(`${b.first} ${b.last}`)
         );
@@ -199,5 +199,30 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     },
 
     clearError: () => set({ error: null }),
+
+    signOutUser: async () => {
+      try {
+        log("Signing out user...");
+        await signOut(auth);
+        log("Sign-out successful");
+
+        if (studentUnsub) {
+          studentUnsub();
+          studentUnsub = null;
+        }
+
+        set({
+          user: null,
+          teacherClasses: [],
+          students: [],
+          loading: false,
+          error: null,
+          debug: [],
+        });
+      } catch (err: any) {
+        log(`Sign-out error: ${err.message}`);
+        throw err;
+      }
+    },
   };
 });
