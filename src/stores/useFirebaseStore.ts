@@ -1,17 +1,28 @@
 // stores/useFirebaseStore.ts
 "use client";
 
-import { create } from 'zustand';
-import { onAuthStateChanged } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, query, where, onSnapshot } from 'firebase/firestore';
-import { auth, db } from '../firebase/config';
+import { create } from "zustand";
+import {
+  onAuthStateChanged,
+  User,
+  Unsubscribe,
+} from "firebase/auth";
+import {
+  collection,
+  doc,
+  getDoc,
+  query,
+  where,
+  onSnapshot,
+} from "firebase/firestore";
+import { auth, db } from "../firebase/config";
 
-interface TeacherClass {
+export interface TeacherClass {
   id: string;
   name: string;
 }
 
-interface Student {
+export interface Student {
   id: string;
   first: string;
   last: string;
@@ -20,142 +31,173 @@ interface Student {
 }
 
 interface FirebaseStore {
-  user: any;
+  user: User | null;
   teacherClasses: TeacherClass[];
   students: Student[];
   loading: boolean;
   error: string | null;
-  initializeAuth: () => void;
-  refreshData: () => void; // This is the function you need
+  debug: string[];
+  initializeAuth: () => Unsubscribe;
+  refreshStudents: () => void;
   clearError: () => void;
 }
 
-export const useFirebaseStore = create<FirebaseStore>((set, get) => ({
-  user: null,
-  teacherClasses: [],
-  students: [],
-  loading: true,
-  error: null,
+/* ------------------------------------------------------------------ */
+const splitName = (fullName = "") => {
+  const parts = fullName.trim().split(/\s+/);
+  const first = parts[0] ?? "";
+  const last = parts.slice(1).join(" ") ?? "";
+  return { first, last };
+};
 
-  initializeAuth: () => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      set({ user });
-      if (user) {
-        await get().loadTeacherData(user.uid);
-      } else {
-        set({ teacherClasses: [], students: [], loading: false });
-      }
-    });
-  },
+/* ------------------------------------------------------------------ */
+export const useFirebaseStore = create<FirebaseStore>((set, get) => {
+  let studentUnsub: Unsubscribe | null = null;
 
-  loadTeacherData: async (userId: string) => {
-    set({ loading: true, error: null });
+  const log = (msg: string) => {
+    const time = new Date().toISOString().slice(11, 19); // HH:MM:SS
+    console.log("[FB-Store]", msg);
+    set((s) => ({ debug: [...s.debug, `[${time}] ${msg}`] }));
+  };
 
-    try {
-      const teacherDoc = await getDoc(doc(db, "users", userId));
-      if (!teacherDoc.exists()) {
-        set({ teacherClasses: [], students: [], loading: false });
-        return;
-      }
+  const loadTeacher = async (uid: string) => {
+    log(`Loading teacher doc for UID: ${uid}`);
+    const ref = doc(db, "teachers", uid);
+    const snap = await getDoc(ref);
 
-      const teacherData = teacherDoc.data();
-      if (teacherData.role !== "teacher" || !Array.isArray(teacherData.teaching)) {
-        set({ teacherClasses: [], students: [], loading: false });
-        return;
-      }
-
-      const classes: TeacherClass[] = teacherData.teaching
-        .map((t: any) => {
-          const level = t.classLevel?.trim();
-          return level ? { id: level.toUpperCase(), name: level } : null;
-        })
-        .filter(Boolean) as TeacherClass[];
-
-      set({ teacherClasses: classes });
-      
-      if (classes.length > 0) {
-        await get().loadStudents(classes.map(c => c.id));
-      } else {
-        set({ students: [], loading: false });
-      }
-    } catch (err) {
-      console.error("Error loading teacher data:", err);
-      set({ error: "Failed to load data", loading: false });
+    if (!snap.exists()) {
+      log("Teacher doc NOT FOUND");
+      return null;
     }
-  },
 
-  loadStudents: async (classLevels: string[]) => {
-    try {
-      const studentCol = collection(db, "users");
-      
-      const arrayQuery = query(
-        studentCol,
-        where("role", "==", "student"),
-        where("classLevels", "array-contains-any", classLevels)
-      );
+    const data = snap.data()!;
+    log(`Teacher raw data: ${JSON.stringify(data)}`);
 
-      const unsubscribe = onSnapshot(arrayQuery, async (snapshot) => {
-        let studentsData: Student[] = [];
-        
-        if (!snapshot.empty) {
-          studentsData = snapshot.docs.map((d) => {
-            const data = d.data();
-            const names = (data.fullName || "").trim().split(" ");
-            return {
-              id: d.id,
-              first: names[0] || "",
-              last: names.slice(1).join(" ") || "",
-              email: data.email || "",
-              progress: data.progress ?? 0,
-            };
-          });
-        }
+    let classLevels: string[] = [];
 
-        if (studentsData.length === 0) {
-          const stringQuery = query(
-            studentCol,
-            where("role", "==", "student"),
-            where("classLevel", "in", classLevels)
-          );
-          
-          const stringSnapshot = await getDocs(stringQuery);
-          studentsData = stringSnapshot.docs.map((d) => {
-            const data = d.data();
-            const names = (data.fullName || "").trim().split(" ");
-            return {
-              id: d.id,
-              first: names[0] || "",
-              last: names.slice(1).join(" ") || "",
-              email: data.email || "",
-              progress: data.progress ?? 0,
-            };
-          });
-        }
+    // Accept "teacher", "teachers", or no role
+    const isTeacher = data.role === "teacher" || data.role === "teachers" || !data.role;
 
-        const uniqueStudents = studentsData.filter((student, index, self) => 
-          index === self.findIndex(s => s.id === student.id)
-        );
-        
-        uniqueStudents.sort((a, b) =>
+    if (isTeacher) {
+      // Try teaching array first
+      if (Array.isArray(data.teaching)) {
+        classLevels = data.teaching
+          .map((t: any) => (t.classLevel ?? "").toString().trim())
+          .filter(Boolean);
+      }
+
+      // Fallback to className
+      if (!classLevels.length && data.className) {
+        const name = data.className.toString().trim();
+        if (name) classLevels = [name];
+      }
+    }
+
+    const classes: TeacherClass[] = classLevels.map((l) => ({ id: l, name: l }));
+    log(`Teacher classes: ${JSON.stringify(classes)}`);
+    return { classes, teacherData: data };
+  };
+
+  const startStudentListener = (classLevels: string[]) => {
+    if (studentUnsub) studentUnsub();
+
+    const clean = classLevels.map((l) => l.trim()).filter(Boolean);
+
+    if (!clean.length) {
+      log("No class levels → empty student list");
+      set({ students: [], loading: false });
+      return () => {};
+    }
+
+    log(`Query students WHERE className IN [${clean.join(", ")}]`);
+    const q = query(collection(db, "students"), where("className", "in", clean));
+
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const students: Student[] = snap.docs.map((d) => {
+          const data = d.data();
+          const { first, last } = splitName(data.fullName);
+          return {
+            id: d.id,
+            first,
+            last,
+            email: data.email ?? "",
+            progress: typeof data.progress === "number" ? data.progress : 0,
+          };
+        });
+
+        students.sort((a, b) =>
           `${a.first} ${a.last}`.localeCompare(`${b.first} ${b.last}`)
         );
 
-        set({ students: uniqueStudents, loading: false });
+        log(`Students loaded: ${students.length}`);
+        set({ students, loading: false, error: null });
+      },
+      (err) => {
+        log(`Student listener error: ${err.message}`);
+        set({ error: "Failed to load students", loading: false });
+      }
+    );
+
+    studentUnsub = unsub;
+    return unsub;
+  };
+
+  return {
+    user: null,
+    teacherClasses: [],
+    students: [],
+    loading: true,
+    error: null,
+    debug: [],
+
+    initializeAuth: () => {
+      const unsub = onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          if (studentUnsub) studentUnsub();
+          set({
+            user: null,
+            teacherClasses: [],
+            students: [],
+            loading: false,
+            error: null,
+            debug: [],
+          });
+          return;
+        }
+
+        log(`Auth user: ${user.uid} – ${user.email}`);
+        set({ user, loading: true, error: null });
+
+        const info = await loadTeacher(user.uid);
+        if (!info) {
+          set({
+            teacherClasses: [],
+            students: [],
+            loading: false,
+            error: "Teacher profile not found",
+          });
+          return;
+        }
+
+        const { classes } = info;
+        set({ teacherClasses: classes });
+        startStudentListener(classes.map((c) => c.id));
       });
 
-      return unsubscribe;
-    } catch (err) {
-      console.error("Error loading students:", err);
-      set({ error: "Failed to load students", loading: false });
-    }
-  },
+      return () => {
+        unsub();
+        if (studentUnsub) studentUnsub();
+      };
+    },
 
-  refreshData: () => {
-    const { user } = get();
-    if (user) {
-      get().loadTeacherData(user.uid);
-    }
-  },
+    refreshStudents: () => {
+      const { user, teacherClasses } = get();
+      if (!user || !teacherClasses.length) return;
+      startStudentListener(teacherClasses.map((c) => c.id));
+    },
 
-  clearError: () => set({ error: null }),
-}));
+    clearError: () => set({ error: null }),
+  };
+});
