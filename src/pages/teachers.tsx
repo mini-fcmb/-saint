@@ -20,10 +20,12 @@ import {
   AlertCircle,
   ArrowRight,
   X,
-  ChevronLeft as LeftIcon,
-  ChevronRight as RightIcon,
   Trash2,
   CloudUpload,
+  Image as ImageIcon,
+  Edit3,
+  Play,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import logo from "../assets/logo.png";
 import { useFirebaseStore } from "../stores/useFirebaseStore";
@@ -41,189 +43,167 @@ interface Student {
   progress: number;
 }
 
-interface AnswerOption {
+interface Question {
+  id: number;
   text: string;
-  correct: boolean;
+  image: File | null;
+  imageUrl: string;
+  options: string[];
+  correctAnswer: number;
+}
+
+interface Quiz {
+  id: string;
+  name: string;
+  questions: Question[];
+  duration: number; // in minutes
+  scheduledDate: string; // ISO string
+  scheduledTime: string; // HH:mm format
+  status: "upcoming" | "active" | "expired";
+  totalDuration: number; // duration + 10 minutes buffer
+}
+
+interface WorkingHoursData {
+  day: string;
+  hours: number;
+  online: boolean;
 }
 
 /* ------------------------------------------------------------------ */
-/*  CreateQuizModal Component                                         */
+/*  Quiz Name Modal Component                                         */
 /* ------------------------------------------------------------------ */
-interface CreateQuizModalProps {
+interface QuizNameModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSave: (
+    name: string,
+    duration: number,
+    scheduledDate: string,
+    scheduledTime: string
+  ) => void;
+  questions: Question[];
 }
 
-function CreateQuizModal({ isOpen, onClose }: CreateQuizModalProps) {
-  const [answers, setAnswers] = useState<AnswerOption[]>([
-    { text: "Graduate scheme Investment ESG Analyst", correct: true },
-    { text: "Banking Operations", correct: false },
-    { text: "Blockchain", correct: false },
-    { text: "Business Analyst", correct: false },
-  ]);
-  const [question, setQuestion] = useState("");
-  const [category, setCategory] = useState("");
-  const [isActive, setIsActive] = useState(true);
+function QuizNameModal({
+  isOpen,
+  onClose,
+  onSave,
+  questions,
+}: QuizNameModalProps) {
+  const [quizName, setQuizName] = useState("");
+  const [duration, setDuration] = useState(30); // default 30 minutes
+  const [scheduledDate, setScheduledDate] = useState("");
+  const [scheduledTime, setScheduledTime] = useState("");
 
-  const handleAddAnswer = () => {
-    setAnswers([...answers, { text: "", correct: false }]);
-  };
+  useEffect(() => {
+    // Set default date to tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    setScheduledDate(tomorrow.toISOString().split("T")[0]);
 
-  const handleRemoveAnswer = (index: number) => {
-    if (answers.length > 1) {
-      const newAnswers = answers.filter((_, i) => i !== index);
-      if (answers[index].correct && newAnswers.length > 0) {
-        newAnswers[0].correct = true;
-      }
-      setAnswers(newAnswers);
-    }
-  };
-
-  const handleAnswerChange = (index: number, text: string) => {
-    const newAnswers = [...answers];
-    newAnswers[index].text = text;
-    setAnswers(newAnswers);
-  };
-
-  const handleCorrectAnswerChange = (index: number) => {
-    const newAnswers = answers.map((answer, i) => ({
-      ...answer,
-      correct: i === index,
-    }));
-    setAnswers(newAnswers);
-  };
+    // Set default time to 09:00
+    setScheduledTime("09:00");
+  }, []);
 
   const handleSave = () => {
-    console.log("Saving quiz:", { question, category, answers, isActive });
-    onClose();
+    if (quizName.trim() && scheduledDate && scheduledTime) {
+      onSave(quizName.trim(), duration, scheduledDate, scheduledTime);
+      setQuizName("");
+      setDuration(30);
+    }
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
+      <div
+        className="modal-content small-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
-          <h2>Create Quiz</h2>
+          <h2>Save Quiz</h2>
           <button className="close-btn" onClick={onClose}>
             <X size={24} />
           </button>
         </div>
 
-        {/* Form Body */}
         <div className="modal-body">
-          {/* Category */}
           <div className="form-group">
-            <label>Category</label>
-            <select
-              className="select-input"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            >
-              <option value="">Select a category</option>
-              <option value="Graduate">Graduate</option>
-              <option value="New Test">New Test</option>
-              <option value="Work experience">Work experience</option>
-            </select>
-          </div>
-
-          {/* Question */}
-          <div className="form-group">
-            <label>Question</label>
+            <label>Quiz Name *</label>
             <input
               type="text"
-              placeholder="Write here..."
+              placeholder="Enter quiz name..."
               className="text-input"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
+              value={quizName}
+              onChange={(e) => setQuizName(e.target.value)}
             />
           </div>
 
-          {/* File Upload */}
           <div className="form-group">
-            <label>Attach file (optional)</label>
-            <div className="file-upload">
-              <div className="upload-area">
-                <CloudUpload size={48} color="#6b7280" />
-                <p>Choose a file or drag & drop it here.</p>
-                <span>PDF, PNG formats, up to 10 MB</span>
-              </div>
-              <button className="browse-btn">Browse File</button>
-            </div>
+            <label>Test Duration (minutes) *</label>
+            <input
+              type="number"
+              min="5"
+              max="180"
+              className="text-input"
+              value={duration}
+              onChange={(e) => setDuration(parseInt(e.target.value) || 30)}
+            />
+            <small>Time students have to complete the test</small>
           </div>
 
-          {/* Answer Options */}
           <div className="form-group">
-            <label>Answer</label>
-            <div className="answers-list">
-              {answers.map((answer, index) => (
-                <div key={index} className="answer-item">
-                  <input
-                    type="radio"
-                    name="correct"
-                    checked={answer.correct}
-                    onChange={() => handleCorrectAnswerChange(index)}
-                    className="radio-input"
-                  />
-                  <input
-                    type="text"
-                    value={answer.text}
-                    onChange={(e) => handleAnswerChange(index, e.target.value)}
-                    className="answer-input"
-                    placeholder="Enter answer option..."
-                  />
-                  <button
-                    className="remove-answer"
-                    onClick={() => handleRemoveAnswer(index)}
-                    disabled={answers.length <= 1}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <button className="add-more-btn" onClick={handleAddAnswer}>
-              <Plus size={16} /> Add More
-            </button>
+            <label>Scheduled Date *</label>
+            <input
+              type="date"
+              className="text-input"
+              value={scheduledDate}
+              onChange={(e) => setScheduledDate(e.target.value)}
+              min={new Date().toISOString().split("T")[0]}
+            />
           </div>
 
-          {/* Status */}
-          <div className="form-group status-group">
-            <label>Status</label>
-            <div className="status-toggle">
-              <input
-                type="checkbox"
-                id="status"
-                checked={isActive}
-                onChange={(e) => setIsActive(e.target.checked)}
-              />
-              <label htmlFor="status" className="toggle-label">
-                <span className="toggle-slider"></span>
-              </label>
-              <span className="status-text">
-                {isActive ? "Active" : "Inactive"}
-              </span>
-            </div>
+          <div className="form-group">
+            <label>Scheduled Time *</label>
+            <input
+              type="time"
+              className="text-input"
+              value={scheduledTime}
+              onChange={(e) => setScheduledTime(e.target.value)}
+            />
+          </div>
+
+          <div className="quiz-summary">
+            <h4>Quiz Summary</h4>
+            <p>
+              <strong>Questions:</strong> {questions.length}
+            </p>
+            <p>
+              <strong>Total Duration:</strong> {duration + 10} minutes
+              (including 10min buffer)
+            </p>
+            {scheduledDate && (
+              <p>
+                <strong>Scheduled:</strong>{" "}
+                {new Date(scheduledDate).toLocaleDateString()} at{" "}
+                {scheduledTime}
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Footer */}
         <div className="modal-footer">
-          <button className="nav-btn prev">
-            <LeftIcon size={16} /> Previous
+          <button className="action-btn cancel" onClick={onClose}>
+            Cancel
           </button>
-          <div className="right-actions">
-            <button className="action-btn cancel" onClick={onClose}>
-              Cancel
-            </button>
-            <button className="action-btn save" onClick={handleSave}>
-              Save
-            </button>
-            <button className="action-btn next">
-              Next <RightIcon size={16} />
-            </button>
-          </div>
+          <button
+            className="action-btn save"
+            onClick={handleSave}
+            disabled={!quizName.trim() || !scheduledDate || !scheduledTime}
+          >
+            Save Quiz
+          </button>
         </div>
       </div>
 
@@ -236,19 +216,21 @@ function CreateQuizModal({ isOpen, onClose }: CreateQuizModalProps) {
           display: flex;
           align-items: center;
           justify-content: center;
-          z-index: 1000;
+          z-index: 1001;
           padding: 20px;
+        }
+
+        .small-modal {
+          max-width: 500px;
         }
 
         .modal-content {
           background: white;
           border-radius: 24px;
           width: 100%;
-          max-width: 600px;
           max-height: 90vh;
           overflow-y: auto;
           box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-          /* Hide scrollbar but keep functionality */
           scrollbar-width: none;
           -ms-overflow-style: none;
         }
@@ -263,10 +245,6 @@ function CreateQuizModal({ isOpen, onClose }: CreateQuizModalProps) {
           align-items: center;
           padding: 32px 32px 0;
           margin-bottom: 24px;
-          position: sticky;
-          top: 0;
-          background: white;
-          z-index: 10;
         }
 
         .modal-header h2 {
@@ -308,7 +286,6 @@ function CreateQuizModal({ isOpen, onClose }: CreateQuizModalProps) {
           margin-bottom: 8px;
         }
 
-        .select-input,
         .text-input {
           width: 100%;
           padding: 12px 16px;
@@ -318,201 +295,44 @@ function CreateQuizModal({ isOpen, onClose }: CreateQuizModalProps) {
           transition: border-color 0.2s;
         }
 
-        .select-input:focus,
         .text-input:focus {
           outline: none;
           border-color: #4f46e5;
         }
 
-        .file-upload {
-          border: 2px dashed #d1d5db;
-          border-radius: 12px;
-          padding: 32px;
-          text-align: center;
-        }
-
-        .upload-area {
-          margin-bottom: 16px;
-        }
-
-        .upload-area p {
-          font-size: 14px;
-          color: #374151;
-          margin: 8px 0 4px;
-        }
-
-        .upload-area span {
+        .form-group small {
+          display: block;
           font-size: 12px;
           color: #6b7280;
+          margin-top: 4px;
         }
 
-        .browse-btn {
-          background: #4f46e5;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          padding: 8px 16px;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-        }
-
-        .answers-list {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          margin-bottom: 16px;
-          max-height: 200px;
-          overflow-y: auto;
-          /* Hide scrollbar but keep functionality */
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-        }
-
-        .answers-list::-webkit-scrollbar {
-          display: none;
-        }
-
-        .answer-item {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .radio-input {
-          margin: 0;
-        }
-
-        .answer-input {
-          flex: 1;
-          padding: 8px 12px;
-          border: 1px solid #d1d5db;
-          border-radius: 8px;
-          font-size: 14px;
-        }
-
-        .remove-answer {
-          background: none;
-          border: none;
-          color: #ef4444;
-          cursor: pointer;
-          padding: 4px;
-          border-radius: 4px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .remove-answer:disabled {
-          color: #d1d5db;
-          cursor: not-allowed;
-        }
-
-        .remove-answer:not(:disabled):hover {
-          background: #fef2f2;
-        }
-
-        .add-more-btn {
-          background: none;
-          border: 1px dashed #d1d5db;
-          border-radius: 8px;
-          padding: 8px 16px;
-          color: #4f46e5;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin: 0 auto;
-        }
-
-        .add-more-btn:hover {
-          background: #f8faff;
-        }
-
-        .status-group {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-        }
-
-        .status-toggle {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .toggle-label {
-          position: relative;
-          display: inline-block;
-          width: 44px;
-          height: 24px;
-          background: #d1d5db;
+        .quiz-summary {
+          background: #f8fafc;
           border-radius: 12px;
-          cursor: pointer;
-          transition: background-color 0.2s;
+          padding: 20px;
+          margin-top: 24px;
         }
 
-        .toggle-label input {
-          opacity: 0;
-          width: 0;
-          height: 0;
-        }
-
-        .toggle-slider {
-          position: absolute;
-          content: "";
-          height: 20px;
-          width: 20px;
-          left: 2px;
-          bottom: 2px;
-          background: white;
-          border-radius: 50%;
-          transition: transform 0.2s;
-        }
-
-        input:checked + .toggle-label {
-          background: #4f46e5;
-        }
-
-        input:checked + .toggle-label .toggle-slider {
-          transform: translateX(20px);
-        }
-
-        .status-text {
-          font-size: 14px;
+        .quiz-summary h4 {
+          font-size: 16px;
+          font-weight: 600;
           color: #374151;
-          font-weight: 500;
+          margin: 0 0 12px 0;
+        }
+
+        .quiz-summary p {
+          font-size: 14px;
+          color: #6b7280;
+          margin: 8px 0;
         }
 
         .modal-footer {
           display: flex;
-          justify-content: space-between;
+          justify-content: flex-end;
           align-items: center;
           padding: 24px 32px 32px;
           border-top: 1px solid #e5e7eb;
-          position: sticky;
-          bottom: 0;
-          background: white;
-          z-index: 10;
-        }
-
-        .nav-btn {
-          background: none;
-          border: 1px solid #d1d5db;
-          border-radius: 8px;
-          padding: 8px 16px;
-          font-size: 14px;
-          color: #374151;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .right-actions {
-          display: flex;
           gap: 12px;
         }
 
@@ -536,12 +356,579 @@ function CreateQuizModal({ isOpen, onClose }: CreateQuizModalProps) {
           color: white;
         }
 
-        .next {
-          background: #10b981;
+        .save:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  CreateQuizModal Component                                         */
+/* ------------------------------------------------------------------ */
+interface CreateQuizModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSaveQuiz: (questions: Question[]) => void;
+  editingQuiz?: Quiz | null;
+}
+
+function CreateQuizModal({
+  isOpen,
+  onClose,
+  onSaveQuiz,
+  editingQuiz,
+}: CreateQuizModalProps) {
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+
+  const currentQuestion = questions[currentQuestionIndex];
+
+  // Initialize with empty question when creating new quiz
+  useEffect(() => {
+    if (isOpen && !editingQuiz) {
+      setQuestions([
+        {
+          id: 1,
+          text: "",
+          image: null,
+          imageUrl: "",
+          options: ["", "", "", ""],
+          correctAnswer: 0,
+        },
+      ]);
+      setCurrentQuestionIndex(0);
+    }
+  }, [isOpen, editingQuiz]);
+
+  // Load editing quiz questions
+  useEffect(() => {
+    if (editingQuiz && isOpen) {
+      setQuestions(editingQuiz.questions);
+      setCurrentQuestionIndex(0);
+    }
+  }, [editingQuiz, isOpen]);
+
+  const handleAddQuestion = () => {
+    const newQuestion: Question = {
+      id: questions.length + 1,
+      text: "",
+      image: null,
+      imageUrl: "",
+      options: ["", "", "", ""],
+      correctAnswer: 0,
+    };
+    setQuestions([...questions, newQuestion]);
+    setCurrentQuestionIndex(questions.length);
+  };
+
+  const handleRemoveQuestion = (index: number) => {
+    if (questions.length > 1) {
+      const newQuestions = questions.filter((_, i) => i !== index);
+      setQuestions(newQuestions);
+      if (currentQuestionIndex >= newQuestions.length) {
+        setCurrentQuestionIndex(newQuestions.length - 1);
+      }
+    }
+  };
+
+  const handleQuestionTextChange = (text: string) => {
+    const newQuestions = [...questions];
+    newQuestions[currentQuestionIndex].text = text;
+    setQuestions(newQuestions);
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const newQuestions = [...questions];
+      newQuestions[currentQuestionIndex].image = file;
+      newQuestions[currentQuestionIndex].imageUrl = URL.createObjectURL(file);
+      setQuestions(newQuestions);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    const newQuestions = [...questions];
+    newQuestions[currentQuestionIndex].image = null;
+    newQuestions[currentQuestionIndex].imageUrl = "";
+    setQuestions(newQuestions);
+  };
+
+  const handleOptionChange = (optionIndex: number, text: string) => {
+    const newQuestions = [...questions];
+    newQuestions[currentQuestionIndex].options[optionIndex] = text;
+    setQuestions(newQuestions);
+  };
+
+  const handleCorrectAnswerChange = (optionIndex: number) => {
+    const newQuestions = [...questions];
+    newQuestions[currentQuestionIndex].correctAnswer = optionIndex;
+    setQuestions(newQuestions);
+  };
+
+  const handleSave = () => {
+    onSaveQuiz(questions);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title-section">
+            <h2>{editingQuiz ? "Edit Quiz" : "Create CBT Questions"}</h2>
+            <span className="question-counter">
+              Question {currentQuestionIndex + 1} of {questions.length}
+            </span>
+          </div>
+          <button className="close-btn" onClick={onClose}>
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="modal-body">
+          <div className="form-group">
+            <label>Question Text *</label>
+            <textarea
+              placeholder="Enter your question here..."
+              className="question-textarea"
+              value={currentQuestion?.text || ""}
+              onChange={(e) => handleQuestionTextChange(e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Question Image (Optional)</label>
+            <div className="image-upload-section">
+              {currentQuestion?.imageUrl ? (
+                <div className="image-preview">
+                  <img
+                    src={currentQuestion.imageUrl}
+                    alt="Question preview"
+                    className="preview-image"
+                  />
+                  <button
+                    className="remove-image-btn"
+                    onClick={handleRemoveImage}
+                  >
+                    <Trash2 size={16} />
+                    Remove Image
+                  </button>
+                </div>
+              ) : (
+                <div className="image-upload-area">
+                  <input
+                    type="file"
+                    id="image-upload"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="image-input"
+                  />
+                  <label htmlFor="image-upload" className="upload-label">
+                    <ImageIcon size={32} color="#6b7280" />
+                    <p>Click to upload question image</p>
+                    <span>JPG, PNG, GIF - Max 5MB</span>
+                  </label>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Answer Options *</label>
+            <div className="options-list">
+              {currentQuestion?.options.map((option, index) => (
+                <div key={index} className="option-item">
+                  <div className="option-header">
+                    <span className="option-label">
+                      Option {String.fromCharCode(65 + index)}
+                    </span>
+                    <div className="correct-answer-selector">
+                      <input
+                        type="radio"
+                        name="correct-answer"
+                        checked={currentQuestion.correctAnswer === index}
+                        onChange={() => handleCorrectAnswerChange(index)}
+                        className="correct-radio"
+                      />
+                      <label>Correct Answer</label>
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={option}
+                    onChange={(e) => handleOptionChange(index, e.target.value)}
+                    className="option-input"
+                    placeholder={`Enter option ${String.fromCharCode(
+                      65 + index
+                    )}...`}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <div className="footer-left">
+            <button
+              className="nav-btn prev"
+              disabled={currentQuestionIndex === 0}
+              onClick={() => setCurrentQuestionIndex(currentQuestionIndex - 1)}
+            >
+              Previous Question
+            </button>
+
+            {questions.length > 1 && (
+              <button
+                className="remove-question-btn"
+                onClick={() => handleRemoveQuestion(currentQuestionIndex)}
+              >
+                <Trash2 size={16} />
+                Remove This Question
+              </button>
+            )}
+          </div>
+
+          <div className="footer-right">
+            <button
+              className="nav-btn next"
+              onClick={() => setCurrentQuestionIndex(currentQuestionIndex + 1)}
+              disabled={currentQuestionIndex === questions.length - 1}
+            >
+              Next Question
+            </button>
+
+            <button className="add-question-btn" onClick={handleAddQuestion}>
+              <Plus size={16} />
+              Add Another Question
+            </button>
+
+            <button className="action-btn save" onClick={handleSave}>
+              {editingQuiz ? "Update Questions" : "Save Questions"} (
+              {questions.length} questions)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        .modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: 20px;
+        }
+
+        .modal-content {
+          background: white;
+          border-radius: 24px;
+          width: 100%;
+          max-width: 700px;
+          max-height: 90vh;
+          overflow-y: auto;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+
+        .modal-content::-webkit-scrollbar {
+          display: none;
+        }
+
+        .modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          padding: 32px 32px 0;
+          margin-bottom: 24px;
+          position: sticky;
+          top: 0;
+          background: white;
+          z-index: 10;
+        }
+
+        .modal-title-section h2 {
+          font-size: 24px;
+          font-weight: 700;
+          color: #111827;
+          margin: 0 0 8px 0;
+        }
+
+        .question-counter {
+          font-size: 14px;
+          color: #6b7280;
+          font-weight: 500;
+        }
+
+        .close-btn {
+          background: none;
+          border: none;
+          color: #6b7280;
+          cursor: pointer;
+          padding: 8px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .close-btn:hover {
+          background: #f3f4f6;
+        }
+
+        .modal-body {
+          padding: 0 32px;
+        }
+
+        .form-group {
+          margin-bottom: 32px;
+        }
+
+        .form-group label {
+          display: block;
+          font-size: 14px;
+          font-weight: 600;
+          color: #374151;
+          margin-bottom: 8px;
+        }
+
+        .question-textarea {
+          width: 100%;
+          padding: 16px;
+          border: 2px solid #e5e7eb;
+          border-radius: 12px;
+          font-size: 14px;
+          font-family: inherit;
+          resize: vertical;
+          min-height: 80px;
+          transition: border-color 0.2s;
+        }
+
+        .question-textarea:focus {
+          outline: none;
+          border-color: #4f46e5;
+        }
+
+        .image-upload-section {
+          border: 2px dashed #d1d5db;
+          border-radius: 12px;
+          padding: 0;
+          overflow: hidden;
+        }
+
+        .image-preview {
+          position: relative;
+          padding: 20px;
+          text-align: center;
+        }
+
+        .preview-image {
+          max-width: 100%;
+          max-height: 200px;
+          border-radius: 8px;
+          margin-bottom: 12px;
+        }
+
+        .remove-image-btn {
+          background: #ef4444;
           color: white;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 16px;
+          font-size: 14px;
+          cursor: pointer;
           display: flex;
           align-items: center;
           gap: 8px;
+          margin: 0 auto;
+        }
+
+        .image-upload-area {
+          padding: 40px 20px;
+          text-align: center;
+        }
+
+        .image-input {
+          display: none;
+        }
+
+        .upload-label {
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .upload-label p {
+          font-size: 16px;
+          color: #374151;
+          margin: 0;
+          font-weight: 500;
+        }
+
+        .upload-label span {
+          font-size: 14px;
+          color: #6b7280;
+        }
+
+        .options-list {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .option-item {
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          padding: 16px;
+          background: #f9fafb;
+        }
+
+        .option-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 12px;
+        }
+
+        .option-label {
+          font-size: 14px;
+          font-weight: 600;
+          color: #374151;
+        }
+
+        .correct-answer-selector {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .correct-radio {
+          margin: 0;
+        }
+
+        .correct-answer-selector label {
+          font-size: 12px;
+          color: #059669;
+          font-weight: 600;
+          margin: 0;
+          cursor: pointer;
+        }
+
+        .option-input {
+          width: 100%;
+          padding: 12px;
+          border: 1px solid #d1d5db;
+          border-radius: 8px;
+          font-size: 14px;
+          transition: border-color 0.2s;
+        }
+
+        .option-input:focus {
+          outline: none;
+          border-color: #4f46e5;
+        }
+
+        .modal-footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 24px 32px 32px;
+          border-top: 1px solid #e5e7eb;
+          position: sticky;
+          bottom: 0;
+          background: white;
+          z-index: 10;
+          gap: 16px;
+        }
+
+        .footer-left,
+        .footer-right {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .nav-btn {
+          background: none;
+          border: 1px solid #d1d5db;
+          border-radius: 8px;
+          padding: 8px 16px;
+          font-size: 14px;
+          color: #374151;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .nav-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .remove-question-btn {
+          background: none;
+          border: 1px solid #ef4444;
+          color: #ef4444;
+          border-radius: 8px;
+          padding: 8px 16px;
+          font-size: 14px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .add-question-btn {
+          background: #10b981;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 16px;
+          font-size: 14px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .action-btn {
+          padding: 8px 16px;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          border: none;
+        }
+
+        .save {
+          background: #4f46e5;
+          color: white;
+        }
+
+        @media (max-width: 768px) {
+          .modal-footer {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .footer-left,
+          .footer-right {
+            justify-content: center;
+          }
         }
       `}</style>
     </div>
@@ -647,6 +1034,11 @@ export default function TeacherDashboard() {
   const [selectedMenu, setSelectedMenu] = useState("dashboard");
   const [classListOpen, setClassListOpen] = useState(false);
   const [quizModalOpen, setQuizModalOpen] = useState(false);
+  const [quizNameModalOpen, setQuizNameModalOpen] = useState(false);
+  const [editingQuiz, setEditingQuiz] = useState<Quiz | null>(null);
+  const [tempQuestions, setTempQuestions] = useState<Question[]>([]);
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [workingHours, setWorkingHours] = useState<WorkingHoursData[]>([]);
 
   const {
     user,
@@ -667,6 +1059,119 @@ export default function TeacherDashboard() {
     };
   }, [initializeAuth]);
 
+  /* --------------------- PERSIST QUIZZES TO LOCALSTORAGE --------------------- */
+  useEffect(() => {
+    // Load quizzes from localStorage
+    const savedQuizzes = localStorage.getItem("teacher-quizzes");
+    if (savedQuizzes) {
+      setQuizzes(JSON.parse(savedQuizzes));
+    }
+
+    // Load working hours from localStorage
+    const savedWorkingHours = localStorage.getItem("teacher-working-hours");
+    if (savedWorkingHours) {
+      setWorkingHours(JSON.parse(savedWorkingHours));
+    } else {
+      // Initialize working hours for the week
+      initializeWorkingHours();
+    }
+  }, []);
+
+  useEffect(() => {
+    // Save quizzes to localStorage whenever quizzes change
+    localStorage.setItem("teacher-quizzes", JSON.stringify(quizzes));
+  }, [quizzes]);
+
+  useEffect(() => {
+    // Save working hours to localStorage whenever they change
+    localStorage.setItem("teacher-working-hours", JSON.stringify(workingHours));
+  }, [workingHours]);
+
+  /* --------------------- INITIALIZE WORKING HOURS --------------------- */
+  const initializeWorkingHours = () => {
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+    const hoursData = days.map((day, index) => {
+      // Convert index to match getDay() format (0 = Sunday)
+      const dayIndex = (index + 1) % 7;
+      const isToday = dayIndex === today;
+
+      return {
+        day,
+        hours: isToday ? 4 : 0, // Start with 4 hours for today if teacher is online
+        online: isToday,
+      };
+    });
+
+    setWorkingHours(hoursData);
+  };
+
+  /* --------------------- UPDATE WORKING HOURS IN REAL-TIME --------------------- */
+  useEffect(() => {
+    const updateTodayHours = () => {
+      const today = new Date().getDay();
+      const todayIndex = (today + 6) % 7; // Convert to our array index (0 = Monday)
+
+      setWorkingHours((prev) =>
+        prev.map((day, index) => {
+          if (index === todayIndex) {
+            // Increment hours by 0.1 (6 minutes) each time this runs
+            return {
+              ...day,
+              hours: Math.min(24, day.hours + 0.1),
+              online: true,
+            };
+          }
+          return day;
+        })
+      );
+    };
+
+    // Update every 6 minutes (360000 ms)
+    const interval = setInterval(updateTodayHours, 360000);
+
+    // Initial update
+    updateTodayHours();
+
+    return () => clearInterval(interval);
+  }, []);
+
+  /* --------------------- UPDATE QUIZ STATUSES IN REAL-TIME --------------------- */
+  useEffect(() => {
+    const updateQuizStatuses = () => {
+      const now = new Date();
+
+      setQuizzes((prevQuizzes) =>
+        prevQuizzes.map((quiz) => {
+          const scheduledDateTime = new Date(
+            `${quiz.scheduledDate}T${quiz.scheduledTime}`
+          );
+          const endTime = new Date(
+            scheduledDateTime.getTime() + quiz.totalDuration * 60000
+          );
+
+          let status: "upcoming" | "active" | "expired" = "upcoming";
+          if (now >= scheduledDateTime && now <= endTime) {
+            status = "active";
+          } else if (now > endTime) {
+            status = "expired";
+          }
+
+          return { ...quiz, status };
+        })
+      );
+    };
+
+    // Update every minute
+    const interval = setInterval(updateQuizStatuses, 60000);
+
+    // Initial update
+    updateQuizStatuses();
+
+    return () => clearInterval(interval);
+  }, []);
+
   /* --------------------- LOGOUT HANDLER --------------------- */
   const handleLogout = async () => {
     try {
@@ -674,6 +1179,93 @@ export default function TeacherDashboard() {
       navigate("/login", { replace: true });
     } catch (err) {
       console.error("Logout failed:", err);
+    }
+  };
+
+  /* --------------------- QUIZ MANAGEMENT --------------------- */
+  const handleSaveQuestions = (questions: Question[]) => {
+    setTempQuestions(questions);
+    if (editingQuiz) {
+      // Update existing quiz
+      const updatedQuizzes = quizzes.map((quiz) =>
+        quiz.id === editingQuiz.id ? { ...quiz, questions } : quiz
+      );
+      setQuizzes(updatedQuizzes);
+      setEditingQuiz(null);
+      setQuizModalOpen(false);
+    } else {
+      // New quiz - open name modal
+      setQuizNameModalOpen(true);
+    }
+  };
+
+  const handleSaveQuizWithName = (
+    name: string,
+    duration: number,
+    scheduledDate: string,
+    scheduledTime: string
+  ) => {
+    const totalDuration = duration + 10; // Add 10 minutes buffer
+
+    // Calculate status based on current time
+    const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
+    const now = new Date();
+    const endTime = new Date(
+      scheduledDateTime.getTime() + totalDuration * 60000
+    );
+
+    let status: "upcoming" | "active" | "expired" = "upcoming";
+    if (now >= scheduledDateTime && now <= endTime) {
+      status = "active";
+    } else if (now > endTime) {
+      status = "expired";
+    }
+
+    const newQuiz: Quiz = {
+      id: Date.now().toString(),
+      name,
+      questions: tempQuestions,
+      duration,
+      scheduledDate,
+      scheduledTime,
+      totalDuration,
+      status,
+    };
+
+    setQuizzes([newQuiz, ...quizzes]);
+    setQuizNameModalOpen(false);
+    setQuizModalOpen(false);
+    setTempQuestions([]);
+  };
+
+  const handleEditQuiz = (quiz: Quiz) => {
+    setEditingQuiz(quiz);
+    setQuizModalOpen(true);
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "active":
+        return <Play size={22} color="#10b981" />;
+      case "upcoming":
+        return <Clock size={22} color="#f59e0b" />;
+      case "expired":
+        return <AlertCircle size={22} color="#ef4444" />;
+      default:
+        return <Clock size={22} color="#6b7280" />;
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "active":
+        return "Start";
+      case "upcoming":
+        return "Upcoming";
+      case "expired":
+        return "Expired";
+      default:
+        return "Unknown";
     }
   };
 
@@ -716,55 +1308,34 @@ export default function TeacherDashboard() {
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
-  /* --------------------- STATIC DATA --------------------- */
-  const workingHours = [
-    { day: "Mon", hours: 8, online: true },
-    { day: "Tue", hours: 6, online: true },
-    { day: "Wed", hours: 7, online: true },
-    { day: "Thu", hours: 5, online: true },
-    { day: "Fri", hours: 4, online: true },
-    { day: "Sat", hours: 0, online: false },
-    { day: "Sun", hours: 0, online: false },
-  ];
+  /* --------------------- UPCOMING CLASSES --------------------- */
+  const upcomingClasses = useMemo(() => {
+    // Combine teacher classes with quizzes for upcoming classes
+    const classItems = teacherClasses.map((c, i) => ({
+      id: `class-${i + 1}`,
+      time: i % 2 === 0 ? "10:30" : "14:30",
+      name: c.name,
+      location: "Classroom",
+      type: "class" as const,
+      status: "active" as const,
+    }));
 
-  const studentTests = [
-    {
-      id: 1,
-      name: "Composition in web design",
-      deadline: "June 07, 2022",
-      student: "Marie Stephens",
-      status: "Active",
-    },
-    {
-      id: 2,
-      name: "Responsive vs. Adaptive Design",
-      deadline: "June 10, 2022",
-      student: "Barbara Carter",
-      status: "Active",
-    },
-    {
-      id: 3,
-      name: "Responsive vs. Adaptive Design",
-      deadline: "June 10, 2022",
-      student: "Daniel Evans",
-      status: "Reviewed",
-    },
-    {
-      id: 4,
-      name: "8 point grid system in UX",
-      deadline: "June 11, 2022",
-      student: "Peta Robinson",
-      status: "Not reviewed",
-    },
-  ];
+    const quizItems = quizzes
+      .filter((quiz) => quiz.status === "upcoming" || quiz.status === "active")
+      .map((quiz, i) => ({
+        id: `quiz-${quiz.id}`,
+        time: quiz.scheduledTime,
+        name: quiz.name,
+        location: "Online Exam",
+        type: "quiz" as const,
+        status:
+          quiz.status === "active"
+            ? ("active" as const)
+            : ("upcoming" as const),
+      }));
 
-  const upcomingClasses = teacherClasses.map((c, i) => ({
-    id: i + 1,
-    time: i % 2 === 0 ? "10:30" : "14:30",
-    name: c.name,
-    location: "June 06, Offline",
-    status: "active",
-  }));
+    return [...classItems, ...quizItems].slice(0, 5); // Show max 5 items
+  }, [teacherClasses, quizzes]);
 
   const firstName = user?.displayName?.split(" ")[0] || "Teacher";
   const fullName = user?.displayName || "Teacher Name";
@@ -790,7 +1361,11 @@ export default function TeacherDashboard() {
 
   /* ------------------------------------------------------------------ */
   return (
-    <div className={`app ${quizModalOpen ? "modal-open" : ""}`}>
+    <div
+      className={`app ${
+        quizModalOpen || quizNameModalOpen ? "modal-open" : ""
+      }`}
+    >
       {/* ====================== HEADER ====================== */}
       <header className="header">
         <div className="header-content">
@@ -861,15 +1436,21 @@ export default function TeacherDashboard() {
                 <div className="avatar-placeholder"></div>
                 <button
                   className="create-chat-btn"
-                  onClick={() => setQuizModalOpen(true)}
+                  onClick={() => {
+                    setEditingQuiz(null);
+                    setQuizModalOpen(true);
+                  }}
                 >
-                  <Plus size={18} /> create quiz
+                  <Plus size={18} /> Create Quiz
                 </button>
                 <button
                   className="create-class-link"
-                  onClick={() => setQuizModalOpen(true)}
+                  onClick={() => {
+                    setEditingQuiz(null);
+                    setQuizModalOpen(true);
+                  }}
                 >
-                  Create quiz
+                  Upload Questions
                 </button>
               </div>
               <div className="copyright">© SXaint MegaPend</div>
@@ -878,7 +1459,11 @@ export default function TeacherDashboard() {
         </aside>
 
         {/* ====================== MAIN CONTENT ====================== */}
-        <main className={`main-content ${quizModalOpen ? "blurred" : ""}`}>
+        <main
+          className={`main-content ${
+            quizModalOpen || quizNameModalOpen ? "blurred" : ""
+          }`}
+        >
           {/* Welcome */}
           <div className="welcome">
             <h1>Welcome back, {firstName}</h1>
@@ -924,7 +1509,7 @@ export default function TeacherDashboard() {
             <div className="card working-hours">
               <div className="card-header">
                 <h3>Working Hours</h3>
-                <span>01 - 08 June 2022</span>
+                <span>This Week</span>
               </div>
               <div className="bar-chart">
                 {workingHours.map((d, i) => (
@@ -932,8 +1517,8 @@ export default function TeacherDashboard() {
                     <div
                       className="bar"
                       style={{
-                        height: `${d.hours * 17.5}px`,
-                        backgroundColor: d.hours > 0 ? "#10b981" : "#e5e7eb",
+                        height: `${Math.min(100, (d.hours / 24) * 100)}%`,
+                        backgroundColor: d.online ? "#10b981" : "#e5e7eb",
                       }}
                     ></div>
                     <span>{d.day}</span>
@@ -941,7 +1526,14 @@ export default function TeacherDashboard() {
                 ))}
               </div>
               <div className="total">
-                Total <strong>38h 15m</strong>
+                Total{" "}
+                <strong>
+                  {Math.round(
+                    workingHours.reduce((sum, day) => sum + day.hours, 0)
+                  )}
+                  h
+                </strong>{" "}
+                this week
               </div>
               <div className="legend">
                 <div>
@@ -1010,82 +1602,114 @@ export default function TeacherDashboard() {
             {/* Student Tests */}
             <div className="card student-tests">
               <div className="card-header">
-                <h3>Student tests</h3>
+                <h3>Student Tests ({quizzes.length})</h3>
                 <a href="#" className="view-all">
                   All tests
                 </a>
               </div>
               <div className="test-list">
-                {studentTests.map((t) => (
-                  <div key={t.id} className="test-item">
-                    <div className="test-icon">
-                      <FileText size={24} />
-                    </div>
-                    <div className="test-info">
-                      <h4>{t.name}</h4>
-                      <div className="test-meta">
-                        <span>
-                          <Clock size={16} /> Deadline {t.deadline}
-                        </span>
-                        <span>
-                          <Users size={16} /> {t.student}
-                        </span>
+                {quizzes.length === 0 ? (
+                  <div className="empty-state">
+                    No tests created yet. Click "Create Quiz" to get started.
+                  </div>
+                ) : (
+                  quizzes.map((quiz) => (
+                    <div key={quiz.id} className="test-item">
+                      <div className="test-icon">
+                        <FileText size={24} />
+                      </div>
+                      <div className="test-info">
+                        <div className="test-title-section">
+                          <h4>{quiz.name}</h4>
+                          <div className="test-actions">
+                            <button
+                              className="edit-btn"
+                              onClick={() => handleEditQuiz(quiz)}
+                              title="Edit quiz"
+                            >
+                              <i className="bx bx-pencil"></i>
+                            </button>
+                          </div>
+                        </div>
+                        <div className="test-meta">
+                          <span>
+                            <Clock size={16} /> {quiz.duration} min test + 10min
+                            buffer
+                          </span>
+                          <span>
+                            <CalendarIcon size={16} />{" "}
+                            {new Date(quiz.scheduledDate).toLocaleDateString()}{" "}
+                            at {quiz.scheduledTime}
+                          </span>
+                          <span>
+                            <Users size={16} /> {quiz.questions.length}{" "}
+                            questions
+                          </span>
+                        </div>
+                      </div>
+                      <div className={`status ${quiz.status}`}>
+                        {getStatusIcon(quiz.status)}
+                        <span>{getStatusText(quiz.status)}</span>
                       </div>
                     </div>
-                    <div
-                      className={`status ${t.status
-                        .toLowerCase()
-                        .replace(" ", "-")}`}
-                    >
-                      {t.status === "Active" && (
-                        <CheckCircle size={22} color="#10b981" />
-                      )}
-                      {t.status === "Reviewed" && (
-                        <CheckCircle size={22} color="#f59e0b" />
-                      )}
-                      {t.status === "Not reviewed" && (
-                        <AlertCircle size={22} color="#ef4444" />
-                      )}
-                      <span>{t.status}</span>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
 
             {/* Upcoming Classes */}
             <div className="card upcoming-classes">
               <div className="card-header">
-                <h3>Upcoming Classes</h3>
+                <h3>Upcoming Classes & Exams</h3>
                 <a href="#" className="view-all">
                   View all
                 </a>
               </div>
               <div className="class-list">
-                {upcomingClasses.map((c) => (
-                  <div key={c.id} className="class-item">
-                    <div className={`class-status ${c.status}`}>
-                      {c.status === "active" ? (
-                        <CheckCircle size={24} />
-                      ) : (
-                        <Clock size={24} />
-                      )}
-                    </div>
-                    <div>
-                      <h4>
-                        {c.time} {c.name}
-                      </h4>
-                      <p>{c.location}</p>
-                    </div>
+                {upcomingClasses.length === 0 ? (
+                  <div className="empty-state">
+                    No upcoming classes or exams scheduled.
                   </div>
-                ))}
+                ) : (
+                  upcomingClasses.map((item) => (
+                    <div key={item.id} className="class-item">
+                      <div className={`class-status ${item.status}`}>
+                        {item.type === "quiz" ? (
+                          <FileText
+                            size={20}
+                            color={
+                              item.status === "active" ? "#10b981" : "#f59e0b"
+                            }
+                          />
+                        ) : item.status === "active" ? (
+                          <CheckCircle size={20} color="#10b981" />
+                        ) : (
+                          <Clock size={20} color="#f59e0b" />
+                        )}
+                      </div>
+                      <div>
+                        <h4>
+                          {item.time} {item.name}
+                        </h4>
+                        <p>
+                          {item.location} •{" "}
+                          {item.type === "quiz" ? "Exam" : "Class"}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
         </main>
 
         {/* ====================== PROFILE CARD ====================== */}
-        <div className={`profile-card ${quizModalOpen ? "blurred" : ""}`}>
+        <div
+          className={`profile-card ${
+            quizModalOpen || quizNameModalOpen ? "blurred" : ""
+          }`}
+        >
           <div className="profile-avatar">
             {firstName.charAt(0).toUpperCase()}
           </div>
@@ -1107,10 +1731,22 @@ export default function TeacherDashboard() {
         </div>
       </div>
 
-      {/* ====================== QUIZ MODAL ====================== */}
+      {/* ====================== MODALS ====================== */}
       <CreateQuizModal
         isOpen={quizModalOpen}
-        onClose={() => setQuizModalOpen(false)}
+        onClose={() => {
+          setQuizModalOpen(false);
+          setEditingQuiz(null);
+        }}
+        onSaveQuiz={handleSaveQuestions}
+        editingQuiz={editingQuiz}
+      />
+
+      <QuizNameModal
+        isOpen={quizNameModalOpen}
+        onClose={() => setQuizNameModalOpen(false)}
+        onSave={handleSaveQuizWithName}
+        questions={tempQuestions}
       />
 
       {/* ------------------------------------------------------------------ */}
@@ -1478,7 +2114,7 @@ export default function TeacherDashboard() {
           align-items: flex-end;
           gap: 16px;
           height: 140px;
-          margin-top: 80px;
+          margin-top: 20px;
         }
         .bar-item {
           flex: 1;
@@ -1492,6 +2128,7 @@ export default function TeacherDashboard() {
           border-radius: 6px;
           background: #10b981;
           transition: height 0.3s;
+          min-height: 20px;
         }
         .total {
           font-size: 14px;
@@ -1523,12 +2160,26 @@ export default function TeacherDashboard() {
           display: flex;
           flex-direction: column;
           gap: 20px;
+          max-height: 400px;
+          overflow-y: auto;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .test-list::-webkit-scrollbar,
+        .class-list::-webkit-scrollbar {
+          display: none;
         }
         .test-item,
         .class-item {
           display: flex;
           align-items: center;
           gap: 16px;
+          padding: 16px;
+          border-radius: 12px;
+          transition: background-color 0.2s;
+        }
+        .test-item:hover {
+          background: #f8fafc;
         }
         .test-icon,
         .class-status {
@@ -1543,6 +2194,53 @@ export default function TeacherDashboard() {
         }
         .test-info {
           flex: 1;
+        }
+        .test-title-section {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 8px;
+        }
+        .test-title-section h4 {
+          font-size: 15px;
+          font-weight: 600;
+          color: #111827;
+          margin: 0;
+          flex: 1;
+        }
+        .test-actions {
+          opacity: 0;
+          transition: opacity 0.2s;
+        }
+        .test-item:hover .test-actions {
+          opacity: 1;
+        }
+        .edit-btn {
+          background: none;
+          border: none;
+          color: #6b7280;
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .edit-btn:hover {
+          background: #e5e7eb;
+          color: #374151;
+        }
+        .test-meta {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .test-meta span {
+          font-size: 13px;
+          color: #6b7280;
+          display: flex;
+          align-items: center;
+          gap: 6px;
         }
         .test-info h4,
         .class-item h4 {
@@ -1563,6 +2261,21 @@ export default function TeacherDashboard() {
           gap: 6px;
           font-size: 14px;
           font-weight: 600;
+          padding: 6px 12px;
+          border-radius: 20px;
+          background: #f3f4f6;
+        }
+        .status.active {
+          background: #d1fae5;
+          color: #065f46;
+        }
+        .status.upcoming {
+          background: #fef3c7;
+          color: #92400e;
+        }
+        .status.expired {
+          background: #fee2e2;
+          color: #991b1b;
         }
         .calendar-grid {
           display: grid;
@@ -1690,7 +2403,6 @@ export default function TeacherDashboard() {
           max-height: 90vh;
           overflow-y: auto;
           box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-          /* Hide scrollbar but keep functionality */
           scrollbar-width: none;
           -ms-overflow-style: none;
         }
@@ -1700,7 +2412,6 @@ export default function TeacherDashboard() {
         .students-list {
           max-height: 400px;
           overflow-y: auto;
-          /* Hide scrollbar but keep functionality */
           scrollbar-width: none;
           -ms-overflow-style: none;
         }
@@ -1744,6 +2455,11 @@ export default function TeacherDashboard() {
           text-align: center;
           color: #9ca3af;
           padding: 20px 0;
+        }
+
+        /* Boxicons for edit icon */
+        .bx-pencil {
+          font-size: 16px;
         }
 
         /* RESPONSIVE MEDIA QUERIES */
