@@ -1,17 +1,15 @@
-// src/pages/Signup.tsx
+// src/pages/signup.tsx
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   createUserWithEmailAndPassword,
-  updateProfile,
   signInWithPopup,
   sendEmailVerification,
-  User,
   fetchSignInMethodsForEmail,
+  updateProfile,
 } from "firebase/auth";
-
-import { auth, db, googleProvider, appleProvider } from "../firebase/config";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db, googleProvider, appleProvider } from "../firebase/config";
 import "../styles/signup.css";
 
 const ADMIN_CODE = "mini-fcmb";
@@ -26,7 +24,7 @@ const DASHBOARD_ROUTES = {
 export default function Signup() {
   const navigate = useNavigate();
 
-  // ---------- Form state ----------
+  // ───── Form State ─────
   const [userType, setUserType] = useState<"teacher" | "student">("teacher");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -36,18 +34,17 @@ export default function Signup() {
   const [className, setClassName] = useState("");
   const [adminCodeInput, setAdminCodeInput] = useState("");
 
-  // ---------- Google/Apple + Modals ----------
-  const [showAdminModal, setShowAdminModal] = useState(false);
-  const [showGoogleInfoModal, setShowGoogleInfoModal] = useState(false);
-  const [googleUser, setGoogleUser] = useState<User | null>(null);
-  const [googleInfo, setGoogleInfo] = useState({
+  // ───── Google/Apple Info Modal ─────
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [info, setInfo] = useState({
     fullName: "",
     email: "",
     phone: "",
     className: "",
   });
 
-  // ---------- Admin attempts ----------
+  // ───── Admin Modal ─────
+  const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminAttempts, setAdminAttempts] = useState(() => {
     const saved = localStorage.getItem(ATTEMPT_KEY);
     return saved ? parseInt(saved, 10) : 0;
@@ -64,189 +61,15 @@ export default function Signup() {
     "SSS 3",
   ];
 
-  // --------------------------------------------------------------
-  // Save user to Firestore
-  // --------------------------------------------------------------
+  // ───── Helper: Save to Firestore ─────
   const saveUserToFirestore = async (uid: string, base: any) => {
     const collection = userType === "teacher" ? "teachers" : "students";
     const data = userType === "teacher" ? { ...base, subjects: [] } : base;
     await setDoc(doc(db, collection, uid), data);
+    console.log(`[Firestore] Saved ${userType} ${uid}`);
   };
 
-  // --------------------------------------------------------------
-  // Handle Email/Password Signup
-  // --------------------------------------------------------------
-  const handleSignup = async (e: FormEvent) => {
-    e.preventDefault();
-
-    // Validate admin code for teachers
-    if (userType === "teacher" && adminCodeInput !== ADMIN_CODE) {
-      handleWrongAdminCode();
-      return;
-    }
-
-    try {
-      // 1. Create Auth user
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
-      const user = cred.user;
-
-      // 2. Update profile
-      await updateProfile(user, { displayName: fullName });
-
-      // 3. Save to Firestore
-      const base = {
-        fullName,
-        email,
-        phone,
-        className,
-        createdAt: serverTimestamp(),
-      };
-      await saveUserToFirestore(user.uid, base);
-
-      // 4. Send verification email (DO NOT WAIT)
-      await sendEmailVerification(user);
-      alert("Account created! Check your email to verify, then log in.");
-
-      // 5. Redirect immediately
-      navigate(DASHBOARD_ROUTES[userType]);
-    } catch (err: any) {
-      if (err.code === "auth/email-already-in-use") {
-        alert("This email is already registered. Please sign in.");
-        navigate("/login");
-      } else {
-        alert(err.message || "Signup failed. Please try again.");
-      }
-    }
-  };
-
-  // --------------------------------------------------------------
-  // Handle Google Signup
-  // --------------------------------------------------------------
-  const handleGoogle = async () => {
-    try {
-      const res = await signInWithPopup(auth, googleProvider);
-      const user = res.user;
-
-      // Block if email already exists
-      const methods = await fetchSignInMethodsForEmail(auth, user.email!);
-      if (methods.length > 0) {
-        alert("This email is already registered. Please sign in.");
-        await auth.signOut();
-        navigate("/login");
-        return;
-      }
-
-      // Populate form
-      const [first = "", ...lastParts] = (user.displayName ?? "").split(" ");
-      const last = lastParts.join(" ");
-      setGoogleUser(user);
-      setGoogleInfo({
-        fullName: user.displayName ?? "",
-        email: user.email ?? "",
-        phone: user.phoneNumber ?? "",
-        className: "",
-      });
-      setFirstName(first);
-      setLastName(last);
-      setEmail(user.email ?? "");
-      setPhone(user.phoneNumber ?? "");
-      setShowGoogleInfoModal(true);
-    } catch (err: any) {
-      if (err.code !== "auth/popup-closed-by-user") {
-        alert(err.message);
-      }
-    }
-  };
-
-  // --------------------------------------------------------------
-  // Handle Apple Signup
-  // --------------------------------------------------------------
-  const handleApple = async () => {
-    try {
-      const res = await signInWithPopup(auth, appleProvider);
-      const user = res.user;
-
-      const methods = await fetchSignInMethodsForEmail(auth, user.email!);
-      if (methods.length > 0) {
-        alert("This email is already registered. Please sign in.");
-        await auth.signOut();
-        navigate("/login");
-        return;
-      }
-
-      const [first = "", ...lastParts] = (user.displayName ?? "").split(" ");
-      const last = lastParts.join(" ");
-      setGoogleUser(user);
-      setGoogleInfo({
-        fullName: user.displayName ?? "",
-        email: user.email ?? "",
-        phone: user.phoneNumber ?? "",
-        className: "",
-      });
-      setFirstName(first);
-      setLastName(last);
-      setEmail(user.email ?? "");
-      setPhone(user.phoneNumber ?? "");
-      setShowGoogleInfoModal(true);
-    } catch (err: any) {
-      if (err.code !== "auth/popup-closed-by-user") {
-        alert(err.message);
-      }
-    }
-  };
-
-  // --------------------------------------------------------------
-  // Confirm Google/Apple Info
-  // --------------------------------------------------------------
-  const confirmGoogleInfo = async () => {
-    if (!googleUser) return;
-
-    const base = {
-      fullName: googleInfo.fullName,
-      email: googleInfo.email,
-      phone: googleInfo.phone,
-      className: googleInfo.className,
-      createdAt: serverTimestamp(),
-    };
-
-    try {
-      await saveUserToFirestore(googleUser.uid, base);
-
-      // Send verification if needed
-      if (!googleUser.emailVerified) {
-        await sendEmailVerification(googleUser);
-        alert("Verification email sent! Please check your inbox.");
-      }
-
-      // Teacher → show admin modal
-      if (userType === "teacher") {
-        setShowGoogleInfoModal(false);
-        setShowAdminModal(true);
-        return;
-      }
-
-      // Student → go to dashboard
-      alert("Account created! Welcome!");
-      setShowGoogleInfoModal(false);
-      navigate(DASHBOARD_ROUTES[userType]);
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
-
-  // --------------------------------------------------------------
-  // Finalize Teacher (after admin code)
-  // --------------------------------------------------------------
-  const finalizeTeacherSignup = () => {
-    alert("Teacher account created successfully!");
-    setShowAdminModal(false);
-    setAdminCodeInput("");
-    navigate(DASHBOARD_ROUTES.teacher);
-  };
-
-  // --------------------------------------------------------------
-  // Admin Code Logic
-  // --------------------------------------------------------------
+  // ───── Admin Code Handlers ─────
   const handleWrongAdminCode = () => {
     const next = adminAttempts + 1;
     setAdminAttempts(next);
@@ -262,34 +85,178 @@ export default function Signup() {
   };
 
   const confirmAdminCode = () => {
-    if (adminCodeInput === ADMIN_CODE) {
-      finalizeTeacherSignup();
-    } else {
+    if (adminCodeInput !== ADMIN_CODE) {
       handleWrongAdminCode();
+      return;
     }
+
+    const user = auth.currentUser;
+    if (!user) {
+      alert("Session expired. Please try again.");
+      navigate("/login");
+      return;
+    }
+
+    if (!user.emailVerified) {
+      alert("Please verify your email first.");
+      navigate("/login");
+      return;
+    }
+
+    alert("Teacher account created successfully!");
+    setShowAdminModal(false);
+    setAdminCodeInput("");
+    navigate(DASHBOARD_ROUTES.teacher);
   };
 
   const resetAndRedirect = () => {
     localStorage.removeItem(ATTEMPT_KEY);
     setAdminAttempts(0);
     setShowAdminModal(false);
-    setShowGoogleInfoModal(false);
-    setGoogleUser(null);
+    setShowInfoModal(false);
     setAdminCodeInput("");
     auth.signOut();
     navigate("/signup", { replace: true });
   };
 
-  // ────────────────────────────────────────────────────────────────────────
-  // UI
-  // ────────────────────────────────────────────────────────────────────────
+  // ───── Google / Apple Provider Handler ─────
+  const handleProvider = async (
+    provider: typeof googleProvider | typeof appleProvider
+  ) => {
+    try {
+      const res = await signInWithPopup(auth, provider);
+      const user = res.user;
+
+      // Block if email already used with password
+      const methods = await fetchSignInMethodsForEmail(auth, user.email!);
+      if (methods.includes("password")) {
+        alert(
+          "This email is already registered with a password. Please sign in."
+        );
+        await auth.signOut();
+        navigate("/login");
+        return;
+      }
+
+      // Populate modal
+      const [first = "", ...lastParts] = (user.displayName ?? "").split(" ");
+      const last = lastParts.join(" ");
+      setFirstName(first);
+      setLastName(last);
+      setEmail(user.email ?? "");
+      setPhone(user.phoneNumber ?? "");
+      setInfo({
+        fullName: user.displayName ?? "",
+        email: user.email ?? "",
+        phone: user.phoneNumber ?? "",
+        className: "",
+      });
+      setShowInfoModal(true);
+    } catch (err: any) {
+      if (err.code !== "auth/popup-closed-by-user") {
+        console.error("[Provider] Error:", err);
+        alert(err.message || "Sign in failed.");
+      }
+    }
+  };
+
+  // ───── Confirm Google/Apple Info ─────
+  const confirmInfo = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      alert("Session lost. Please try again.");
+      navigate("/login");
+      return;
+    }
+
+    const base = {
+      fullName: info.fullName,
+      email: info.email,
+      phone: info.phone,
+      className: info.className,
+      createdAt: serverTimestamp(),
+    };
+
+    try {
+      await saveUserToFirestore(user.uid, base);
+      console.log("[Provider] Profile saved to Firestore");
+
+      if (!user.emailVerified) {
+        await sendEmailVerification(user);
+        console.log("[Provider] Verification email sent");
+        alert("Verification email sent! Please check your inbox.");
+      }
+
+      setShowInfoModal(false);
+
+      if (userType === "teacher") {
+        setShowAdminModal(true);
+        return;
+      }
+
+      if (user.emailVerified) {
+        navigate(DASHBOARD_ROUTES[userType]);
+      } else {
+        alert("Please verify your email before accessing the dashboard.");
+        navigate("/login");
+      }
+    } catch (err: any) {
+      console.error("[Provider] Save failed:", err);
+      alert("Failed to save profile: " + err.message);
+    }
+  };
+
+  // ───── Email/Password Signup ─────
+  const handleEmailSignup = async (e: FormEvent) => {
+    e.preventDefault();
+
+    if (userType === "teacher" && adminCodeInput !== ADMIN_CODE) {
+      handleWrongAdminCode();
+      return;
+    }
+
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      const user = cred.user;
+
+      console.log("[Email] User created:", user.uid);
+
+      // Update display name
+      await updateProfile(user, { displayName: fullName });
+
+      // Save to Firestore
+      await saveUserToFirestore(user.uid, {
+        fullName,
+        email,
+        phone,
+        className,
+        createdAt: serverTimestamp(),
+      });
+
+      // Send verification email
+      await sendEmailVerification(user);
+      console.log("[Email] Verification email sent");
+
+      alert("Account created! Check your inbox to verify, then log in.");
+      navigate("/login");
+    } catch (err: any) {
+      console.error("[Email] Signup error:", err.code);
+      if (err.code === "auth/email-already-in-use") {
+        alert("This email is already registered. Please sign in.");
+        navigate("/login");
+      } else {
+        alert(err.message || "Signup failed. Please try again.");
+      }
+    }
+  };
+
+  // ───── UI ─────
   return (
     <>
-      {/* ======== MAIN SIGNUP FORM ======== */}
+      {/* MAIN SIGNUP FORM */}
       <div className="signup-page">
         <div className="signup-modal">
-          <div className="modal-backdrop"></div>
-
+          <div className="modal-backdrop" />
           <div className="signup-card">
             <button className="close-btn" onClick={() => navigate(-1)}>
               ×
@@ -310,7 +277,7 @@ export default function Signup() {
               </button>
             </div>
 
-            <form onSubmit={handleSignup} className="signup-form">
+            <form onSubmit={handleEmailSignup} className="signup-form">
               <h2>Create an account</h2>
 
               <div className="name-row">
@@ -389,10 +356,16 @@ export default function Signup() {
             <div className="divider">OR SIGN UP WITH</div>
 
             <div className="social-row">
-              <button onClick={handleGoogle} className="social google">
+              <button
+                onClick={() => handleProvider(googleProvider)}
+                className="social google"
+              >
                 <img src="/icons/google.svg" alt="Google" />
               </button>
-              <button onClick={handleApple} className="social apple">
+              <button
+                onClick={() => handleProvider(appleProvider)}
+                className="social apple"
+              >
                 <img src="/icons/apple.svg" alt="Apple" />
               </button>
             </div>
@@ -405,11 +378,11 @@ export default function Signup() {
         </div>
       </div>
 
-      {/* ======== GOOGLE/APPLE INFO MODAL ======== */}
-      {showGoogleInfoModal && (
+      {/* GOOGLE/APPLE INFO MODAL */}
+      {showInfoModal && (
         <div className="signup-page" style={{ zIndex: 1100 }}>
           <div className="signup-modal">
-            <div className="modal-backdrop"></div>
+            <div className="modal-backdrop" />
             <div
               className="signup-card"
               style={{ maxWidth: 460, padding: "24px" }}
@@ -437,9 +410,9 @@ export default function Signup() {
               <input
                 type="text"
                 placeholder="Full name"
-                value={googleInfo.fullName}
+                value={info.fullName}
                 onChange={(e) =>
-                  setGoogleInfo((s) => ({ ...s, fullName: e.target.value }))
+                  setInfo((s) => ({ ...s, fullName: e.target.value }))
                 }
                 style={{
                   width: "100%",
@@ -453,9 +426,9 @@ export default function Signup() {
               <input
                 type="email"
                 placeholder="Email"
-                value={googleInfo.email}
+                value={info.email}
                 onChange={(e) =>
-                  setGoogleInfo((s) => ({ ...s, email: e.target.value }))
+                  setInfo((s) => ({ ...s, email: e.target.value }))
                 }
                 style={{
                   width: "100%",
@@ -474,9 +447,9 @@ export default function Signup() {
                 <input
                   type="tel"
                   placeholder="775-351-6501"
-                  value={googleInfo.phone}
+                  value={info.phone}
                   onChange={(e) =>
-                    setGoogleInfo((s) => ({ ...s, phone: e.target.value }))
+                    setInfo((s) => ({ ...s, phone: e.target.value }))
                   }
                   style={{
                     flex: 1,
@@ -488,9 +461,9 @@ export default function Signup() {
                 />
               </div>
               <select
-                value={googleInfo.className}
+                value={info.className}
                 onChange={(e) =>
-                  setGoogleInfo((s) => ({ ...s, className: e.target.value }))
+                  setInfo((s) => ({ ...s, className: e.target.value }))
                 }
                 style={{
                   width: "100%",
@@ -512,7 +485,7 @@ export default function Signup() {
 
               <div style={{ display: "flex", gap: 12 }}>
                 <button
-                  onClick={confirmGoogleInfo}
+                  onClick={confirmInfo}
                   style={{
                     flex: 1,
                     padding: "14px",
@@ -546,11 +519,11 @@ export default function Signup() {
         </div>
       )}
 
-      {/* ======== ADMIN CODE MODAL ======== */}
+      {/* ADMIN CODE MODAL */}
       {showAdminModal && (
         <div className="signup-page" style={{ zIndex: 1200 }}>
           <div className="signup-modal">
-            <div className="modal-backdrop"></div>
+            <div className="modal-backdrop" />
             <div
               className="signup-card"
               style={{ maxWidth: 420, padding: "24px" }}
