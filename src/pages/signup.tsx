@@ -12,6 +12,7 @@ import {
 
 import { auth, db, googleProvider } from "../firebase/config";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { appleProvider } from "../firebase/config";
 import "../styles/signup.css";
 
 const ADMIN_CODE = "mini-fcmb";
@@ -53,6 +54,41 @@ export default function Signup() {
     phone: "",
     className: "",
   });
+  const handleApple = async () => {
+    try {
+      const res = await signInWithPopup(auth, appleProvider);
+      const user = res.user;
+
+      // Check if email already exists (any provider)
+      const methods = await fetchSignInMethodsForEmail(auth, user.email!);
+      if (methods.length > 0) {
+        alert("This email is already registered. Please sign in instead.");
+        await auth.signOut();
+        navigate("/login");
+        return;
+      }
+
+      // Proceed if new
+      setGoogleUser(user); // can reuse googleUser state
+      const [first = "", ...lastParts] = (user.displayName ?? "").split(" ");
+      const last = lastParts.join("");
+      setGoogleInfo({
+        fullName: user.displayName ?? "",
+        email: user.email ?? "",
+        phone: user.phoneNumber ?? "",
+        className: "",
+      });
+      setFirstName(first);
+      setLastName(last);
+      setEmail(user.email ?? "");
+      setPhone(user.phoneNumber ?? "");
+      setShowGoogleInfoModal(true);
+    } catch (err: any) {
+      if (err.code !== "auth/popup-closed-by-user") {
+        alert(err.message);
+      }
+    }
+  };
 
   // ---------- Verification & attempts ----------
   const [verifying, setVerifying] = useState(false);
@@ -403,7 +439,11 @@ export default function Signup() {
               >
                 <img src="/icons/google.svg" alt="Google" />
               </button>
-              <button className="social apple" disabled>
+              <button
+                onClick={handleApple}
+                className="social apple"
+                disabled={verifying}
+              >
                 <img src="/icons/apple.svg" alt="Apple" />
               </button>
             </div>
