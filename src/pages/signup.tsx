@@ -57,6 +57,7 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [className, setClassName] = useState("");
   const [adminCodeInput, setAdminCodeInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   // ───── Google/Apple Info Modal ─────
   const [showInfoModal, setShowInfoModal] = useState(false);
@@ -77,6 +78,7 @@ export default function Signup() {
   // ───── Subject Selection Modal ─────
   const [showSubjectsModal, setShowSubjectsModal] = useState(false);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [tempUserData, setTempUserData] = useState<any>(null);
 
   const fullName = `${firstName} ${lastName}`.trim();
   const classOptions = [
@@ -90,25 +92,10 @@ export default function Signup() {
   ];
 
   // ───── Helper: Save to Firestore ─────
-  const saveUserToFirestore = async (uid: string, base: any) => {
+  const saveUserToFirestore = async (uid: string, data: any) => {
     const collection = userType === "teacher" ? "teachers" : "students";
-    const data = userType === "teacher" ? { ...base, subjects: [] } : base;
     await setDoc(doc(db, collection, uid), data);
     console.log(`[Firestore] Saved ${userType} ${uid}`);
-  };
-
-  // ───── Helper: Update Subjects in Firestore ─────
-  const updateStudentSubjects = async (uid: string, subjects: string[]) => {
-    try {
-      await updateDoc(doc(db, "students", uid), {
-        subjects: subjects,
-        updatedAt: serverTimestamp(),
-      });
-      console.log(`[Firestore] Updated subjects for student ${uid}`);
-    } catch (error) {
-      console.error("[Firestore] Failed to update subjects:", error);
-      throw error;
-    }
   };
 
   // ───── Subject Selection Handlers ─────
@@ -126,21 +113,74 @@ export default function Signup() {
       return;
     }
 
-    const user = auth.currentUser;
-    if (!user) {
-      alert("Session expired. Please try again.");
-      navigate("/login");
-      return;
-    }
-
+    setIsLoading(true);
     try {
-      await updateStudentSubjects(user.uid, selectedSubjects);
+      // For email/password signup - create user after subject selection
+      if (tempUserData && tempUserData.type === "email") {
+        const { email, password, userData } = tempUserData;
+
+        // Create the user account
+        const cred = await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password
+        );
+        const user = cred.user;
+
+        // Update display name
+        await updateProfile(user, { displayName: userData.fullName });
+
+        // Save to Firestore with subjects
+        await saveUserToFirestore(user.uid, {
+          ...userData,
+          subjects: selectedSubjects,
+          createdAt: serverTimestamp(),
+        });
+
+        // Send verification email
+        await sendEmailVerification(user);
+        console.log("[Email] Verification email sent");
+
+        alert(
+          "Account created! Check your inbox to verify your email, then log in."
+        );
+        setShowSubjectsModal(false);
+        setTempUserData(null);
+        navigate("/login");
+        return;
+      }
+
+      // For provider signup - update existing user with subjects
+      const user = auth.currentUser;
+      if (!user) {
+        alert("Session expired. Please try again.");
+        navigate("/login");
+        return;
+      }
+
+      // Update Firestore with subjects
+      await updateDoc(doc(db, "students", user.uid), {
+        subjects: selectedSubjects,
+        updatedAt: serverTimestamp(),
+      });
+
+      console.log("[Firestore] Updated subjects for student", user.uid);
+
       setShowSubjectsModal(false);
-      alert("Subjects saved successfully!");
-      navigate(DASHBOARD_ROUTES.student);
+      setSelectedSubjects([]);
+
+      if (user.emailVerified) {
+        // If already verified, go to dashboard
+        navigate(DASHBOARD_ROUTES.student);
+      } else {
+        alert("Please verify your email before accessing the dashboard.");
+        navigate("/login");
+      }
     } catch (error: any) {
       console.error("[Subjects] Save failed:", error);
       alert("Failed to save subjects: " + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -159,7 +199,7 @@ export default function Signup() {
     }
   };
 
-  const confirmAdminCode = () => {
+  const confirmAdminCode = async () => {
     if (adminCodeInput !== ADMIN_CODE) {
       handleWrongAdminCode();
       return;
@@ -192,6 +232,7 @@ export default function Signup() {
     setShowSubjectsModal(false);
     setAdminCodeInput("");
     setSelectedSubjects([]);
+    setTempUserData(null);
     auth.signOut();
     navigate("/signup", { replace: true });
   };
@@ -246,7 +287,7 @@ export default function Signup() {
       return;
     }
 
-    const base = {
+    const baseData = {
       fullName: info.fullName,
       email: info.email,
       phone: info.phone,
@@ -255,13 +296,14 @@ export default function Signup() {
     };
 
     try {
-      await saveUserToFirestore(user.uid, base);
+      // Save basic user data first
+      await saveUserToFirestore(user.uid, baseData);
       console.log("[Provider] Profile saved to Firestore");
 
+      // Send verification email if not verified
       if (!user.emailVerified) {
         await sendEmailVerification(user);
         console.log("[Provider] Verification email sent");
-        alert("Verification email sent! Please check your inbox.");
       }
 
       setShowInfoModal(false);
@@ -271,13 +313,8 @@ export default function Signup() {
         return;
       }
 
-      if (user.emailVerified) {
-        // Show subject selection for students
-        setShowSubjectsModal(true);
-      } else {
-        alert("Please verify your email before accessing the dashboard.");
-        navigate("/login");
-      }
+      // For students - show subject selection modal
+      setShowSubjectsModal(true);
     } catch (err: any) {
       console.error("[Provider] Save failed:", err);
       alert("Failed to save profile: " + err.message);
@@ -287,36 +324,51 @@ export default function Signup() {
   // ───── Email/Password Signup ─────
   const handleEmailSignup = async (e: FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
 
     if (userType === "teacher" && adminCodeInput !== ADMIN_CODE) {
       handleWrongAdminCode();
+      setIsLoading(false);
       return;
     }
 
     try {
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
-      const user = cred.user;
-
-      console.log("[Email] User created:", user.uid);
-
-      // Update display name
-      await updateProfile(user, { displayName: fullName });
-
-      // Save to Firestore
-      await saveUserToFirestore(user.uid, {
+      const userData = {
         fullName,
         email,
         phone,
         className,
         createdAt: serverTimestamp(),
-      });
+        subjects: userType === "student" ? [] : undefined, // Will be filled later for students
+      };
 
-      // Send verification email
-      await sendEmailVerification(user);
-      console.log("[Email] Verification email sent");
+      if (userType === "teacher") {
+        // For teachers - create account immediately
+        const cred = await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password
+        );
+        const user = cred.user;
 
-      alert("Account created! Check your inbox to verify, then log in.");
-      navigate("/login");
+        await updateProfile(user, { displayName: fullName });
+        await saveUserToFirestore(user.uid, userData);
+        await sendEmailVerification(user);
+
+        alert(
+          "Teacher account created! Check your inbox to verify, then log in."
+        );
+        navigate("/login");
+      } else {
+        // For students - store data and show subject selection
+        setTempUserData({
+          type: "email",
+          email,
+          password,
+          userData,
+        });
+        setShowSubjectsModal(true);
+      }
     } catch (err: any) {
       console.error("[Email] Signup error:", err.code);
       if (err.code === "auth/email-already-in-use") {
@@ -325,6 +377,8 @@ export default function Signup() {
       } else {
         alert(err.message || "Signup failed. Please try again.");
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -364,12 +418,14 @@ export default function Signup() {
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
                 <input
                   placeholder="Last name"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
 
@@ -379,6 +435,7 @@ export default function Signup() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={isLoading}
               />
 
               <div className="phone-row">
@@ -391,6 +448,7 @@ export default function Signup() {
                   placeholder="775-351-6501"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  disabled={isLoading}
                 />
               </div>
 
@@ -400,6 +458,7 @@ export default function Signup() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={isLoading}
               />
 
               <select
@@ -407,6 +466,7 @@ export default function Signup() {
                 onChange={(e) => setClassName(e.target.value)}
                 required
                 className="input-select"
+                disabled={isLoading}
               >
                 <option value="">Select Class</option>
                 {classOptions.map((c) => (
@@ -423,11 +483,12 @@ export default function Signup() {
                   value={adminCodeInput}
                   onChange={(e) => setAdminCodeInput(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               )}
 
-              <button type="submit" className="create-btn">
-                Create Account
+              <button type="submit" className="create-btn" disabled={isLoading}>
+                {isLoading ? "Creating Account..." : "Create Account"}
               </button>
             </form>
 
@@ -437,12 +498,14 @@ export default function Signup() {
               <button
                 onClick={() => handleProvider(googleProvider)}
                 className="social google"
+                disabled={isLoading}
               >
                 <img src="/icons/google.svg" alt="Google" />
               </button>
               <button
                 onClick={() => handleProvider(appleProvider)}
                 className="social apple"
+                disabled={isLoading}
               >
                 <img src="/icons/apple.svg" alt="Apple" />
               </button>
@@ -766,25 +829,31 @@ export default function Signup() {
               <div style={{ display: "flex", gap: "12px" }}>
                 <button
                   onClick={handleSubjectsSubmit}
-                  disabled={selectedSubjects.length === 0}
+                  disabled={selectedSubjects.length === 0 || isLoading}
                   style={{
                     flex: 1,
                     padding: "14px",
                     background:
-                      selectedSubjects.length === 0 ? "#cbd5e1" : "#007bff",
+                      selectedSubjects.length === 0 || isLoading
+                        ? "#cbd5e1"
+                        : "#007bff",
                     color: "white",
                     border: "none",
                     borderRadius: "8px",
                     fontSize: "16px",
                     cursor:
-                      selectedSubjects.length === 0 ? "not-allowed" : "pointer",
-                    opacity: selectedSubjects.length === 0 ? 0.6 : 1,
+                      selectedSubjects.length === 0 || isLoading
+                        ? "not-allowed"
+                        : "pointer",
+                    opacity:
+                      selectedSubjects.length === 0 || isLoading ? 0.6 : 1,
                   }}
                 >
-                  Save Subjects & Continue
+                  {isLoading ? "Saving..." : "Save Subjects & Continue"}
                 </button>
                 <button
                   onClick={resetAndRedirect}
+                  disabled={isLoading}
                   style={{
                     flex: 1,
                     padding: "14px",
@@ -792,7 +861,8 @@ export default function Signup() {
                     border: "1px solid #ddd",
                     borderRadius: "8px",
                     fontSize: "16px",
-                    cursor: "pointer",
+                    cursor: isLoading ? "not-allowed" : "pointer",
+                    opacity: isLoading ? 0.6 : 1,
                   }}
                 >
                   Cancel
