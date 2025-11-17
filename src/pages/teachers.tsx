@@ -1127,7 +1127,6 @@ export default function TeacherDashboard() {
       const todayStr = today.toDateString();
 
       if (lastUpdated !== todayStr) {
-        // New day - reset today's minutes
         const updatedHours = parsedHours.map(
           (day: WorkingHoursData, index: number) =>
             index === todayIndex
@@ -1140,7 +1139,6 @@ export default function TeacherDashboard() {
         setWorkingHours(parsedHours);
       }
     } else {
-      // First time initialization - start with 1 minute for today
       const hoursData = days.map((day, index) => ({
         day,
         minutes: index === todayIndex ? 1 : 0,
@@ -1161,7 +1159,6 @@ export default function TeacherDashboard() {
       setWorkingHours((prev) =>
         prev.map((day, index) => {
           if (index === todayIndex && day.online) {
-            // Calculate minutes based on how long teacher has been online
             const startTime = onlineStartTime || new Date();
             const minutesOnline = Math.floor(
               (today.getTime() - startTime.getTime()) / (1000 * 60)
@@ -1169,7 +1166,7 @@ export default function TeacherDashboard() {
 
             return {
               ...day,
-              minutes: Math.min(1440, Math.max(1, minutesOnline)), // Max 24 hours (1440 min)
+              minutes: Math.min(1440, Math.max(1, minutesOnline)),
               online: true,
             };
           }
