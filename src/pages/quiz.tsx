@@ -7,6 +7,7 @@ import {
   ChevronRight,
   AlertTriangle,
   Lock,
+  AlertCircle,
 } from "lucide-react";
 
 const QuizDashboard: React.FC = () => {
@@ -18,6 +19,7 @@ const QuizDashboard: React.FC = () => {
   const [answers, setAnswers] = useState<{ [key: number]: string }>({});
   const [flagged, setFlagged] = useState<number[]>([]);
   const [quizStarted, setQuizStarted] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false); // Add this state
 
   // Strict mode restrictions
   const [fullscreen, setFullscreen] = useState(false);
@@ -137,6 +139,22 @@ const QuizDashboard: React.FC = () => {
     );
   };
 
+  // Add this function to show confirmation modal
+  const handleSubmitClick = () => {
+    setShowConfirmModal(true);
+  };
+
+  // Add this function to handle confirmed submission
+  const handleConfirmSubmit = () => {
+    setShowConfirmModal(false);
+    handleSubmitQuiz();
+  };
+
+  // Add this function to cancel submission
+  const handleCancelSubmit = () => {
+    setShowConfirmModal(false);
+  };
+
   const handleSubmitQuiz = () => {
     // Calculate results
     const totalQuestions = questions.length;
@@ -196,6 +214,10 @@ const QuizDashboard: React.FC = () => {
     },
     // Add more questions as needed
   ];
+
+  // Calculate answered questions for confirmation modal
+  const answeredQuestions = Object.keys(answers).length;
+  const totalQuestions = questions.length;
 
   if (!quizStarted) {
     return (
@@ -569,7 +591,7 @@ const QuizDashboard: React.FC = () => {
           </div>
 
           {currentQuestion === questions.length - 1 ? (
-            <button className="nav-btn submit" onClick={handleSubmitQuiz}>
+            <button className="nav-btn submit" onClick={handleSubmitClick}>
               Submit Quiz
             </button>
           ) : (
@@ -587,6 +609,54 @@ const QuizDashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="confirmation-modal">
+          <div className="modal-overlay" onClick={handleCancelSubmit}></div>
+          <div className="modal-content">
+            <div className="modal-header">
+              <AlertCircle size={24} className="modal-icon" />
+              <h3>Confirm Submission</h3>
+            </div>
+
+            <div className="modal-body">
+              <p>Are you sure you want to submit your quiz?</p>
+              <div className="submission-stats">
+                <div className="stat-item">
+                  <span className="stat-label">Questions Answered:</span>
+                  <span className="stat-value">
+                    {answeredQuestions}/{totalQuestions}
+                  </span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Flagged Questions:</span>
+                  <span className="stat-value">{flagged.length}</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Time Remaining:</span>
+                  <span className="stat-value">{formatTime(timeLeft)}</span>
+                </div>
+              </div>
+              <p className="warning-text">
+                Once submitted, you cannot change your answers.
+              </p>
+            </div>
+
+            <div className="modal-actions">
+              <button className="modal-btn cancel" onClick={handleCancelSubmit}>
+                Cancel
+              </button>
+              <button
+                className="modal-btn confirm"
+                onClick={handleConfirmSubmit}
+              >
+                Yes, Submit Quiz
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         .quiz-dashboard {
@@ -879,6 +949,150 @@ const QuizDashboard: React.FC = () => {
           font-weight: 500;
         }
 
+        /* Confirmation Modal Styles */
+        .confirmation-modal {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: 20px;
+        }
+
+        .modal-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+          position: relative;
+          background: white;
+          border-radius: 16px;
+          padding: 32px;
+          max-width: 500px;
+          width: 100%;
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+          animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+          from {
+            opacity: 0;
+            transform: scale(0.9) translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+
+        .modal-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 20px;
+        }
+
+        .modal-icon {
+          color: #f59e0b;
+        }
+
+        .modal-header h3 {
+          margin: 0;
+          font-size: 1.5rem;
+          color: #1e293b;
+        }
+
+        .modal-body {
+          margin-bottom: 24px;
+        }
+
+        .modal-body p {
+          margin: 0 0 16px 0;
+          color: #64748b;
+          line-height: 1.5;
+        }
+
+        .submission-stats {
+          background: #f8fafc;
+          border-radius: 8px;
+          padding: 16px;
+          margin-bottom: 16px;
+        }
+
+        .stat-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 8px 0;
+        }
+
+        .stat-item:not(:last-child) {
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        .stat-label {
+          color: #64748b;
+          font-weight: 500;
+        }
+
+        .stat-value {
+          color: #1e293b;
+          font-weight: 600;
+        }
+
+        .warning-text {
+          color: #dc2626 !important;
+          font-weight: 500;
+          background: #fef2f2;
+          padding: 12px;
+          border-radius: 8px;
+          border-left: 4px solid #dc2626;
+        }
+
+        .modal-actions {
+          display: flex;
+          gap: 12px;
+        }
+
+        .modal-btn {
+          flex: 1;
+          padding: 12px 24px;
+          border: none;
+          border-radius: 8px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .modal-btn.cancel {
+          background: #f1f5f9;
+          color: #64748b;
+          border: 1px solid #e2e8f0;
+        }
+
+        .modal-btn.cancel:hover {
+          background: #e2e8f0;
+        }
+
+        .modal-btn.confirm {
+          background: #dc2626;
+          color: white;
+        }
+
+        .modal-btn.confirm:hover {
+          background: #b91c1c;
+        }
+
         @media (max-width: 768px) {
           .quiz-header {
             padding: 16px;
@@ -906,6 +1120,14 @@ const QuizDashboard: React.FC = () => {
 
           .nav-center {
             order: -1;
+          }
+
+          .modal-actions {
+            flex-direction: column;
+          }
+
+          .modal-content {
+            padding: 24px;
           }
         }
       `}</style>

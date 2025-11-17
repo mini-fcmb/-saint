@@ -8,7 +8,7 @@ import {
   fetchSignInMethodsForEmail,
   updateProfile,
 } from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { auth, db, googleProvider, appleProvider } from "../firebase/config";
 import "../styles/signup.css";
 
@@ -20,6 +20,30 @@ const DASHBOARD_ROUTES = {
   teacher: "/teachers",
   student: "/students",
 } as const;
+
+// Available subjects for students to choose from
+const AVAILABLE_SUBJECTS = [
+  "Mathematics",
+  "English Language",
+  "Physics",
+  "Chemistry",
+  "Biology",
+  "Further Mathematics",
+  "Economics",
+  "Geography",
+  "Government",
+  "Literature in English",
+  "Commerce",
+  "Accounting",
+  "Computer Science",
+  "Agricultural Science",
+  "Technical Drawing",
+  "French",
+  "Islamic Studies",
+  "Christian Religious Studies",
+  "History",
+  "Civic Education",
+];
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -50,6 +74,10 @@ export default function Signup() {
     return saved ? parseInt(saved, 10) : 0;
   });
 
+  // ───── Subject Selection Modal ─────
+  const [showSubjectsModal, setShowSubjectsModal] = useState(false);
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+
   const fullName = `${firstName} ${lastName}`.trim();
   const classOptions = [
     "Primary5",
@@ -67,6 +95,53 @@ export default function Signup() {
     const data = userType === "teacher" ? { ...base, subjects: [] } : base;
     await setDoc(doc(db, collection, uid), data);
     console.log(`[Firestore] Saved ${userType} ${uid}`);
+  };
+
+  // ───── Helper: Update Subjects in Firestore ─────
+  const updateStudentSubjects = async (uid: string, subjects: string[]) => {
+    try {
+      await updateDoc(doc(db, "students", uid), {
+        subjects: subjects,
+        updatedAt: serverTimestamp(),
+      });
+      console.log(`[Firestore] Updated subjects for student ${uid}`);
+    } catch (error) {
+      console.error("[Firestore] Failed to update subjects:", error);
+      throw error;
+    }
+  };
+
+  // ───── Subject Selection Handlers ─────
+  const handleSubjectToggle = (subject: string) => {
+    setSelectedSubjects((prev) =>
+      prev.includes(subject)
+        ? prev.filter((s) => s !== subject)
+        : [...prev, subject]
+    );
+  };
+
+  const handleSubjectsSubmit = async () => {
+    if (selectedSubjects.length === 0) {
+      alert("Please select at least one subject.");
+      return;
+    }
+
+    const user = auth.currentUser;
+    if (!user) {
+      alert("Session expired. Please try again.");
+      navigate("/login");
+      return;
+    }
+
+    try {
+      await updateStudentSubjects(user.uid, selectedSubjects);
+      setShowSubjectsModal(false);
+      alert("Subjects saved successfully!");
+      navigate(DASHBOARD_ROUTES.student);
+    } catch (error: any) {
+      console.error("[Subjects] Save failed:", error);
+      alert("Failed to save subjects: " + error.message);
+    }
   };
 
   // ───── Admin Code Handlers ─────
@@ -114,7 +189,9 @@ export default function Signup() {
     setAdminAttempts(0);
     setShowAdminModal(false);
     setShowInfoModal(false);
+    setShowSubjectsModal(false);
     setAdminCodeInput("");
+    setSelectedSubjects([]);
     auth.signOut();
     navigate("/signup", { replace: true });
   };
@@ -195,7 +272,8 @@ export default function Signup() {
       }
 
       if (user.emailVerified) {
-        navigate(DASHBOARD_ROUTES[userType]);
+        // Show subject selection for students
+        setShowSubjectsModal(true);
       } else {
         alert("Please verify your email before accessing the dashboard.");
         navigate("/login");
@@ -588,6 +666,132 @@ export default function Signup() {
                     border: "1px solid #ddd",
                     borderRadius: 8,
                     fontSize: 16,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUBJECT SELECTION MODAL */}
+      {showSubjectsModal && (
+        <div className="signup-page" style={{ zIndex: 1300 }}>
+          <div className="signup-modal">
+            <div className="modal-backdrop" />
+            <div
+              className="signup-card"
+              style={{ maxWidth: 600, padding: "24px" }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 12px",
+                  textAlign: "center",
+                  fontSize: 20,
+                }}
+              >
+                Select Your Subjects
+              </h3>
+              <p
+                style={{
+                  textAlign: "center",
+                  margin: "0 0 20px",
+                  fontSize: 14,
+                  color: "#555",
+                }}
+              >
+                Choose the subjects you offer. You can change this later in your
+                profile.
+              </p>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+                  gap: "12px",
+                  maxHeight: "400px",
+                  overflowY: "auto",
+                  marginBottom: "20px",
+                  padding: "12px",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                }}
+              >
+                {AVAILABLE_SUBJECTS.map((subject) => (
+                  <label
+                    key={subject}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "12px",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                      backgroundColor: selectedSubjects.includes(subject)
+                        ? "#eff6ff"
+                        : "white",
+                      borderColor: selectedSubjects.includes(subject)
+                        ? "#3b82f6"
+                        : "#e2e8f0",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedSubjects.includes(subject)}
+                      onChange={() => handleSubjectToggle(subject)}
+                      style={{
+                        width: "16px",
+                        height: "16px",
+                        cursor: "pointer",
+                      }}
+                    />
+                    <span style={{ fontSize: "14px", fontWeight: "500" }}>
+                      {subject}
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              <div style={{ textAlign: "center", marginBottom: "16px" }}>
+                <small style={{ color: "#64748b" }}>
+                  Selected: {selectedSubjects.length} subject(s)
+                </small>
+              </div>
+
+              <div style={{ display: "flex", gap: "12px" }}>
+                <button
+                  onClick={handleSubjectsSubmit}
+                  disabled={selectedSubjects.length === 0}
+                  style={{
+                    flex: 1,
+                    padding: "14px",
+                    background:
+                      selectedSubjects.length === 0 ? "#cbd5e1" : "#007bff",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "16px",
+                    cursor:
+                      selectedSubjects.length === 0 ? "not-allowed" : "pointer",
+                    opacity: selectedSubjects.length === 0 ? 0.6 : 1,
+                  }}
+                >
+                  Save Subjects & Continue
+                </button>
+                <button
+                  onClick={resetAndRedirect}
+                  style={{
+                    flex: 1,
+                    padding: "14px",
+                    background: "#f8f9fa",
+                    border: "1px solid #ddd",
+                    borderRadius: "8px",
+                    fontSize: "16px",
                     cursor: "pointer",
                   }}
                 >

@@ -1,7 +1,11 @@
 // src/pages/Login.tsx
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  reload,
+} from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "../firebase/config";
 import "../styles/signin.css";
@@ -20,33 +24,47 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [adminCode, setAdminCode] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   // --------------------------------------------------------------
   // Email/Password Login
   // --------------------------------------------------------------
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
 
     try {
       // 1. Try to sign in — Firebase will tell us if user exists
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const user = cred.user;
 
-      // 2. Check email verification
-      if (!user.emailVerified) {
-        alert("Please verify your email before logging in.");
+      // 2. RELOAD USER to get fresh email verification status
+      await reload(user);
+      const refreshedUser = auth.currentUser; // Get the refreshed user
+
+      if (!refreshedUser) {
+        throw new Error("User not found after reload");
+      }
+
+      // 3. Check email verification with refreshed data
+      if (!refreshedUser.emailVerified) {
+        alert(
+          "Please verify your email before logging in. Check your inbox and spam folder."
+        );
         await auth.signOut();
+        setIsLoading(false);
         return;
       }
 
-      // 3. Validate admin code for teachers
+      // 4. Validate admin code for teachers
       if (userType === "teacher" && adminCode !== ADMIN_CODE) {
         alert("Invalid Admin Code!");
         await auth.signOut();
+        setIsLoading(false);
         return;
       }
 
-      // 4. Check Firestore profile exists
+      // 5. Check Firestore profile exists
       const collection = userType === "teacher" ? "teachers" : "students";
       const docSnap = await getDoc(doc(db, collection, user.uid));
 
@@ -54,10 +72,11 @@ export default function Login() {
         alert(`No ${userType} profile found. Please sign up.`);
         await auth.signOut();
         navigate("/signup");
+        setIsLoading(false);
         return;
       }
 
-      // 5. SUCCESS! Go to dashboard
+      // 6. SUCCESS! Go to dashboard
       navigate(DASHBOARD_ROUTES[userType]);
     } catch (err: any) {
       // Firebase gives accurate error codes
@@ -73,6 +92,8 @@ export default function Login() {
       } else {
         alert(err.message || "Login failed. Please try again.");
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -80,25 +101,37 @@ export default function Login() {
   // Google Login
   // --------------------------------------------------------------
   const handleGoogle = async () => {
+    setIsLoading(true);
+
     try {
       const res = await signInWithPopup(auth, googleProvider);
       const user = res.user;
 
-      // 1. Check email verification
-      if (!user.emailVerified) {
+      // 1. RELOAD USER to get fresh email verification status
+      await reload(user);
+      const refreshedUser = auth.currentUser;
+
+      if (!refreshedUser) {
+        throw new Error("User not found after reload");
+      }
+
+      // 2. Check email verification with refreshed data
+      if (!refreshedUser.emailVerified) {
         alert("Google account email is not verified.");
         await auth.signOut();
+        setIsLoading(false);
         return;
       }
 
-      // 2. Validate admin code for teachers
+      // 3. Validate admin code for teachers
       if (userType === "teacher" && adminCode !== ADMIN_CODE) {
         alert("Invalid Admin Code for Teacher!");
         await auth.signOut();
+        setIsLoading(false);
         return;
       }
 
-      // 3. Check Firestore profile
+      // 4. Check Firestore profile
       const collection = userType === "teacher" ? "teachers" : "students";
       const docSnap = await getDoc(doc(db, collection, user.uid));
 
@@ -106,14 +139,20 @@ export default function Login() {
         alert(`No ${userType} profile linked to this Google account.`);
         await auth.signOut();
         navigate("/signup");
+        setIsLoading(false);
         return;
       }
 
-      // 4. SUCCESS
+      // 5. SUCCESS
       navigate(DASHBOARD_ROUTES[userType]);
     } catch (err: any) {
-      if (err.code === "auth/popup-closed-by-user") return;
-      alert(err.message || "Google login failed.");
+      if (err.code === "auth/popup-closed-by-user") {
+        // User closed the popup, no need to show error
+      } else {
+        alert(err.message || "Google login failed.");
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -154,6 +193,7 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              disabled={isLoading}
             />
 
             <input
@@ -162,6 +202,7 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              disabled={isLoading}
             />
 
             {userType === "teacher" && (
@@ -171,18 +212,23 @@ export default function Login() {
                 value={adminCode}
                 onChange={(e) => setAdminCode(e.target.value)}
                 required
+                disabled={isLoading}
               />
             )}
 
-            <button type="submit" className="login-btn">
-              Log in
+            <button type="submit" className="login-btn" disabled={isLoading}>
+              {isLoading ? "Signing in..." : "Log in"}
             </button>
           </form>
 
           <div className="divider">OR SIGN IN WITH</div>
 
           <div className="social-row">
-            <button onClick={handleGoogle} className="social google">
+            <button
+              onClick={handleGoogle}
+              className="social google"
+              disabled={isLoading}
+            >
               <img src="/icons/google.svg" alt="Google" />
             </button>
             <button className="social apple" disabled>
