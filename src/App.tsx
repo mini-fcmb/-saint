@@ -1,4 +1,6 @@
 // src/App.tsx
+"use client";
+
 import React from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Home from "./pages/Home";
@@ -9,7 +11,7 @@ import StudentDashboard from "./pages/students";
 import QuizDashboard from "./pages/quiz";
 import LoadingOverlay from "./components/LoadingOverlay";
 import { useLoading } from "./hooks/useLoading";
-import { useAuth } from "./hooks/useAuth";
+import { useFirebaseStore } from "./stores/useFirebaseStore";
 
 function useRouteLoading() {
   const location = useLocation();
@@ -23,7 +25,7 @@ function useRouteLoading() {
 }
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, userData, loading } = useFirebaseStore();
 
   if (loading) return <LoadingOverlay />;
 
@@ -38,23 +40,32 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 }
 
 function SmartRedirect() {
-  const { user } = useAuth();
+  const { user, userData } = useFirebaseStore();
+
   if (!user || !user.emailVerified) return <Navigate to="/login" replace />;
 
-  // Let FirebaseStore decide — but for now, redirect to teachers
-  return <Navigate to="/teachers" replace />;
+  if (userData?.role === "teacher") return <Navigate to="/teachers" replace />;
+  if (userData?.role === "student") return <Navigate to="/students" replace />;
+
+  return <Navigate to="/login" replace />;
 }
 
 export default function App() {
   useRouteLoading();
+
+  const initializeAuth = useFirebaseStore((state) => state.initializeAuth);
+
+  React.useEffect(() => {
+    const unsubscribe = initializeAuth();
+    return () => unsubscribe();
+  }, [initializeAuth]);
 
   return (
     <>
       <LoadingOverlay />
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/signup" element={<Signup />} />{" "}
-        {/* FIXED: was /signupní */}
+        <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
         <Route
           path="/teachers"

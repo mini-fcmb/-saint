@@ -30,6 +30,27 @@ import logo from "../assets/logo.png";
 import { useFirebaseStore } from "../stores/useFirebaseStore";
 import { useNavigate } from "react-router-dom";
 
+// Define proper TypeScript interfaces
+interface UserInfo {
+  fullName: string;
+  firstName: string;
+  userInitial: string;
+  email: string;
+}
+
+interface StudentData {
+  id: string;
+  first: string;
+  last: string;
+  email: string;
+  progress: number;
+  className: string;
+  enrollmentNo: string;
+  course: string;
+  session: string;
+  semester: string;
+}
+
 const StudentDashboard: React.FC = () => {
   // State declarations
   const [activeTab, setActiveTab] = useState<"assignments" | "exam">(
@@ -41,15 +62,56 @@ const StudentDashboard: React.FC = () => {
   const [showProfileCard, setShowProfileCard] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showLoading, setShowLoading] = useState(true);
+  const [userInfo, setUserInfo] = useState<UserInfo>({
+    fullName: "Loading...",
+    firstName: "Loading...",
+    userInitial: "L",
+    email: "loading...",
+  });
 
   const { user, userData, signOutUser, loading } = useFirebaseStore();
   const navigate = useNavigate();
 
-  // Prevent infinite loading
+  // Handle user data loading properly
+  useEffect(() => {
+    console.log("Firebase Store State:", { user, userData, loading });
+
+    // Stop if still loading
+    if (loading) return;
+
+    // Handle user not logged in or no data found
+    if (!user) {
+      setUserInfo({
+        fullName: "Unknown User",
+        firstName: "Unknown",
+        userInitial: "U",
+        email: "No email",
+      });
+      setShowLoading(false);
+      return;
+    }
+
+    // Handle proper user and data
+    const fullName = userData?.fullName || user.displayName || "Student";
+    const firstName = fullName.split(" ")[0];
+    const userInitial = firstName.charAt(0).toUpperCase();
+    const email = userData?.email || user.email || "student@email.com";
+
+    setUserInfo({
+      fullName,
+      firstName,
+      userInitial,
+      email,
+    });
+
+    setShowLoading(false);
+  }, [userData, user, loading]);
+
+  // Safety timeout to prevent infinite loading
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowLoading(false);
-    }, 3000);
+    }, 5000);
 
     return () => clearTimeout(timer);
   }, []);
@@ -81,25 +143,12 @@ const StudentDashboard: React.FC = () => {
     ctx.stroke();
   }, []);
 
-  // Get user info from database
-  const getUserInfo = () => {
-    // Priority: userData.fullName > user.displayName > fallback
-    const fullName = userData?.fullName || user?.displayName || "User";
-    const firstName = fullName.split(" ")[0];
-    const userInitial = firstName.charAt(0).toUpperCase();
-    const email = userData?.email || user?.email || "student@email.com";
-
-    return { fullName, firstName, userInitial, email };
-  };
-
-  const { fullName, firstName, userInitial, email } = getUserInfo();
-
-  // Student data from database
-  const currentStudent = {
+  // Student data - only use fields that exist in UserData
+  const currentStudent: StudentData = {
     id: user?.uid || "",
-    first: firstName,
-    last: fullName.split(" ").slice(1).join(" ") || "",
-    email: email,
+    first: userInfo.firstName,
+    last: userInfo.fullName.split(" ").slice(1).join(" ") || "",
+    email: userInfo.email,
     progress: 0,
     className: userData?.className || "Not assigned",
     enrollmentNo: userData?.enrollmentNo || "A231231231",
@@ -215,8 +264,8 @@ const StudentDashboard: React.FC = () => {
     { icon: BarChart, label: "Attendance" },
   ];
 
-  // Show loading only briefly
-  if (showLoading && loading) {
+  // Show loading only if still loading and showLoading is true
+  if (showLoading) {
     return (
       <div className="loading-container">
         <div className="loading-spinner"></div>
@@ -265,9 +314,9 @@ const StudentDashboard: React.FC = () => {
           </button>
 
           <div className="user-profile">
-            <div className="avatar">{userInitial}</div>
+            <div className="avatar">{userInfo.userInitial}</div>
             <div className="user-info">
-              <span className="user-name">{firstName}</span>
+              <span className="user-name">{userInfo.firstName}</span>
               <span className="user-role">Student</span>
             </div>
           </div>
@@ -328,10 +377,10 @@ const StudentDashboard: React.FC = () => {
           </button>
           <div className="profile-card-content">
             <div className="profile-header">
-              <div className="profile-avatar-large">{userInitial}</div>
+              <div className="profile-avatar-large">{userInfo.userInitial}</div>
               <div className="profile-info">
-                <h4>{fullName}</h4>
-                <p>{email}</p>
+                <h4>{userInfo.fullName}</h4>
+                <p>{userInfo.email}</p>
               </div>
             </div>
             <div className="profile-details">
@@ -397,7 +446,7 @@ const StudentDashboard: React.FC = () => {
           {/* Welcome Section */}
           <section className="welcome-section">
             <div className="welcome-content">
-              <h1>Welcome back, {firstName}! 👋</h1>
+              <h1>Welcome back, {userInfo.firstName}! 👋</h1>
               <p>Continue your learning journey and unlock new achievements</p>
             </div>
             <div className="stats-grid">
@@ -667,7 +716,7 @@ const StudentDashboard: React.FC = () => {
 
       {/* Support Widget */}
       <div className="support-widget">
-        <div className="support-avatar">{userInitial}</div>
+        <div className="support-avatar">{userInfo.userInitial}</div>
         <div className="support-text">
           <p>Support 24/7</p>
           <p>Need help at any time</p>
@@ -675,12 +724,12 @@ const StudentDashboard: React.FC = () => {
         <button className="call-btn">Call</button>
       </div>
 
-      <style jsx>{`
+      {/* CSS Styles */}
+      <style>{`
         .student-dashboard {
           min-height: 100vh;
           background: #f0f4f8;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-            sans-serif;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
 
         .loading-container {
@@ -702,15 +751,10 @@ const StudentDashboard: React.FC = () => {
         }
 
         @keyframes spin {
-          0% {
-            transform: rotate(0deg);
-          }
-          100% {
-            transform: rotate(360deg);
-          }
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
 
-        /* Header Styles */
         .dashboard-header {
           position: fixed;
           top: 0;
@@ -895,7 +939,6 @@ const StudentDashboard: React.FC = () => {
           background: #4338ca;
         }
 
-        /* Fixed Profile Card */
         .fixed-profile-card {
           position: fixed;
           top: 90px;
@@ -1005,7 +1048,6 @@ const StudentDashboard: React.FC = () => {
           font-size: 14px;
         }
 
-        /* Notifications Panel */
         .notifications-panel {
           position: absolute;
           top: 100%;
@@ -1109,14 +1151,12 @@ const StudentDashboard: React.FC = () => {
           border-radius: 6px;
         }
 
-        /* Layout */
         .dashboard-layout {
           display: flex;
           margin-top: 70px;
           min-height: calc(100vh - 70px);
         }
 
-        /* Sidebar */
         .sidebar {
           width: 280px;
           background: white;
@@ -1208,7 +1248,6 @@ const StudentDashboard: React.FC = () => {
           color: #64748b;
         }
 
-        /* Main Content */
         .main-content {
           flex: 1;
           margin-left: 280px;
@@ -1221,7 +1260,6 @@ const StudentDashboard: React.FC = () => {
           margin-left: 80px;
         }
 
-        /* Welcome Section */
         .welcome-section {
           margin-bottom: 32px;
         }
@@ -1301,7 +1339,6 @@ const StudentDashboard: React.FC = () => {
           color: #64748b;
         }
 
-        /* Tiles Section */
         .tiles-section {
           margin-bottom: 24px;
         }
@@ -1344,7 +1381,6 @@ const StudentDashboard: React.FC = () => {
           background: linear-gradient(135deg, #9f7aea, #805ad5);
         }
 
-        /* Top Row */
         .top-row {
           display: flex;
           gap: 20px;
@@ -1433,7 +1469,6 @@ const StudentDashboard: React.FC = () => {
           box-shadow: none;
         }
 
-        /* Bottom Row */
         .bottom-row {
           display: flex;
           gap: 20px;
@@ -1524,7 +1559,6 @@ const StudentDashboard: React.FC = () => {
           color: #718096;
         }
 
-        /* Calendar */
         .cal-head {
           display: flex;
           justify-content: space-between;
@@ -1600,7 +1634,6 @@ const StudentDashboard: React.FC = () => {
           font-weight: 500;
         }
 
-        /* Support Widget */
         .support-widget {
           position: fixed;
           bottom: 30px;
@@ -1655,17 +1688,14 @@ const StudentDashboard: React.FC = () => {
           background: #38a169;
         }
 
-        /* Responsive Design */
         @media (max-width: 1200px) {
           .stats-grid {
             grid-template-columns: repeat(2, 1fr);
           }
-
           .top-row,
           .bottom-row {
             flex-direction: column;
           }
-
           .chart-container,
           .donuts-container,
           .empty-space,
@@ -1673,7 +1703,6 @@ const StudentDashboard: React.FC = () => {
           .calendar-card {
             min-width: 100%;
           }
-
           .fixed-profile-card {
             right: 16px;
             width: 280px;
@@ -1684,32 +1713,25 @@ const StudentDashboard: React.FC = () => {
           .dashboard-header {
             padding: 0 16px;
           }
-
           .header-center {
             display: none;
           }
-
           .main-content {
             padding: 20px;
             margin-left: 0;
           }
-
           .sidebar {
             transform: translateX(-100%);
           }
-
           .sidebar.open {
             transform: translateX(0);
           }
-
           .stats-grid {
             grid-template-columns: 1fr;
           }
-
           .tiles {
             grid-template-columns: repeat(2, 1fr);
           }
-
           .fixed-profile-card {
             width: calc(100vw - 32px);
             right: 16px;
@@ -1721,13 +1743,11 @@ const StudentDashboard: React.FC = () => {
           .tiles {
             grid-template-columns: 1fr;
           }
-
           .support-widget {
             bottom: 70px;
             right: 16px;
             padding: 12px 16px;
           }
-
           .donuts-container {
             flex-direction: column;
             gap: 20px;
