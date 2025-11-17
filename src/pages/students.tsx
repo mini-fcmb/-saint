@@ -25,6 +25,14 @@ import {
   Coffee,
   Video,
   BarChart,
+  Play,
+  Award,
+  Calendar,
+  Bookmark,
+  Settings,
+  Brain,
+  Timer,
+  CheckSquare,
 } from "lucide-react";
 import logo from "../assets/logo.png";
 import { useFirebaseStore } from "../stores/useFirebaseStore";
@@ -51,15 +59,26 @@ interface StudentData {
   semester: string;
 }
 
+interface Quiz {
+  id: string;
+  title: string;
+  subject: string;
+  duration: number;
+  questions: number;
+  dueDate: string;
+  status: "pending" | "completed" | "in-progress";
+  score?: number;
+}
+
 const StudentDashboard: React.FC = () => {
   // State declarations
-  const [activeTab, setActiveTab] = useState<"assignments" | "exam">(
-    "assignments"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "assignments" | "exam" | "quizzes"
+  >("assignments");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeMenu, setActiveMenu] = useState("dashboard");
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showProfileCard, setShowProfileCard] = useState(true);
+  const [showProfileCard, setShowProfileCard] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showLoading, setShowLoading] = useState(true);
   const [userInfo, setUserInfo] = useState<UserInfo>({
@@ -72,14 +91,53 @@ const StudentDashboard: React.FC = () => {
   const { user, userData, signOutUser, loading } = useFirebaseStore();
   const navigate = useNavigate();
 
+  // Mock quizzes data
+  const [quizzes, setQuizzes] = useState<Quiz[]>([
+    {
+      id: "1",
+      title: "Mathematics Mid-Term",
+      subject: "Mathematics",
+      duration: 60,
+      questions: 25,
+      dueDate: "2024-12-20",
+      status: "pending",
+    },
+    {
+      id: "2",
+      title: "Physics Fundamentals",
+      subject: "Physics",
+      duration: 45,
+      questions: 20,
+      dueDate: "2024-12-18",
+      status: "completed",
+      score: 85,
+    },
+    {
+      id: "3",
+      title: "Chemistry Basics",
+      subject: "Chemistry",
+      duration: 30,
+      questions: 15,
+      dueDate: "2024-12-22",
+      status: "pending",
+    },
+    {
+      id: "4",
+      title: "Computer Science Quiz",
+      subject: "Computer Science",
+      duration: 90,
+      questions: 40,
+      dueDate: "2024-12-25",
+      status: "in-progress",
+    },
+  ]);
+
   // Handle user data loading properly
   useEffect(() => {
     console.log("Firebase Store State:", { user, userData, loading });
 
-    // Stop if still loading
     if (loading) return;
 
-    // Handle user not logged in or no data found
     if (!user) {
       setUserInfo({
         fullName: "Unknown User",
@@ -91,7 +149,6 @@ const StudentDashboard: React.FC = () => {
       return;
     }
 
-    // Handle proper user and data
     const fullName = userData?.fullName || user.displayName || "Student";
     const firstName = fullName.split(" ")[0];
     const userInitial = firstName.charAt(0).toUpperCase();
@@ -107,7 +164,6 @@ const StudentDashboard: React.FC = () => {
     setShowLoading(false);
   }, [userData, user, loading]);
 
-  // Safety timeout to prevent infinite loading
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowLoading(false);
@@ -125,16 +181,17 @@ const StudentDashboard: React.FC = () => {
     if (!ctx) return;
 
     const { width: w, height: h } = canvas;
-
-    // Clear canvas
     ctx.clearRect(0, 0, w, h);
 
-    // Set styles
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "#5a67d8";
+    // Gradient line
+    const gradient = ctx.createLinearGradient(0, 0, w, 0);
+    gradient.addColorStop(0, "#667eea");
+    gradient.addColorStop(1, "#764ba2");
+
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = gradient;
     ctx.lineCap = "round";
 
-    // Draw line
     ctx.beginPath();
     ctx.moveTo(30, 90);
     ctx.bezierCurveTo(80, 60, 130, 70, 180, 50);
@@ -143,7 +200,6 @@ const StudentDashboard: React.FC = () => {
     ctx.stroke();
   }, []);
 
-  // Student data - only use fields that exist in UserData
   const currentStudent: StudentData = {
     id: user?.uid || "",
     first: userInfo.firstName,
@@ -161,16 +217,16 @@ const StudentDashboard: React.FC = () => {
   const mockNotifications = [
     {
       id: "1",
-      title: "Course Completed",
-      message: "You've completed UI/UX Design Fundamentals!",
+      title: "New Quiz Available",
+      message: "Mathematics Mid-Term quiz is now available",
       time: "2 hours ago",
       isRead: false,
       type: "success",
     },
     {
       id: "2",
-      title: "New Lesson",
-      message: "New lesson available in React Native Masterclass",
+      title: "Quiz Completed",
+      message: "You scored 85% in Physics Fundamentals",
       time: "5 hours ago",
       isRead: false,
       type: "info",
@@ -182,6 +238,7 @@ const StudentDashboard: React.FC = () => {
     completedCourses: 3,
     inProgressCourses: 5,
     totalLearningTime: 45,
+    averageScore: 78,
   };
 
   // Calendar functions
@@ -242,6 +299,11 @@ const StudentDashboard: React.FC = () => {
     console.log("Mark as read:", notificationId);
   };
 
+  const handleStartQuiz = (quizId: string) => {
+    // Navigate to subjects selection page
+    navigate("/quiz-subjects");
+  };
+
   const handleLogout = async () => {
     try {
       await signOutUser();
@@ -254,22 +316,21 @@ const StudentDashboard: React.FC = () => {
   const sidebarItems = [
     { icon: Home, label: "Dashboard" },
     { icon: BookOpen, label: "My Courses" },
-    { icon: FileText, label: "Request" },
+    { icon: Brain, label: "CBT Quizzes" },
+    { icon: FileText, label: "Assignments" },
     { icon: HelpCircle, label: "Query" },
     { icon: Upload, label: "Project Submission" },
-    { icon: Coffee, label: "Semester Break" },
-    { icon: Users, label: "Connection" },
     { icon: Video, label: "Virtual Lab" },
-    { icon: HelpCircle, label: "Exam FAQ" },
-    { icon: BarChart, label: "Attendance" },
+    { icon: BarChart, label: "Progress" },
+    { icon: Users, label: "Connection" },
+    { icon: Settings, label: "Settings" },
   ];
 
-  // Show loading only if still loading and showLoading is true
   if (showLoading) {
     return (
       <div className="loading-container">
         <div className="loading-spinner"></div>
-        <p>Loading dashboard...</p>
+        <p>Loading your learning dashboard...</p>
       </div>
     );
   }
@@ -287,7 +348,7 @@ const StudentDashboard: React.FC = () => {
           </button>
           <div className="logo">
             <img src={logo} alt="SXaint Logo" />
-            <span className="logo-text">SXaint</span>
+            <span className="logo-text">EduPortal</span>
           </div>
         </div>
 
@@ -296,7 +357,7 @@ const StudentDashboard: React.FC = () => {
             <Search size={18} />
             <input
               type="text"
-              placeholder="Search courses, lessons, or instructors..."
+              placeholder="Search courses, quizzes, or materials..."
             />
           </div>
         </div>
@@ -313,17 +374,16 @@ const StudentDashboard: React.FC = () => {
             <Bell size={20} />
           </button>
 
-          <div className="user-profile">
+          <div
+            className="user-profile"
+            onClick={() => setShowProfileCard(!showProfileCard)}
+          >
             <div className="avatar">{userInfo.userInitial}</div>
             <div className="user-info">
               <span className="user-name">{userInfo.firstName}</span>
               <span className="user-role">Student</span>
             </div>
           </div>
-
-          <button className="logout-btn" onClick={handleLogout}>
-            <LogOut size={16} /> Logout
-          </button>
         </div>
 
         {/* Notifications Panel */}
@@ -366,7 +426,7 @@ const StudentDashboard: React.FC = () => {
         )}
       </header>
 
-      {/* Profile Card with real user data */}
+      {/* Profile Card */}
       {showProfileCard && (
         <div className="fixed-profile-card">
           <button
@@ -401,6 +461,9 @@ const StudentDashboard: React.FC = () => {
                 <span>{currentStudent.semester}</span>
               </div>
             </div>
+            <button className="logout-btn-full" onClick={handleLogout}>
+              <LogOut size={16} /> Sign Out
+            </button>
           </div>
         </div>
       )}
@@ -433,8 +496,8 @@ const StudentDashboard: React.FC = () => {
                   <Zap size={20} />
                 </div>
                 <div className="ai-content">
-                  <h4>AI Assistant</h4>
-                  <p>Get personalized help</p>
+                  <h4>AI Learning Assistant</h4>
+                  <p>Get personalized help 24/7</p>
                 </div>
               </div>
             </div>
@@ -446,9 +509,24 @@ const StudentDashboard: React.FC = () => {
           {/* Welcome Section */}
           <section className="welcome-section">
             <div className="welcome-content">
-              <h1>Welcome back, {userInfo.firstName}! 👋</h1>
-              <p>Continue your learning journey and unlock new achievements</p>
+              <div className="welcome-text">
+                <h1>Welcome back, {userInfo.firstName}! 👋</h1>
+                <p>
+                  Ready to ace your next quiz? Continue your learning journey
+                </p>
+              </div>
+              <div className="welcome-actions">
+                <button className="primary-btn">
+                  <Play size={16} />
+                  Continue Learning
+                </button>
+                <button className="secondary-btn">
+                  <Bookmark size={16} />
+                  Save for Later
+                </button>
+              </div>
             </div>
+
             <div className="stats-grid">
               <div className="stat-card">
                 <div className="stat-icon total-courses">
@@ -479,257 +557,292 @@ const StudentDashboard: React.FC = () => {
               </div>
               <div className="stat-card">
                 <div className="stat-icon learning-time">
-                  <Clock size={20} />
+                  <Award size={20} />
                 </div>
                 <div className="stat-content">
-                  <h3>{stats.totalLearningTime}h</h3>
-                  <p>Learning Time</p>
+                  <h3>{stats.averageScore}%</h3>
+                  <p>Average Score</p>
                 </div>
               </div>
             </div>
           </section>
 
-          {/* Quick Action Tiles */}
-          <section className="tiles-section">
-            <div className="tiles">
-              <div className="tile open">
-                <MessageSquare size={28} />
-                <span>Open Queries</span>
+          {/* Quick Actions */}
+          <section className="quick-actions">
+            <h2>Quick Actions</h2>
+            <div className="action-tiles">
+              <div
+                className="action-tile primary"
+                onClick={() => navigate("/quiz-subjects")}
+              >
+                <Brain size={24} />
+                <span>Take Quiz</span>
               </div>
-              <div className="tile assign">
-                <Clipboard size={28} />
-                <span>Assignments</span>
+              <div className="action-tile secondary">
+                <BookOpen size={24} />
+                <span>Study Materials</span>
               </div>
-              <div className="tile proj">
-                <Rocket size={28} />
-                <span>Projects</span>
+              <div className="action-tile accent">
+                <BarChart3 size={24} />
+                <span>Progress Report</span>
               </div>
-              <div className="tile sport">
-                <Target size={28} />
-                <span>Sports</span>
+              <div className="action-tile success">
+                <Video size={24} />
+                <span>Virtual Lab</span>
               </div>
             </div>
           </section>
 
-          {/* Chart and Progress Section */}
-          <section className="top-row">
-            <div className="chart-container">
-              <h3>Student Progress</h3>
-              <div className="chart-box">
-                <canvas id="lineChart" width="460" height="130"></canvas>
-                <div className="x-labels">
-                  {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"].map(
-                    (m) => (
-                      <span key={m}>{m}</span>
-                    )
+          {/* Main Content Grid */}
+          <div className="content-grid">
+            {/* Left Column */}
+            <div className="content-column">
+              {/* Progress Chart */}
+              <div className="content-card">
+                <div className="card-header">
+                  <h3>Learning Progress</h3>
+                  <span className="card-badge">This Semester</span>
+                </div>
+                <div className="chart-container">
+                  <canvas id="lineChart" width="500" height="150"></canvas>
+                </div>
+              </div>
+
+              {/* Assignments/Quizzes Section */}
+              <div className="content-card">
+                <div className="tab-header">
+                  <button
+                    className={activeTab === "assignments" ? "active" : ""}
+                    onClick={() => setActiveTab("assignments")}
+                  >
+                    Assignments
+                  </button>
+                  <button
+                    className={activeTab === "quizzes" ? "active" : ""}
+                    onClick={() => setActiveTab("quizzes")}
+                  >
+                    CBT Quizzes
+                  </button>
+                  <button
+                    className={activeTab === "exam" ? "active" : ""}
+                    onClick={() => setActiveTab("exam")}
+                  >
+                    Exam Schedule
+                  </button>
+                </div>
+
+                <div className="tab-content">
+                  {activeTab === "assignments" && (
+                    <div className="assignments-list">
+                      {[
+                        ["Mathematics", "21.01.2024", "1.05.2024", "pending"],
+                        ["Physics", "21.02.2024", "1.06.2024", "submitted"],
+                        ["Chemistry", "21.02.2024", "1.06.2024", "submitted"],
+                      ].map(([sub, start, end, status], i) => (
+                        <div key={i} className="assignment-item">
+                          <div className="assignment-info">
+                            <h4>{sub}</h4>
+                            <p>Due: {end}</p>
+                          </div>
+                          <span className={`status ${status}`}>
+                            {status.charAt(0).toUpperCase() + status.slice(1)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {activeTab === "quizzes" && (
+                    <div className="quizzes-list">
+                      {quizzes.map((quiz) => (
+                        <div key={quiz.id} className="quiz-item">
+                          <div className="quiz-info">
+                            <h4>{quiz.title}</h4>
+                            <p>
+                              {quiz.subject} • {quiz.questions} questions •{" "}
+                              {quiz.duration} min
+                            </p>
+                            <span className="quiz-due">
+                              Due: {quiz.dueDate}
+                            </span>
+                          </div>
+                          <div className="quiz-actions">
+                            {quiz.status === "completed" && (
+                              <span className="quiz-score">{quiz.score}%</span>
+                            )}
+                            <button
+                              className={`quiz-btn ${quiz.status}`}
+                              onClick={() => handleStartQuiz(quiz.id)}
+                            >
+                              {quiz.status === "completed"
+                                ? "Review"
+                                : quiz.status === "in-progress"
+                                ? "Continue"
+                                : "Start"}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {activeTab === "exam" && (
+                    <div className="exam-schedule">
+                      {examSchedule.map((exam, index) => (
+                        <div key={index} className="exam-item">
+                          <div className="exam-date">
+                            <Calendar size={16} />
+                            <span>{exam.date.toLocaleDateString()}</span>
+                          </div>
+                          <div className="exam-details">
+                            <h4>{exam.exam} Exam</h4>
+                            <p>
+                              {exam.time} • Room {exam.room}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="donuts-container">
-              <div className="donut">
-                <svg viewBox="0 0 36 36">
-                  <path
-                    className="bg"
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  />
-                  <path
-                    className="fill avg"
-                    strokeDasharray="62,100"
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  />
-                  <text x="18" y="20.35" className="pct">
-                    62%
-                  </text>
-                </svg>
-                <p>Average</p>
-              </div>
-              <div className="donut">
-                <svg viewBox="0 0 36 36">
-                  <path
-                    className="bg"
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  />
-                  <path
-                    className="fill proj"
-                    strokeDasharray="70,100"
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  />
-                  <text x="18" y="20.35" className="pct">
-                    70%
-                  </text>
-                </svg>
-                <p>Project</p>
-              </div>
-            </div>
-
-            <div className="empty-space"></div>
-          </section>
-
-          {/* Assignments and Calendar Section */}
-          <section className="bottom-row">
-            <div className="assignments-container">
-              <div className="tab-header">
-                <button
-                  className={activeTab === "assignments" ? "active" : ""}
-                  onClick={() => setActiveTab("assignments")}
-                >
-                  Assignments
-                </button>
-                <button
-                  className={activeTab === "exam" ? "active" : ""}
-                  onClick={() => setActiveTab("exam")}
-                >
-                  Exam Schedule
-                </button>
-              </div>
-
-              <div className="tab-content">
-                {activeTab === "assignments" ? (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Subject</th>
-                        <th>Start Date</th>
-                        <th>End Date</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[
-                        ["Mathematics", "21.01.2020", "1.05.2020", "pending"],
-                        [
-                          "Fundamentals of C++",
-                          "21.02.2020",
-                          "1.06.2020",
-                          "submitted",
-                        ],
-                        ["Java", "21.02.2020", "1.06.2020", "submitted"],
-                        ["Html & Css", "21.02.2020", "1.06.2020", "pending"],
-                        [
-                          "Computer Applications",
-                          "21.02.2020",
-                          "1.06.2020",
-                          "pending",
-                        ],
-                      ].map(([sub, start, end, status], i) => (
-                        <tr key={i}>
-                          <td>{sub}</td>
-                          <td>{start}</td>
-                          <td>{end}</td>
-                          <td>
-                            <span className={`status ${status}`}>
-                              {status.charAt(0).toUpperCase() + status.slice(1)}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Exam</th>
-                        <th>Date</th>
-                        <th>Time</th>
-                        <th>Room</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {examSchedule.map((exam, index) => (
-                        <tr key={index}>
-                          <td>{exam.exam}</td>
-                          <td>{exam.date.toLocaleDateString()}</td>
-                          <td>{exam.time}</td>
-                          <td>{exam.room}</td>
-                        </tr>
-                      ))}
-                      {examSchedule.length === 0 && (
-                        <tr>
-                          <td colSpan={4} className="no-exams">
-                            No exams scheduled for{" "}
-                            {currentMonth.toLocaleDateString("en-US", {
-                              month: "long",
-                              year: "numeric",
-                            })}
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-
-            <div className="calendar-card">
-              <div className="cal-head">
-                <button onClick={() => navigateMonth("prev")}>
-                  <ChevronLeft size={18} />
-                </button>
-                <span>
-                  {currentMonth.toLocaleDateString("en-US", {
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </span>
-                <button onClick={() => navigateMonth("next")}>
-                  <ChevronRight size={18} />
-                </button>
-              </div>
-              <div className="cal-grid">
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-                  <div key={d} className="day-name">
-                    {d}
+            {/* Right Column */}
+            <div className="content-column">
+              {/* Calendar */}
+              <div className="content-card">
+                <div className="card-header">
+                  <h3>Academic Calendar</h3>
+                </div>
+                <div className="calendar">
+                  <div className="cal-head">
+                    <button onClick={() => navigateMonth("prev")}>
+                      <ChevronLeft size={18} />
+                    </button>
+                    <span>
+                      {currentMonth.toLocaleDateString("en-US", {
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </span>
+                    <button onClick={() => navigateMonth("next")}>
+                      <ChevronRight size={18} />
+                    </button>
                   </div>
-                ))}
-                {calendarDays.map((day, i) => {
-                  const today = new Date();
-                  const isToday =
-                    day === today.getDate() &&
-                    currentMonth.getMonth() === today.getMonth() &&
-                    currentMonth.getFullYear() === today.getFullYear();
-                  const hasExam = examSchedule.some(
-                    (exam) => exam.date.getDate() === day
-                  );
+                  <div className="cal-grid">
+                    {["S", "M", "T", "W", "T", "F", "S"].map((d) => (
+                      <div key={d} className="day-name">
+                        {d}
+                      </div>
+                    ))}
+                    {calendarDays.map((day, i) => {
+                      const today = new Date();
+                      const isToday =
+                        day === today.getDate() &&
+                        currentMonth.getMonth() === today.getMonth() &&
+                        currentMonth.getFullYear() === today.getFullYear();
+                      const hasExam = examSchedule.some(
+                        (exam) => exam.date.getDate() === day
+                      );
 
-                  return (
-                    <div
-                      key={i}
-                      className={`calendar-day ${!day ? "empty" : ""} ${
-                        isToday ? "today" : ""
-                      } ${hasExam ? "exam-day" : ""}`}
-                    >
-                      {day}
-                    </div>
-                  );
-                })}
+                      return (
+                        <div
+                          key={i}
+                          className={`calendar-day ${!day ? "empty" : ""} ${
+                            isToday ? "today" : ""
+                          } ${hasExam ? "exam-day" : ""}`}
+                        >
+                          {day}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
-              <div className="event">
-                Hacking Competition - {new Date().getDate()}th
+
+              {/* Performance Metrics */}
+              <div className="content-card">
+                <div className="card-header">
+                  <h3>Performance</h3>
+                </div>
+                <div className="performance-metrics">
+                  <div className="metric">
+                    <div className="metric-info">
+                      <span>Average Score</span>
+                      <h4>78%</h4>
+                    </div>
+                    <div className="metric-bar">
+                      <div
+                        className="metric-fill"
+                        style={{ width: "78%" }}
+                      ></div>
+                    </div>
+                  </div>
+                  <div className="metric">
+                    <div className="metric-info">
+                      <span>Completion Rate</span>
+                      <h4>65%</h4>
+                    </div>
+                    <div className="metric-bar">
+                      <div
+                        className="metric-fill"
+                        style={{ width: "65%" }}
+                      ></div>
+                    </div>
+                  </div>
+                  <div className="metric">
+                    <div className="metric-info">
+                      <span>Time Spent</span>
+                      <h4>45h</h4>
+                    </div>
+                    <div className="metric-bar">
+                      <div
+                        className="metric-fill"
+                        style={{ width: "60%" }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upcoming Deadlines */}
+              <div className="content-card">
+                <div className="card-header">
+                  <h3>Upcoming Deadlines</h3>
+                </div>
+                <div className="deadlines-list">
+                  <div className="deadline-item urgent">
+                    <div className="deadline-icon">
+                      <Timer size={16} />
+                    </div>
+                    <div className="deadline-content">
+                      <h4>Math Assignment</h4>
+                      <p>Due tomorrow</p>
+                    </div>
+                  </div>
+                  <div className="deadline-item warning">
+                    <div className="deadline-icon">
+                      <CheckSquare size={16} />
+                    </div>
+                    <div className="deadline-content">
+                      <h4>Physics Quiz</h4>
+                      <p>Due in 3 days</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </section>
+          </div>
         </main>
-      </div>
-
-      {/* Support Widget */}
-      <div className="support-widget">
-        <div className="support-avatar">{userInfo.userInitial}</div>
-        <div className="support-text">
-          <p>Support 24/7</p>
-          <p>Need help at any time</p>
-        </div>
-        <button className="call-btn">Call</button>
       </div>
 
       {/* CSS Styles */}
       <style>{`
         .student-dashboard {
           min-height: 100vh;
-          background: #f0f4f8;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
         .loading-container {
@@ -739,13 +852,14 @@ const StudentDashboard: React.FC = () => {
           justify-content: center;
           height: 100vh;
           gap: 16px;
+          color: white;
         }
 
         .loading-spinner {
           width: 40px;
           height: 40px;
-          border: 4px solid #e2e8f0;
-          border-top: 4px solid #3b82f6;
+          border: 4px solid rgba(255,255,255,0.3);
+          border-top: 4px solid white;
           border-radius: 50%;
           animation: spin 1s linear infinite;
         }
@@ -761,14 +875,14 @@ const StudentDashboard: React.FC = () => {
           left: 0;
           right: 0;
           height: 70px;
-          background: white;
-          border-bottom: 1px solid #e2e8f0;
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(20px);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.2);
           display: flex;
           align-items: center;
           justify-content: space-between;
           padding: 0 32px;
           z-index: 1000;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
 
         .header-left {
@@ -798,7 +912,9 @@ const StudentDashboard: React.FC = () => {
           gap: 12px;
           font-weight: 700;
           font-size: 24px;
-          color: #3b82f6;
+          background: linear-gradient(135deg, #667eea, #764ba2);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
         }
 
         .logo img {
@@ -806,7 +922,6 @@ const StudentDashboard: React.FC = () => {
           height: 36px;
           object-fit: contain;
           border-radius: 50%;
-          display: block;
         }
 
         .header-center {
@@ -817,8 +932,8 @@ const StudentDashboard: React.FC = () => {
 
         .search-bar {
           position: relative;
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
+          background: rgba(241, 245, 249, 0.8);
+          border: 1px solid rgba(226, 232, 240, 0.6);
           border-radius: 12px;
           padding: 12px 16px;
           display: flex;
@@ -829,8 +944,8 @@ const StudentDashboard: React.FC = () => {
 
         .search-bar:focus-within {
           background: white;
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+          border-color: #667eea;
+          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
         .search-bar input {
@@ -920,25 +1035,6 @@ const StudentDashboard: React.FC = () => {
           color: #64748b;
         }
 
-        .logout-btn {
-          background: #4f46e5;
-          color: #fff;
-          border: none;
-          border-radius: 12px;
-          padding: 0 24px;
-          height: 44px;
-          font-size: 15px;
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          transition: all 0.3s ease;
-        }
-
-        .logout-btn:hover {
-          background: #4338ca;
-        }
-
         .fixed-profile-card {
           position: fixed;
           top: 90px;
@@ -1024,6 +1120,7 @@ const StudentDashboard: React.FC = () => {
           display: flex;
           flex-direction: column;
           gap: 12px;
+          margin-bottom: 20px;
         }
 
         .detail-item {
@@ -1046,6 +1143,27 @@ const StudentDashboard: React.FC = () => {
         .detail-item span {
           color: #6b7280;
           font-size: 14px;
+        }
+
+        .logout-btn-full {
+          width: 100%;
+          background: #ef4444;
+          color: white;
+          border: none;
+          border-radius: 12px;
+          padding: 12px;
+          font-size: 14px;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .logout-btn-full:hover {
+          background: #dc2626;
         }
 
         .notifications-panel {
@@ -1159,8 +1277,9 @@ const StudentDashboard: React.FC = () => {
 
         .sidebar {
           width: 280px;
-          background: white;
-          border-right: 1px solid #e2e8f0;
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(20px);
+          border-right: 1px solid rgba(255, 255, 255, 0.2);
           transition: all 0.3s ease;
           position: fixed;
           left: 0;
@@ -1193,19 +1312,19 @@ const StudentDashboard: React.FC = () => {
         }
 
         .nav-item:hover {
-          background: #f8fafc;
-          color: #334155;
+          background: rgba(102, 126, 234, 0.1);
+          color: #667eea;
         }
 
         .nav-item.active {
-          background: #eff6ff;
-          color: #3b82f6;
-          border-right: 3px solid #3b82f6;
+          background: rgba(102, 126, 234, 0.15);
+          color: #667eea;
+          border-right: 3px solid #667eea;
         }
 
         .sidebar-footer {
           padding: 24px;
-          border-top: 1px solid #e2e8f0;
+          border-top: 1px solid rgba(226, 232, 240, 0.6);
         }
 
         .ai-assistant {
@@ -1213,21 +1332,21 @@ const StudentDashboard: React.FC = () => {
           align-items: center;
           gap: 12px;
           padding: 16px;
-          background: #f0f9ff;
+          background: rgba(102, 126, 234, 0.1);
           border-radius: 12px;
-          border: 1px solid #e0f2fe;
+          border: 1px solid rgba(102, 126, 234, 0.2);
           cursor: pointer;
           transition: all 0.3s ease;
         }
 
         .ai-assistant:hover {
-          background: #e0f2fe;
+          background: rgba(102, 126, 234, 0.2);
         }
 
         .ai-icon {
           width: 40px;
           height: 40px;
-          background: #3b82f6;
+          background: #667eea;
           border-radius: 10px;
           display: flex;
           align-items: center;
@@ -1253,7 +1372,6 @@ const StudentDashboard: React.FC = () => {
           margin-left: 280px;
           padding: 32px;
           transition: margin-left 0.3s ease;
-          background: #f0f4f8;
         }
 
         .sidebar.closed ~ .main-content {
@@ -1264,40 +1382,84 @@ const StudentDashboard: React.FC = () => {
           margin-bottom: 32px;
         }
 
-        .welcome-content h1 {
+        .welcome-content {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 24px;
+        }
+
+        .welcome-text h1 {
           margin: 0 0 8px 0;
           font-size: 32px;
           font-weight: 700;
-          color: #1e293b;
+          color: white;
         }
 
-        .welcome-content p {
+        .welcome-text p {
           margin: 0;
           font-size: 16px;
-          color: #64748b;
+          color: rgba(255, 255, 255, 0.8);
+        }
+
+        .welcome-actions {
+          display: flex;
+          gap: 12px;
+        }
+
+        .primary-btn, .secondary-btn {
+          padding: 12px 20px;
+          border: none;
+          border-radius: 12px;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .primary-btn {
+          background: white;
+          color: #667eea;
+        }
+
+        .primary-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .secondary-btn {
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+          backdrop-filter: blur(10px);
+        }
+
+        .secondary-btn:hover {
+          background: rgba(255, 255, 255, 0.3);
         }
 
         .stats-grid {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
           gap: 20px;
-          margin-top: 24px;
         }
 
         .stat-card {
-          background: white;
-          border: 1px solid #e2e8f0;
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(20px);
           border-radius: 16px;
           padding: 24px;
           display: flex;
           align-items: center;
           gap: 16px;
           transition: all 0.3s ease;
+          border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .stat-card:hover {
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
           transform: translateY(-4px);
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
         }
 
         .stat-icon {
@@ -1310,19 +1472,19 @@ const StudentDashboard: React.FC = () => {
         }
 
         .stat-icon.total-courses {
-          background: #eff6ff;
-          color: #3b82f6;
+          background: rgba(102, 126, 234, 0.1);
+          color: #667eea;
         }
         .stat-icon.completed {
-          background: #f0fdf4;
+          background: rgba(16, 185, 129, 0.1);
           color: #10b981;
         }
         .stat-icon.in-progress {
-          background: #fef3c7;
+          background: rgba(245, 158, 11, 0.1);
           color: #f59e0b;
         }
         .stat-icon.learning-time {
-          background: #f3e8ff;
+          background: rgba(139, 92, 246, 0.1);
           color: #8b5cf6;
         }
 
@@ -1339,150 +1501,103 @@ const StudentDashboard: React.FC = () => {
           color: #64748b;
         }
 
-        .tiles-section {
-          margin-bottom: 24px;
+        .quick-actions {
+          margin-bottom: 32px;
         }
 
-        .tiles {
+        .quick-actions h2 {
+          margin: 0 0 16px 0;
+          font-size: 24px;
+          font-weight: 600;
+          color: white;
+        }
+
+        .action-tiles {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
           gap: 16px;
         }
 
-        .tile {
+        .action-tile {
           padding: 24px;
           border-radius: 16px;
           display: flex;
           flex-direction: column;
           align-items: center;
           gap: 12px;
-          color: #fff;
+          color: white;
           font-weight: 600;
           font-size: 14px;
           transition: all 0.3s ease;
           cursor: pointer;
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
-        .tile:hover {
+        .action-tile:hover {
           transform: translateY(-6px);
           box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
         }
 
-        .tile.open {
-          background: linear-gradient(135deg, #38b2ac, #319795);
+        .action-tile.primary {
+          background: linear-gradient(135deg, #667eea, #764ba2);
         }
-        .tile.assign {
-          background: linear-gradient(135deg, #4299e1, #3182ce);
+        .action-tile.secondary {
+          background: linear-gradient(135deg, #f093fb, #f5576c);
         }
-        .tile.proj {
-          background: linear-gradient(135deg, #f56565, #e53e3e);
+        .action-tile.accent {
+          background: linear-gradient(135deg, #4facfe, #00f2fe);
         }
-        .tile.sport {
-          background: linear-gradient(135deg, #9f7aea, #805ad5);
+        .action-tile.success {
+          background: linear-gradient(135deg, #43e97b, #38f9d7);
         }
 
-        .top-row {
+        .content-grid {
+          display: grid;
+          grid-template-columns: 2fr 1fr;
+          gap: 24px;
+        }
+
+        .content-column {
           display: flex;
-          gap: 20px;
-          margin-bottom: 24px;
-          flex-wrap: wrap;
+          flex-direction: column;
+          gap: 24px;
         }
 
-        .chart-container,
-        .donuts-container,
-        .empty-space {
-          background: white;
+        .content-card {
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(20px);
           border-radius: 16px;
           padding: 24px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-          flex: 1;
-          min-width: 280px;
         }
 
-        .chart-container h3 {
-          margin: 0 0 16px;
+        .card-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 20px;
+        }
+
+        .card-header h3 {
+          margin: 0;
           font-size: 18px;
           font-weight: 600;
           color: #1e293b;
         }
 
-        .x-labels {
-          display: flex;
-          justify-content: space-between;
+        .card-badge {
+          background: #667eea;
+          color: white;
+          padding: 4px 12px;
+          border-radius: 20px;
           font-size: 12px;
-          color: #718096;
-          margin-top: 12px;
-        }
-
-        .donuts-container {
-          display: flex;
-          justify-content: center;
-          gap: 32px;
-          align-items: center;
-        }
-
-        .donut {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
-
-        .donut svg {
-          width: 100px;
-          height: 100px;
-        }
-
-        .donut .bg {
-          fill: none;
-          stroke: #e2e8f0;
-          stroke-width: 3.8;
-        }
-        .donut .fill {
-          fill: none;
-          stroke-linecap: round;
-          transform: rotate(-90deg);
-          transform-origin: 50% 50%;
-          stroke-width: 3.8;
-        }
-        .donut .fill.avg {
-          stroke: #f56565;
-        }
-        .donut .fill.proj {
-          stroke: #4299e1;
-        }
-        .donut .pct {
-          font-size: 16px;
-          font-weight: bold;
-          fill: #2d3748;
-          text-anchor: middle;
-        }
-
-        .donut p {
-          margin-top: 12px;
-          font-size: 14px;
-          color: #4a5568;
           font-weight: 600;
         }
 
-        .empty-space {
-          background: transparent;
-          box-shadow: none;
-        }
-
-        .bottom-row {
-          display: flex;
-          gap: 20px;
-          flex-wrap: wrap;
-        }
-
-        .assignments-container,
-        .calendar-card {
-          background: white;
-          border-radius: 16px;
-          padding: 24px;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-          flex: 1;
-          min-width: 300px;
+        .chart-container {
+          padding: 20px 0;
         }
 
         .tab-header {
@@ -1507,35 +1622,48 @@ const StudentDashboard: React.FC = () => {
         }
 
         .tab-header button.active {
-          color: #5a67d8;
-          border-bottom: 2px solid #5a67d8;
+          color: #667eea;
+          border-bottom: 2px solid #667eea;
         }
 
-        .tab-content {
-          overflow-x: auto;
+        .assignments-list, .quizzes-list, .exam-schedule {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
         }
 
-        table {
-          width: 100%;
-          min-width: 500px;
-          border-collapse: collapse;
-          font-size: 14px;
-        }
-
-        th,
-        td {
-          padding: 12px;
-          text-align: left;
-          border-bottom: 1px solid #e2e8f0;
-        }
-
-        tr:hover td {
+        .assignment-item, .quiz-item, .exam-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 16px;
           background: #f8fafc;
+          border-radius: 12px;
+          transition: all 0.3s ease;
         }
 
-        th {
-          color: #4a5568;
+        .assignment-item:hover, .quiz-item:hover, .exam-item:hover {
+          background: #f1f5f9;
+        }
+
+        .assignment-info h4, .quiz-info h4, .exam-details h4 {
+          margin: 0 0 4px 0;
+          font-size: 14px;
           font-weight: 600;
+          color: #1e293b;
+        }
+
+        .assignment-info p, .quiz-info p, .exam-details p {
+          margin: 0;
+          font-size: 12px;
+          color: #64748b;
+        }
+
+        .quiz-due {
+          font-size: 11px;
+          color: #94a3b8;
+          margin-top: 4px;
+          display: block;
         }
 
         .status {
@@ -1554,9 +1682,57 @@ const StudentDashboard: React.FC = () => {
           color: #38a169;
         }
 
-        .no-exams {
-          text-align: center;
-          color: #718096;
+        .quiz-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .quiz-score {
+          font-weight: 600;
+          color: #667eea;
+        }
+
+        .quiz-btn {
+          padding: 8px 16px;
+          border: none;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+
+        .quiz-btn.pending {
+          background: #667eea;
+          color: white;
+        }
+
+        .quiz-btn.in-progress {
+          background: #f59e0b;
+          color: white;
+        }
+
+        .quiz-btn.completed {
+          background: #10b981;
+          color: white;
+        }
+
+        .quiz-btn:hover {
+          transform: translateY(-1px);
+        }
+
+        .exam-date {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: #667eea;
+          font-weight: 600;
+          font-size: 14px;
+        }
+
+        .calendar {
+          padding: 0;
         }
 
         .cal-head {
@@ -1583,15 +1759,13 @@ const StudentDashboard: React.FC = () => {
         .cal-grid {
           display: grid;
           grid-template-columns: repeat(7, 1fr);
-          gap: 2px;
+          gap: 1px;
           background: #e2e8f0;
           border-radius: 12px;
           overflow: hidden;
-          margin-bottom: 16px;
         }
 
-        .day-name,
-        .cal-grid > div {
+        .day-name, .cal-grid > div {
           background: #fff;
           padding: 12px;
           text-align: center;
@@ -1609,7 +1783,7 @@ const StudentDashboard: React.FC = () => {
         }
 
         .calendar-day.today {
-          background: #3b82f6;
+          background: #667eea;
           color: #fff;
           font-weight: 700;
         }
@@ -1624,88 +1798,116 @@ const StudentDashboard: React.FC = () => {
           background: transparent;
         }
 
-        .event {
-          background: #fed7d7;
-          color: #e53e3e;
-          text-align: center;
-          padding: 8px;
-          border-radius: 8px;
-          font-size: 14px;
-          font-weight: 500;
+        .performance-metrics {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
         }
 
-        .support-widget {
-          position: fixed;
-          bottom: 30px;
-          right: 30px;
-          background: #fff;
-          padding: 16px 20px;
-          border-radius: 50px;
+        .metric {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .metric-info {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .metric-info span {
+          font-size: 14px;
+          color: #64748b;
+        }
+
+        .metric-info h4 {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 700;
+          color: #1e293b;
+        }
+
+        .metric-bar {
+          height: 8px;
+          background: #e2e8f0;
+          border-radius: 4px;
+          overflow: hidden;
+        }
+
+        .metric-fill {
+          height: 100%;
+          background: linear-gradient(135deg, #667eea, #764ba2);
+          border-radius: 4px;
+          transition: width 0.3s ease;
+        }
+
+        .deadlines-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .deadline-item {
           display: flex;
           align-items: center;
           gap: 12px;
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
-          z-index: 100;
+          padding: 16px;
+          border-radius: 12px;
           transition: all 0.3s ease;
         }
 
-        .support-widget:hover {
-          transform: scale(1.05);
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        .deadline-item.urgent {
+          background: #fef2f2;
+          border-left: 4px solid #ef4444;
         }
 
-        .support-avatar {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #48bb78, #38a169);
+        .deadline-item.warning {
+          background: #fffbeb;
+          border-left: 4px solid #f59e0b;
+        }
+
+        .deadline-icon {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
-          color: white;
+        }
+
+        .deadline-item.urgent .deadline-icon {
+          background: #fef2f2;
+          color: #ef4444;
+        }
+
+        .deadline-item.warning .deadline-icon {
+          background: #fffbeb;
+          color: #f59e0b;
+        }
+
+        .deadline-content h4 {
+          margin: 0 0 4px 0;
+          font-size: 14px;
           font-weight: 600;
-          font-size: 16px;
+          color: #1e293b;
         }
 
-        .support-text p {
-          font-size: 14px;
-          margin: 2px 0;
-          font-weight: 500;
-        }
-
-        .call-btn {
-          background: #48bb78;
-          color: #fff;
-          border: none;
-          padding: 8px 16px;
-          border-radius: 20px;
-          font-size: 14px;
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
-
-        .call-btn:hover {
-          background: #38a169;
+        .deadline-content p {
+          margin: 0;
+          font-size: 12px;
+          color: #64748b;
         }
 
         @media (max-width: 1200px) {
+          .content-grid {
+            grid-template-columns: 1fr;
+          }
           .stats-grid {
             grid-template-columns: repeat(2, 1fr);
           }
-          .top-row,
-          .bottom-row {
-            flex-direction: column;
-          }
-          .chart-container,
-          .donuts-container,
-          .empty-space,
-          .assignments-container,
-          .calendar-card {
-            min-width: 100%;
-          }
-          .fixed-profile-card {
-            right: 16px;
-            width: 280px;
+          .action-tiles {
+            grid-template-columns: repeat(2, 1fr);
           }
         }
 
@@ -1726,31 +1928,30 @@ const StudentDashboard: React.FC = () => {
           .sidebar.open {
             transform: translateX(0);
           }
+          .welcome-content {
+            flex-direction: column;
+            gap: 16px;
+          }
+          .welcome-actions {
+            width: 100%;
+          }
+          .primary-btn, .secondary-btn {
+            flex: 1;
+            justify-content: center;
+          }
           .stats-grid {
             grid-template-columns: 1fr;
           }
-          .tiles {
-            grid-template-columns: repeat(2, 1fr);
-          }
-          .fixed-profile-card {
-            width: calc(100vw - 32px);
-            right: 16px;
-            left: 16px;
+          .action-tiles {
+            grid-template-columns: 1fr;
           }
         }
 
         @media (max-width: 480px) {
-          .tiles {
-            grid-template-columns: 1fr;
-          }
-          .support-widget {
-            bottom: 70px;
+          .fixed-profile-card {
+            width: calc(100vw - 32px);
             right: 16px;
-            padding: 12px 16px;
-          }
-          .donuts-container {
-            flex-direction: column;
-            gap: 20px;
+            left: 16px;
           }
         }
       `}</style>
