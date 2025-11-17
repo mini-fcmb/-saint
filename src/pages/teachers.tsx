@@ -65,8 +65,9 @@ interface Quiz {
 
 interface WorkingHoursData {
   day: string;
-  hours: number;
+  minutes: number; // CHANGED: minutes instead of hours
   online: boolean;
+  startTime?: Date;
 }
 
 /* ------------------------------------------------------------------ */
@@ -91,17 +92,14 @@ function QuizNameModal({
   questions,
 }: QuizNameModalProps) {
   const [quizName, setQuizName] = useState("");
-  const [duration, setDuration] = useState(30); // default 30 minutes
+  const [duration, setDuration] = useState(30);
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
 
   useEffect(() => {
-    // Set default date to tomorrow
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     setScheduledDate(tomorrow.toISOString().split("T")[0]);
-
-    // Set default time to 09:00
     setScheduledTime("09:00");
   }, []);
 
@@ -386,7 +384,6 @@ function CreateQuizModal({
 
   const currentQuestion = questions[currentQuestionIndex];
 
-  // Initialize with empty question when creating new quiz
   useEffect(() => {
     if (isOpen && !editingQuiz) {
       setQuestions([
@@ -403,7 +400,6 @@ function CreateQuizModal({
     }
   }, [isOpen, editingQuiz]);
 
-  // Load editing quiz questions
   useEffect(() => {
     if (editingQuiz && isOpen) {
       setQuestions(editingQuiz.questions);
@@ -1039,6 +1035,7 @@ export default function TeacherDashboard() {
   const [tempQuestions, setTempQuestions] = useState<Question[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [workingHours, setWorkingHours] = useState<WorkingHoursData[]>([]);
+  const [onlineStartTime, setOnlineStartTime] = useState<Date | null>(null);
 
   const {
     user,
@@ -1059,67 +1056,120 @@ export default function TeacherDashboard() {
     };
   }, [initializeAuth]);
 
-  /* --------------------- PERSIST QUIZZES TO LOCALSTORAGE --------------------- */
+  /* --------------------- INITIALIZE ONLINE STATUS --------------------- */
   useEffect(() => {
-    // Load quizzes from localStorage
-    const savedQuizzes = localStorage.getItem("teacher-quizzes");
-    if (savedQuizzes) {
-      setQuizzes(JSON.parse(savedQuizzes));
+    const today = new Date().toDateString();
+    const lastOnlineDate = localStorage.getItem("teacher-last-online-date");
+    const savedOnlineStartTime = localStorage.getItem(
+      "teacher-online-start-time"
+    );
+
+    if (lastOnlineDate === today && savedOnlineStartTime) {
+      setOnlineStartTime(new Date(savedOnlineStartTime));
+    } else {
+      const startTime = new Date();
+      setOnlineStartTime(startTime);
+      localStorage.setItem("teacher-last-online-date", today);
+      localStorage.setItem(
+        "teacher-online-start-time",
+        startTime.toISOString()
+      );
     }
 
-    // Load working hours from localStorage
-    const savedWorkingHours = localStorage.getItem("teacher-working-hours");
-    if (savedWorkingHours) {
-      setWorkingHours(JSON.parse(savedWorkingHours));
-    } else {
-      // Initialize working hours for the week
-      initializeWorkingHours();
+    initializeWorkingHours();
+  }, []);
+
+  /* --------------------- PERSIST QUIZZES TO LOCALSTORAGE --------------------- */
+  useEffect(() => {
+    const savedQuizzes = localStorage.getItem("teacher-quizzes");
+    if (savedQuizzes) {
+      try {
+        const parsedQuizzes = JSON.parse(savedQuizzes);
+        const validatedQuizzes = parsedQuizzes.map((quiz: any) => ({
+          ...quiz,
+          status: quiz.status || "upcoming",
+          totalDuration: quiz.totalDuration || quiz.duration + 10,
+        }));
+        setQuizzes(validatedQuizzes);
+      } catch (error) {
+        console.error("Error loading quizzes from localStorage:", error);
+        setQuizzes([]);
+      }
     }
   }, []);
 
   useEffect(() => {
-    // Save quizzes to localStorage whenever quizzes change
-    localStorage.setItem("teacher-quizzes", JSON.stringify(quizzes));
+    if (quizzes.length > 0) {
+      localStorage.setItem("teacher-quizzes", JSON.stringify(quizzes));
+    }
   }, [quizzes]);
 
   useEffect(() => {
-    // Save working hours to localStorage whenever they change
-    localStorage.setItem("teacher-working-hours", JSON.stringify(workingHours));
+    if (workingHours.length > 0) {
+      localStorage.setItem(
+        "teacher-working-hours",
+        JSON.stringify(workingHours)
+      );
+    }
   }, [workingHours]);
 
-  /* --------------------- INITIALIZE WORKING HOURS --------------------- */
+  /* --------------------- INITIALIZE WORKING HOURS (MINUTES) --------------------- */
   const initializeWorkingHours = () => {
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const today = new Date();
+    const todayIndex = (today.getDay() + 6) % 7;
 
-    const hoursData = days.map((day, index) => {
-      // Convert index to match getDay() format (0 = Sunday)
-      const dayIndex = (index + 1) % 7;
-      const isToday = dayIndex === today;
+    const savedWorkingHours = localStorage.getItem("teacher-working-hours");
 
-      return {
+    if (savedWorkingHours) {
+      const parsedHours = JSON.parse(savedWorkingHours);
+      const lastUpdated = localStorage.getItem("working-hours-last-updated");
+      const todayStr = today.toDateString();
+
+      if (lastUpdated !== todayStr) {
+        // New day - reset today's minutes
+        const updatedHours = parsedHours.map(
+          (day: WorkingHoursData, index: number) =>
+            index === todayIndex
+              ? { ...day, minutes: 1, online: true, startTime: new Date() }
+              : day
+        );
+        setWorkingHours(updatedHours);
+        localStorage.setItem("working-hours-last-updated", todayStr);
+      } else {
+        setWorkingHours(parsedHours);
+      }
+    } else {
+      // First time initialization - start with 1 minute for today
+      const hoursData = days.map((day, index) => ({
         day,
-        hours: isToday ? 4 : 0, // Start with 4 hours for today if teacher is online
-        online: isToday,
-      };
-    });
-
-    setWorkingHours(hoursData);
+        minutes: index === todayIndex ? 1 : 0,
+        online: index === todayIndex,
+        startTime: index === todayIndex ? new Date() : undefined,
+      }));
+      setWorkingHours(hoursData);
+      localStorage.setItem("working-hours-last-updated", today.toDateString());
+    }
   };
 
-  /* --------------------- UPDATE WORKING HOURS IN REAL-TIME --------------------- */
+  /* --------------------- UPDATE WORKING MINUTES IN REAL-TIME --------------------- */
   useEffect(() => {
-    const updateTodayHours = () => {
-      const today = new Date().getDay();
-      const todayIndex = (today + 6) % 7; // Convert to our array index (0 = Monday)
+    const updateTodayMinutes = () => {
+      const today = new Date();
+      const todayIndex = (today.getDay() + 6) % 7;
 
       setWorkingHours((prev) =>
         prev.map((day, index) => {
-          if (index === todayIndex) {
-            // Increment hours by 0.1 (6 minutes) each time this runs
+          if (index === todayIndex && day.online) {
+            // Calculate minutes based on how long teacher has been online
+            const startTime = onlineStartTime || new Date();
+            const minutesOnline = Math.floor(
+              (today.getTime() - startTime.getTime()) / (1000 * 60)
+            );
+
             return {
               ...day,
-              hours: Math.min(24, day.hours + 0.1),
+              minutes: Math.min(1440, Math.max(1, minutesOnline)), // Max 24 hours (1440 min)
               online: true,
             };
           }
@@ -1128,14 +1178,11 @@ export default function TeacherDashboard() {
       );
     };
 
-    // Update every 6 minutes (360000 ms)
-    const interval = setInterval(updateTodayHours, 360000);
-
-    // Initial update
-    updateTodayHours();
-
+    // Update every minute
+    const interval = setInterval(updateTodayMinutes, 60000);
+    updateTodayMinutes();
     return () => clearInterval(interval);
-  }, []);
+  }, [onlineStartTime]);
 
   /* --------------------- UPDATE QUIZ STATUSES IN REAL-TIME --------------------- */
   useEffect(() => {
@@ -1163,12 +1210,8 @@ export default function TeacherDashboard() {
       );
     };
 
-    // Update every minute
     const interval = setInterval(updateQuizStatuses, 60000);
-
-    // Initial update
     updateQuizStatuses();
-
     return () => clearInterval(interval);
   }, []);
 
@@ -1186,7 +1229,6 @@ export default function TeacherDashboard() {
   const handleSaveQuestions = (questions: Question[]) => {
     setTempQuestions(questions);
     if (editingQuiz) {
-      // Update existing quiz
       const updatedQuizzes = quizzes.map((quiz) =>
         quiz.id === editingQuiz.id ? { ...quiz, questions } : quiz
       );
@@ -1194,7 +1236,6 @@ export default function TeacherDashboard() {
       setEditingQuiz(null);
       setQuizModalOpen(false);
     } else {
-      // New quiz - open name modal
       setQuizNameModalOpen(true);
     }
   };
@@ -1205,9 +1246,8 @@ export default function TeacherDashboard() {
     scheduledDate: string,
     scheduledTime: string
   ) => {
-    const totalDuration = duration + 10; // Add 10 minutes buffer
+    const totalDuration = duration + 10;
 
-    // Calculate status based on current time
     const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
     const now = new Date();
     const endTime = new Date(
@@ -1259,7 +1299,7 @@ export default function TeacherDashboard() {
   const getStatusText = (status: string) => {
     switch (status) {
       case "active":
-        return "Start";
+        return "Active";
       case "upcoming":
         return "Upcoming";
       case "expired":
@@ -1310,7 +1350,6 @@ export default function TeacherDashboard() {
 
   /* --------------------- UPCOMING CLASSES --------------------- */
   const upcomingClasses = useMemo(() => {
-    // Combine teacher classes with quizzes for upcoming classes
     const classItems = teacherClasses.map((c, i) => ({
       id: `class-${i + 1}`,
       time: i % 2 === 0 ? "10:30" : "14:30",
@@ -1334,7 +1373,7 @@ export default function TeacherDashboard() {
             : ("upcoming" as const),
       }));
 
-    return [...classItems, ...quizItems].slice(0, 5); // Show max 5 items
+    return [...classItems, ...quizItems].slice(0, 5);
   }, [teacherClasses, quizzes]);
 
   const firstName = user?.displayName?.split(" ")[0] || "Teacher";
@@ -1372,7 +1411,10 @@ export default function TeacherDashboard() {
           <div className="logo-section">
             <img src={logo} alt="logo" className="logo-img" />
             <span className="logo-text">SXaint</span>
-            <span className="status">Available for work</span>
+            <span className="status online-indicator">
+              <div className="online-dot"></div>
+              Online - Available for work
+            </span>
             <button className="follow-btn">Follow</button>
           </div>
 
@@ -1512,26 +1554,40 @@ export default function TeacherDashboard() {
                 <span>This Week</span>
               </div>
               <div className="bar-chart">
-                {workingHours.map((d, i) => (
-                  <div key={i} className="bar-item">
-                    <div
-                      className="bar"
-                      style={{
-                        height: `${Math.min(100, (d.hours / 24) * 100)}%`,
-                        backgroundColor: d.online ? "#10b981" : "#e5e7eb",
-                      }}
-                    ></div>
-                    <span>{d.day}</span>
-                  </div>
-                ))}
+                {workingHours.map((d, i) => {
+                  const todayIndex = (new Date().getDay() + 6) % 7;
+                  const isToday = i === todayIndex;
+                  // Calculate bar height based on minutes (max 1440 minutes = 24 hours)
+                  const barHeight = Math.min(100, (d.minutes / 1440) * 100);
+
+                  return (
+                    <div key={i} className="bar-item">
+                      <div className="bar-container">
+                        <div
+                          className={`bar ${d.online ? "online" : "offline"} ${
+                            isToday ? "today" : ""
+                          }`}
+                          style={{
+                            height: `${barHeight}%`,
+                          }}
+                        >
+                          {isToday && d.online && (
+                            <div className="growing-indicator"></div>
+                          )}
+                        </div>
+                      </div>
+                      <span className={isToday ? "today-label" : ""}>
+                        {d.day}
+                      </span>
+                      <div className="minutes-label">{d.minutes}m</div>
+                    </div>
+                  );
+                })}
               </div>
               <div className="total">
                 Total{" "}
                 <strong>
-                  {Math.round(
-                    workingHours.reduce((sum, day) => sum + day.hours, 0)
-                  )}
-                  h
+                  {workingHours.reduce((sum, day) => sum + day.minutes, 0)}m
                 </strong>{" "}
                 this week
               </div>
@@ -1627,7 +1683,7 @@ export default function TeacherDashboard() {
                               onClick={() => handleEditQuiz(quiz)}
                               title="Edit quiz"
                             >
-                              <i className="bx bx-pencil"></i>
+                              <Edit3 size={16} />
                             </button>
                           </div>
                         </div>
@@ -1777,6 +1833,7 @@ export default function TeacherDashboard() {
           flex-direction: column;
           gap: 16px;
         }
+
         * {
           box-sizing: border-box;
           margin: 0;
@@ -1847,6 +1904,31 @@ export default function TeacherDashboard() {
           font-size: 14px;
           color: #6b7280;
           font-weight: 500;
+        }
+        .online-indicator {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: #10b981;
+          font-weight: 600;
+        }
+        .online-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #10b981;
+          animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+          0% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
+          100% {
+            opacity: 1;
+          }
         }
         .follow-btn {
           background: #f3f4f6;
@@ -2109,31 +2191,87 @@ export default function TeacherDashboard() {
           text-decoration: none;
           font-weight: 600;
         }
+
+        /* Working Hours Bar Chart Styles - MINUTES BASED */
         .bar-chart {
           display: flex;
           align-items: flex-end;
-          gap: 16px;
-          height: 140px;
+          gap: 12px;
+          height: 160px;
           margin-top: 20px;
+          padding: 0 10px;
         }
         .bar-item {
           flex: 1;
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 12px;
+          gap: 8px;
+          position: relative;
+        }
+        .bar-container {
+          height: 120px;
+          display: flex;
+          align-items: flex-end;
+          width: 100%;
+          position: relative;
         }
         .bar {
-          width: 40%;
-          border-radius: 6px;
-          background: #10b981;
-          transition: height 0.3s;
-          min-height: 20px;
+          width: 100%;
+          border-radius: 6px 6px 0 0;
+          transition: height 0.3s ease;
+          position: relative;
+          min-height: 4px;
         }
+        .bar.online {
+          background: #10b981;
+        }
+        .bar.offline {
+          background: #e5e7eb;
+        }
+        .bar.today {
+          background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+          box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+        }
+        .growing-indicator {
+          position: absolute;
+          top: -2px;
+          left: 0;
+          right: 0;
+          height: 4px;
+          background: #34d399;
+          border-radius: 2px;
+          animation: grow 2s ease-in-out infinite;
+        }
+        @keyframes grow {
+          0% {
+            transform: scaleX(0);
+            opacity: 0;
+          }
+          50% {
+            transform: scaleX(1);
+            opacity: 1;
+          }
+          100% {
+            transform: scaleX(0);
+            opacity: 0;
+          }
+        }
+        .minutes-label {
+          font-size: 12px;
+          color: #6b7280;
+          font-weight: 600;
+        }
+        .today-label {
+          font-weight: 700;
+          color: #111827;
+        }
+
         .total {
           font-size: 14px;
           color: #6b7280;
           margin-top: 12px;
+          text-align: center;
         }
         .legend {
           display: flex;
@@ -2141,6 +2279,7 @@ export default function TeacherDashboard() {
           font-size: 13px;
           color: #6b7280;
           margin-top: 8px;
+          justify-content: center;
         }
         .dot {
           display: inline-block;
@@ -2457,34 +2596,48 @@ export default function TeacherDashboard() {
           padding: 20px 0;
         }
 
-        /* Boxicons for edit icon */
-        .bx-pencil {
-          font-size: 16px;
-        }
-
         /* RESPONSIVE MEDIA QUERIES */
-        @media (min-width: 1400px) {
-          .sidebar {
-            width: 340px;
+        @media (max-width: 1200px) {
+          .top-grid {
+            grid-template-columns: 1fr;
+            gap: 24px;
+          }
+          .bottom-grid {
+            grid-template-columns: 1fr;
+            gap: 24px;
           }
           .main-content {
-            margin-left: 340px;
+            padding: 32px;
           }
         }
-        @media (max-width: 1399px) {
-          /* ... */
-        }
-        @media (max-width: 1199px) {
-          /* ... */
-        }
-        @media (max-width: 991px) {
-          /* ... */
-        }
-        @media (max-width: 767px) {
-          /* ... */
-        }
-        @media (max-width: 575px) {
-          /* ... */
+
+        @media (max-width: 768px) {
+          .header {
+            padding: 0 24px;
+          }
+          .main-content {
+            padding: 24px;
+            margin-left: 0;
+          }
+          .sidebar:not(.open) ~ .main-content {
+            margin-left: 0;
+          }
+          .sidebar {
+            transform: translateX(-100%);
+          }
+          .sidebar.open {
+            transform: translateX(0);
+          }
+          .profile-card {
+            position: static;
+            width: 100%;
+            margin-top: 24px;
+          }
+          .progress-card {
+            flex-direction: column;
+            text-align: center;
+            gap: 20px;
+          }
         }
       `}</style>
     </div>
