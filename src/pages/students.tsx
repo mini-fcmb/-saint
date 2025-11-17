@@ -31,7 +31,7 @@ import { useFirebaseStore } from "../stores/useFirebaseStore";
 import { useNavigate } from "react-router-dom";
 
 const StudentDashboard: React.FC = () => {
-  // All hooks must be called unconditionally at the top level
+  // State declarations
   const [activeTab, setActiveTab] = useState<"assignments" | "exam">(
     "assignments"
   );
@@ -40,12 +40,12 @@ const StudentDashboard: React.FC = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileCard, setShowProfileCard] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [showLoading, setShowLoading] = useState(true); // HOTFIX: Prevent infinite loading
+  const [showLoading, setShowLoading] = useState(true);
 
   const { user, userData, signOutUser, loading } = useFirebaseStore();
   const navigate = useNavigate();
 
-  // HOTFIX: Prevent infinite loading - this useEffect must be unconditional
+  // Prevent infinite loading
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowLoading(false);
@@ -54,7 +54,7 @@ const StudentDashboard: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Canvas drawing effect - this useEffect must be unconditional
+  // Canvas drawing effect
   useEffect(() => {
     const canvas = document.getElementById("lineChart") as HTMLCanvasElement;
     if (!canvas) return;
@@ -79,9 +79,36 @@ const StudentDashboard: React.FC = () => {
     ctx.bezierCurveTo(230, 30, 280, 80, 330, 65);
     ctx.bezierCurveTo(380, 50, 430, 85, w - 30, 75);
     ctx.stroke();
-  }, []); // Empty dependency array - runs once on mount
+  }, []);
 
-  // Mock data - these should be defined unconditionally
+  // Get user info from database
+  const getUserInfo = () => {
+    // Priority: userData.fullName > user.displayName > fallback
+    const fullName = userData?.fullName || user?.displayName || "User";
+    const firstName = fullName.split(" ")[0];
+    const userInitial = firstName.charAt(0).toUpperCase();
+    const email = userData?.email || user?.email || "student@email.com";
+
+    return { fullName, firstName, userInitial, email };
+  };
+
+  const { fullName, firstName, userInitial, email } = getUserInfo();
+
+  // Student data from database
+  const currentStudent = {
+    id: user?.uid || "",
+    first: firstName,
+    last: fullName.split(" ").slice(1).join(" ") || "",
+    email: email,
+    progress: 0,
+    className: userData?.className || "Not assigned",
+    enrollmentNo: userData?.enrollmentNo || "A231231231",
+    course: userData?.course || "Computer Science",
+    session: userData?.session || "2023 - 2024",
+    semester: userData?.semester || "IV",
+  };
+
+  // Mock data
   const mockNotifications = [
     {
       id: "1",
@@ -107,40 +134,6 @@ const StudentDashboard: React.FC = () => {
     inProgressCourses: 5,
     totalLearningTime: 45,
   };
-
-  // Show loading only briefly
-  if (showLoading && loading) {
-    return (
-      <div className="loading-container">
-        <div className="loading-spinner"></div>
-        <p>Loading dashboard...</p>
-      </div>
-    );
-  }
-
-  // Get user info - works for both teachers and students
-  const firstName =
-    user?.displayName?.split(" ")[0] ||
-    userData?.fullName?.split(" ")[0] ||
-    "User";
-  const userInitial = firstName.charAt(0).toUpperCase();
-
-  // Student-specific data
-  const currentStudent =
-    userData?.role === "student"
-      ? {
-          id: user?.uid || "",
-          first: firstName,
-          last: userData.fullName?.split(" ").slice(1).join(" ") || "",
-          email: userData.email || "",
-          progress: 0,
-          className: userData.className,
-          enrollmentNo: userData.enrollmentNo,
-          course: userData.course,
-          session: userData.session,
-          semester: userData.semester,
-        }
-      : null;
 
   // Calendar functions
   const getDaysInMonth = (date: Date) => {
@@ -181,7 +174,6 @@ const StudentDashboard: React.FC = () => {
     });
   };
 
-  // Exam schedule based on current month
   const examSchedule = [
     {
       exam: "Mid-Term",
@@ -222,6 +214,16 @@ const StudentDashboard: React.FC = () => {
     { icon: HelpCircle, label: "Exam FAQ" },
     { icon: BarChart, label: "Attendance" },
   ];
+
+  // Show loading only briefly
+  if (showLoading && loading) {
+    return (
+      <div className="loading-container">
+        <div className="loading-spinner"></div>
+        <p>Loading dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="student-dashboard">
@@ -315,7 +317,7 @@ const StudentDashboard: React.FC = () => {
         )}
       </header>
 
-      {/* Profile Card */}
+      {/* Profile Card with real user data */}
       {showProfileCard && (
         <div className="fixed-profile-card">
           <button
@@ -328,26 +330,26 @@ const StudentDashboard: React.FC = () => {
             <div className="profile-header">
               <div className="profile-avatar-large">{userInitial}</div>
               <div className="profile-info">
-                <h4>{firstName}</h4>
-                <p>{user?.email || userData?.email || "student@email.com"}</p>
+                <h4>{fullName}</h4>
+                <p>{email}</p>
               </div>
             </div>
             <div className="profile-details">
               <div className="detail-item">
                 <strong>Enrollment No:</strong>
-                <span>{currentStudent?.enrollmentNo || "A231231231"}</span>
+                <span>{currentStudent.enrollmentNo}</span>
               </div>
               <div className="detail-item">
                 <strong>Course:</strong>
-                <span>{currentStudent?.course || "Computer Science"}</span>
+                <span>{currentStudent.course}</span>
               </div>
               <div className="detail-item">
                 <strong>Session:</strong>
-                <span>{currentStudent?.session || "2023 - 2024"}</span>
+                <span>{currentStudent.session}</span>
               </div>
               <div className="detail-item">
                 <strong>Semester:</strong>
-                <span>{currentStudent?.semester || "IV"}</span>
+                <span>{currentStudent.semester}</span>
               </div>
             </div>
           </div>
@@ -462,7 +464,6 @@ const StudentDashboard: React.FC = () => {
 
           {/* Chart and Progress Section */}
           <section className="top-row">
-            {/* Line Chart */}
             <div className="chart-container">
               <h3>Student Progress</h3>
               <div className="chart-box">
@@ -477,7 +478,6 @@ const StudentDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Donut Charts */}
             <div className="donuts-container">
               <div className="donut">
                 <svg viewBox="0 0 36 36">
@@ -515,13 +515,11 @@ const StudentDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Empty space for layout balance */}
             <div className="empty-space"></div>
           </section>
 
           {/* Assignments and Calendar Section */}
           <section className="bottom-row">
-            {/* Assignments / Exam Schedule */}
             <div className="assignments-container">
               <div className="tab-header">
                 <button
@@ -616,7 +614,6 @@ const StudentDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Calendar */}
             <div className="calendar-card">
               <div className="cal-head">
                 <button onClick={() => navigateMonth("prev")}>
@@ -678,7 +675,6 @@ const StudentDashboard: React.FC = () => {
         <button className="call-btn">Call</button>
       </div>
 
-      {/* CSS Styles */}
       <style jsx>{`
         .student-dashboard {
           min-height: 100vh;
