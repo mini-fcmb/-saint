@@ -29,10 +29,30 @@ export interface Student {
   last: string;
   email: string;
   progress: number;
+  className?: string;
+  enrollmentNo?: string;
+  course?: string;
+  session?: string;
+  semester?: string;
+}
+
+interface UserData {
+  role: "teacher" | "student";
+  fullName: string;
+  email: string;
+  // Student specific
+  className?: string;
+  enrollmentNo?: string;
+  course?: string;
+  session?: string;
+  semester?: string;
+  // Teacher specific
+  teaching?: any[];
 }
 
 interface FirebaseStore {
   user: User | null;
+  userData: UserData | null;
   teacherClasses: TeacherClass[];
   students: Student[];
   loading: boolean;
@@ -62,39 +82,73 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     set((s) => ({ debug: [...s.debug, `[${time}] ${msg}`] }));
   };
 
-  const loadTeacher = async (uid: string) => {
-    log(`Loading teacher doc for UID: ${uid}`);
-    const ref = doc(db, "teachers", uid);
-    const snap = await getDoc(ref);
+  const loadUserData = async (uid: string): Promise<{ userData: UserData; role: "teacher" | "student" }> => {
+    log(`Loading user data for UID: ${uid}`);
+    
+    // Try teacher collection first
+    const teacherRef = doc(db, "teachers", uid);
+    const teacherSnap = await getDoc(teacherRef);
 
-    if (!snap.exists()) {
-      log("Teacher doc NOT FOUND");
-      return null;
+    if (teacherSnap.exists()) {
+      const data = teacherSnap.data()!;
+      log(`Teacher data found: ${JSON.stringify(data)}`);
+      
+      const userData: UserData = {
+        role: "teacher",
+        fullName: data.fullName || "",
+        email: data.email || "",
+        teaching: data.teaching || [],
+        className: data.className || "",
+      };
+      
+      return { userData, role: "teacher" };
     }
 
-    const data = snap.data()!;
-    log(`Teacher raw data: ${JSON.stringify(data)}`);
+    // Try student collection
+    const studentRef = doc(db, "students", uid);
+    const studentSnap = await getDoc(studentRef);
+
+    if (studentSnap.exists()) {
+      const data = studentSnap.data()!;
+      log(`Student data found: ${JSON.stringify(data)}`);
+      
+      const userData: UserData = {
+        role: "student",
+        fullName: data.fullName || "",
+        email: data.email || "",
+        className: data.className || "",
+        enrollmentNo: data.enrollmentNo || "",
+        course: data.course || "Computer Science",
+        session: data.session || "2023-2024",
+        semester: data.semester || "IV",
+      };
+      
+      return { userData, role: "student" };
+    }
+
+    log("User document not found in teachers or students collection");
+    throw new Error("User profile not found");
+  };
+
+  const loadTeacherClasses = (userData: UserData): TeacherClass[] => {
+    if (userData.role !== "teacher") return [];
 
     let classLevels: string[] = [];
 
-    const isTeacher = data.role === "teacher" || data.role === "teachers" || !data.role;
+    if (Array.isArray(userData.teaching)) {
+      classLevels = userData.teaching
+        .map((t: any) => (t.classLevel ?? "").toString().trim())
+        .filter(Boolean);
+    }
 
-    if (isTeacher) {
-      if (Array.isArray(data.teaching)) {
-        classLevels = data.teaching
-          .map((t: any) => (t.classLevel ?? "").toString().trim())
-          .filter(Boolean);
-      }
-
-      if (!classLevels.length && data.className) {
-        const name = data.className.toString().trim();
-        if (name) classLevels = [name];
-      }
+    if (!classLevels.length && userData.className) {
+      const name = userData.className.toString().trim();
+      if (name) classLevels = [name];
     }
 
     const classes: TeacherClass[] = classLevels.map((l) => ({ id: l, name: l }));
     log(`Teacher classes: ${JSON.stringify(classes)}`);
-    return { classes, teacherData: data };
+    return classes;
   };
 
   const startStudentListener = (classLevels: string[]) => {
@@ -123,10 +177,14 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
             last,
             email: data.email ?? "",
             progress: typeof data.progress === "number" ? data.progress : 0,
+            className: data.className,
+            enrollmentNo: data.enrollmentNo,
+            course: data.course,
+            session: data.session,
+            semester: data.semester,
           };
         });
 
-        // FIXED: Removed stray '11'
         students.sort((a, b) =>
           `${a.first} ${a.last}`.localeCompare(`${b.first} ${b.last}`)
         );
@@ -146,6 +204,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
 
   return {
     user: null,
+    userData: null,
     teacherClasses: [],
     students: [],
     loading: true,
@@ -158,6 +217,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
           if (studentUnsub) studentUnsub();
           set({
             user: null,
+            userData: null,
             teacherClasses: [],
             students: [],
             loading: false,
@@ -170,20 +230,34 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         log(`Auth user: ${user.uid} – ${user.email}`);
         set({ user, loading: true, error: null });
 
-        const info = await loadTeacher(user.uid);
-        if (!info) {
+        try {
+          const { userData, role } = await loadUserData(user.uid);
+          
+          set({ userData });
+
+          if (role === "teacher") {
+            const classes = loadTeacherClasses(userData);
+            set({ teacherClasses: classes });
+            startStudentListener(classes.map((c) => c.id));
+          } else {
+            // For students, we don't need to load other students
+            set({ 
+              teacherClasses: [],
+              students: [],
+              loading: false 
+            });
+          }
+
+        } catch (error: any) {
+          log(`Error loading user data: ${error.message}`);
           set({
+            userData: null,
             teacherClasses: [],
             students: [],
             loading: false,
-            error: "Teacher profile not found",
+            error: error.message,
           });
-          return;
         }
-
-        const { classes } = info;
-        set({ teacherClasses: classes });
-        startStudentListener(classes.map((c) => c.id));
       });
 
       return () => {
@@ -213,6 +287,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
 
         set({
           user: null,
+          userData: null,
           teacherClasses: [],
           students: [],
           loading: false,
