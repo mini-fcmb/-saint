@@ -1,4 +1,4 @@
-// stores/useFirebaseStore.ts
+// stores/useFirebaseStore.ts - FIXED VERSION
 "use client";
 
 import { create } from "zustand";
@@ -40,13 +40,11 @@ interface UserData {
   role: "teacher" | "student";
   fullName: string;
   email: string;
-  // Student specific
   className?: string;
   enrollmentNo?: string;
   course?: string;
   session?: string;
   semester?: string;
-  // Teacher specific
   teaching?: any[];
 }
 
@@ -58,6 +56,7 @@ interface FirebaseStore {
   loading: boolean;
   error: string | null;
   debug: string[];
+  authInitialized: boolean; // NEW: Track if auth is initialized
   initializeAuth: () => Unsubscribe;
   refreshStudents: () => void;
   clearError: () => void;
@@ -75,14 +74,22 @@ const splitName = (fullName = "") => {
 /* ------------------------------------------------------------------ */
 export const useFirebaseStore = create<FirebaseStore>((set, get) => {
   let studentUnsub: Unsubscribe | null = null;
+  let authUnsubscribe: Unsubscribe | null = null;
+  let currentUserId: string | null = null; // NEW: Track current user to prevent reloads
 
   const log = (msg: string) => {
     const time = new Date().toISOString().slice(11, 19);
     console.log("[FB-Store]", msg);
-    set((s) => ({ debug: [...s.debug, `[${time}] ${msg}`] }));
+    set((s) => ({ debug: [...s.debug.slice(-50), `[${time}] ${msg}`] })); // Limit debug array size
   };
 
   const loadUserData = async (uid: string): Promise<{ userData: UserData; role: "teacher" | "student" }> => {
+    // FIXED: Prevent reloading same user data
+    if (currentUserId === uid && get().userData) {
+      log(`User data already loaded for UID: ${uid}`);
+      return { userData: get().userData!, role: get().userData!.role };
+    }
+
     log(`Loading user data for UID: ${uid}`);
     
     // Try teacher collection first
@@ -101,6 +108,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         className: data.className || "",
       };
       
+      currentUserId = uid; // Track current user
       return { userData, role: "teacher" };
     }
 
@@ -123,6 +131,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         semester: data.semester || "IV",
       };
       
+      currentUserId = uid; // Track current user
       return { userData, role: "student" };
     }
 
@@ -152,14 +161,17 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
   };
 
   const startStudentListener = (classLevels: string[]) => {
-    if (studentUnsub) studentUnsub();
+    if (studentUnsub) {
+      studentUnsub();
+      studentUnsub = null;
+    }
 
     const clean = classLevels.map((l) => l.trim()).filter(Boolean);
 
     if (!clean.length) {
       log("No class levels → empty student list");
       set({ students: [], loading: false });
-      return () => {};
+      return;
     }
 
     log(`Query students WHERE className IN [${clean.join(", ")}]`);
@@ -199,7 +211,6 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     );
 
     studentUnsub = unsub;
-    return unsub;
   };
 
   return {
@@ -210,11 +221,35 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     loading: true,
     error: null,
     debug: [],
+    authInitialized: false, // NEW
 
     initializeAuth: () => {
+      // FIXED: Only initialize once
+      if (authUnsubscribe) {
+        log("Auth already initialized, returning existing unsubscribe");
+        return authUnsubscribe;
+      }
+
+      log("Initializing auth listener...");
+      
       const unsub = onAuthStateChanged(auth, async (user) => {
+        log(`Auth state changed: ${user ? `User ${user.uid}` : 'No user'}`);
+        
+        // FIXED: Prevent unnecessary state updates for same user
+        const currentUser = get().user;
+        if (user?.uid === currentUser?.uid && !get().loading) {
+          log("Same user, skipping state update");
+          return;
+        }
+
         if (!user) {
-          if (studentUnsub) studentUnsub();
+          log("No user - clearing state");
+          if (studentUnsub) {
+            studentUnsub();
+            studentUnsub = null;
+          }
+          currentUserId = null;
+          
           set({
             user: null,
             userData: null,
@@ -222,17 +257,24 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
             students: [],
             loading: false,
             error: null,
-            debug: [],
+            authInitialized: true,
           });
           return;
         }
 
-        log(`Auth user: ${user.uid} – ${user.email}`);
-        set({ user, loading: true, error: null });
+        log(`Processing user: ${user.uid} – ${user.email}`);
+        set({ user, loading: true, error: null, authInitialized: true });
 
         try {
           const { userData, role } = await loadUserData(user.uid);
           
+          // FIXED: Only update if we're still dealing with the same user
+          const currentState = get();
+          if (currentState.user?.uid !== user.uid) {
+            log("User changed during data load, skipping update");
+            return;
+          }
+
           set({ userData });
 
           if (role === "teacher") {
@@ -250,19 +292,35 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
 
         } catch (error: any) {
           log(`Error loading user data: ${error.message}`);
-          set({
-            userData: null,
-            teacherClasses: [],
-            students: [],
-            loading: false,
-            error: error.message,
-          });
+          
+          // Only update state if user hasn't changed
+          const currentState = get();
+          if (currentState.user?.uid === user.uid) {
+            set({
+              userData: null,
+              teacherClasses: [],
+              students: [],
+              loading: false,
+              error: error.message,
+            });
+          }
         }
       });
 
+      authUnsubscribe = unsub;
+      
+      // FIXED: Return proper cleanup function
       return () => {
-        unsub();
-        if (studentUnsub) studentUnsub();
+        log("Cleaning up auth listener");
+        if (authUnsubscribe) {
+          authUnsubscribe();
+          authUnsubscribe = null;
+        }
+        if (studentUnsub) {
+          studentUnsub();
+          studentUnsub = null;
+        }
+        currentUserId = null;
       };
     },
 
@@ -277,13 +335,20 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     signOutUser: async () => {
       try {
         log("Signing out user...");
-        await signOut(auth);
-        log("Sign-out successful");
-
+        
+        // Clean up listeners first
+        if (authUnsubscribe) {
+          authUnsubscribe();
+          authUnsubscribe = null;
+        }
         if (studentUnsub) {
           studentUnsub();
           studentUnsub = null;
         }
+        currentUserId = null;
+        
+        await signOut(auth);
+        log("Sign-out successful");
 
         set({
           user: null,
@@ -292,6 +357,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
           students: [],
           loading: false,
           error: null,
+          authInitialized: false,
           debug: [],
         });
       } catch (err: any) {

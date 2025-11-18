@@ -1,7 +1,7 @@
-// app/teachers/page.tsx (or components/TeacherDashboard.tsx)
+// app/teachers/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Search,
   Bell,
@@ -21,20 +21,16 @@ import {
   ArrowRight,
   X,
   Trash2,
-  CloudUpload,
   Image as ImageIcon,
   Edit3,
   Play,
   Calendar as CalendarIcon,
 } from "lucide-react";
-import logo from "../assets/logo.png";
 import { useFirebaseStore } from "../stores/useFirebaseStore";
 import { useLiveDate, useCalendar } from "../hooks/useDateUtils";
 import { useNavigate } from "react-router-dom";
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                             */
-/* ------------------------------------------------------------------ */
+// Types
 interface Student {
   id: string;
   first: string;
@@ -56,23 +52,21 @@ interface Quiz {
   id: string;
   name: string;
   questions: Question[];
-  duration: number; // in minutes
-  scheduledDate: string; // ISO string
-  scheduledTime: string; // HH:mm format
+  duration: number;
+  scheduledDate: string;
+  scheduledTime: string;
   status: "upcoming" | "active" | "expired";
-  totalDuration: number; // duration + 10 minutes buffer
+  totalDuration: number;
 }
 
 interface WorkingHoursData {
   day: string;
-  minutes: number; // CHANGED: minutes instead of hours
+  minutes: number;
   online: boolean;
   startTime?: Date;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Quiz Name Modal Component                                         */
-/* ------------------------------------------------------------------ */
+// Quiz Name Modal
 interface QuizNameModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -85,29 +79,31 @@ interface QuizNameModalProps {
   questions: Question[];
 }
 
-function QuizNameModal({
+const QuizNameModal: React.FC<QuizNameModalProps> = ({
   isOpen,
   onClose,
   onSave,
   questions,
-}: QuizNameModalProps) {
+}) => {
   const [quizName, setQuizName] = useState("");
   const [duration, setDuration] = useState(30);
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
 
   useEffect(() => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    setScheduledDate(tomorrow.toISOString().split("T")[0]);
-    setScheduledTime("09:00");
-  }, []);
+    if (isOpen) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setScheduledDate(tomorrow.toISOString().split("T")[0]);
+      setScheduledTime("09:00");
+      setQuizName("");
+      setDuration(30);
+    }
+  }, [isOpen]);
 
   const handleSave = () => {
     if (quizName.trim() && scheduledDate && scheduledTime) {
       onSave(quizName.trim(), duration, scheduledDate, scheduledTime);
-      setQuizName("");
-      setDuration(30);
     }
   };
 
@@ -204,168 +200,11 @@ function QuizNameModal({
           </button>
         </div>
       </div>
-
-      <style jsx>{`
-        .modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.5);
-          backdrop-filter: blur(4px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1001;
-          padding: 20px;
-        }
-
-        .small-modal {
-          max-width: 500px;
-        }
-
-        .modal-content {
-          background: white;
-          border-radius: 24px;
-          width: 100%;
-          max-height: 90vh;
-          overflow-y: auto;
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-        }
-
-        .modal-content::-webkit-scrollbar {
-          display: none;
-        }
-
-        .modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 32px 32px 0;
-          margin-bottom: 24px;
-        }
-
-        .modal-header h2 {
-          font-size: 24px;
-          font-weight: 700;
-          color: #111827;
-          margin: 0;
-        }
-
-        .close-btn {
-          background: none;
-          border: none;
-          color: #6b7280;
-          cursor: pointer;
-          padding: 8px;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .close-btn:hover {
-          background: #f3f4f6;
-        }
-
-        .modal-body {
-          padding: 0 32px;
-        }
-
-        .form-group {
-          margin-bottom: 24px;
-        }
-
-        .form-group label {
-          display: block;
-          font-size: 14px;
-          font-weight: 600;
-          color: #374151;
-          margin-bottom: 8px;
-        }
-
-        .text-input {
-          width: 100%;
-          padding: 12px 16px;
-          border: 2px solid #e5e7eb;
-          border-radius: 12px;
-          font-size: 14px;
-          transition: border-color 0.2s;
-        }
-
-        .text-input:focus {
-          outline: none;
-          border-color: #4f46e5;
-        }
-
-        .form-group small {
-          display: block;
-          font-size: 12px;
-          color: #6b7280;
-          margin-top: 4px;
-        }
-
-        .quiz-summary {
-          background: #f8fafc;
-          border-radius: 12px;
-          padding: 20px;
-          margin-top: 24px;
-        }
-
-        .quiz-summary h4 {
-          font-size: 16px;
-          font-weight: 600;
-          color: #374151;
-          margin: 0 0 12px 0;
-        }
-
-        .quiz-summary p {
-          font-size: 14px;
-          color: #6b7280;
-          margin: 8px 0;
-        }
-
-        .modal-footer {
-          display: flex;
-          justify-content: flex-end;
-          align-items: center;
-          padding: 24px 32px 32px;
-          border-top: 1px solid #e5e7eb;
-          gap: 12px;
-        }
-
-        .action-btn {
-          padding: 8px 16px;
-          border-radius: 8px;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          border: none;
-        }
-
-        .cancel {
-          background: none;
-          color: #374151;
-          border: 1px solid #d1d5db;
-        }
-
-        .save {
-          background: #4f46e5;
-          color: white;
-        }
-
-        .save:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-      `}</style>
     </div>
   );
-}
+};
 
-/* ------------------------------------------------------------------ */
-/*  CreateQuizModal Component                                         */
-/* ------------------------------------------------------------------ */
+// Create Quiz Modal
 interface CreateQuizModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -373,39 +212,36 @@ interface CreateQuizModalProps {
   editingQuiz?: Quiz | null;
 }
 
-function CreateQuizModal({
+const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
   isOpen,
   onClose,
   onSaveQuiz,
   editingQuiz,
-}: CreateQuizModalProps) {
+}) => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
 
   const currentQuestion = questions[currentQuestionIndex];
 
   useEffect(() => {
-    if (isOpen && !editingQuiz) {
-      setQuestions([
-        {
-          id: 1,
-          text: "",
-          image: null,
-          imageUrl: "",
-          options: ["", "", "", ""],
-          correctAnswer: 0,
-        },
-      ]);
+    if (isOpen) {
+      if (editingQuiz) {
+        setQuestions(editingQuiz.questions);
+      } else {
+        setQuestions([
+          {
+            id: 1,
+            text: "",
+            image: null,
+            imageUrl: "",
+            options: ["", "", "", ""],
+            correctAnswer: 0,
+          },
+        ]);
+      }
       setCurrentQuestionIndex(0);
     }
   }, [isOpen, editingQuiz]);
-
-  useEffect(() => {
-    if (editingQuiz && isOpen) {
-      setQuestions(editingQuiz.questions);
-      setCurrentQuestionIndex(0);
-    }
-  }, [editingQuiz, isOpen]);
 
   const handleAddQuestion = () => {
     const newQuestion: Question = {
@@ -416,7 +252,7 @@ function CreateQuizModal({
       options: ["", "", "", ""],
       correctAnswer: 0,
     };
-    setQuestions([...questions, newQuestion]);
+    setQuestions((prev) => [...prev, newQuestion]);
     setCurrentQuestionIndex(questions.length);
   };
 
@@ -579,7 +415,6 @@ function CreateQuizModal({
             >
               Previous Question
             </button>
-
             {questions.length > 1 && (
               <button
                 className="remove-question-btn"
@@ -599,12 +434,10 @@ function CreateQuizModal({
             >
               Next Question
             </button>
-
             <button className="add-question-btn" onClick={handleAddQuestion}>
               <Plus size={16} />
               Add Another Question
             </button>
-
             <button className="action-btn save" onClick={handleSave}>
               {editingQuiz ? "Update Questions" : "Save Questions"} (
               {questions.length} questions)
@@ -612,328 +445,11 @@ function CreateQuizModal({
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        .modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.5);
-          backdrop-filter: blur(4px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-          padding: 20px;
-        }
-
-        .modal-content {
-          background: white;
-          border-radius: 24px;
-          width: 100%;
-          max-width: 700px;
-          max-height: 90vh;
-          overflow-y: auto;
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-        }
-
-        .modal-content::-webkit-scrollbar {
-          display: none;
-        }
-
-        .modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          padding: 32px 32px 0;
-          margin-bottom: 24px;
-          position: sticky;
-          top: 0;
-          background: white;
-          z-index: 10;
-        }
-
-        .modal-title-section h2 {
-          font-size: 24px;
-          font-weight: 700;
-          color: #111827;
-          margin: 0 0 8px 0;
-        }
-
-        .question-counter {
-          font-size: 14px;
-          color: #6b7280;
-          font-weight: 500;
-        }
-
-        .close-btn {
-          background: none;
-          border: none;
-          color: #6b7280;
-          cursor: pointer;
-          padding: 8px;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .close-btn:hover {
-          background: #f3f4f6;
-        }
-
-        .modal-body {
-          padding: 0 32px;
-        }
-
-        .form-group {
-          margin-bottom: 32px;
-        }
-
-        .form-group label {
-          display: block;
-          font-size: 14px;
-          font-weight: 600;
-          color: #374151;
-          margin-bottom: 8px;
-        }
-
-        .question-textarea {
-          width: 100%;
-          padding: 16px;
-          border: 2px solid #e5e7eb;
-          border-radius: 12px;
-          font-size: 14px;
-          font-family: inherit;
-          resize: vertical;
-          min-height: 80px;
-          transition: border-color 0.2s;
-        }
-
-        .question-textarea:focus {
-          outline: none;
-          border-color: #4f46e5;
-        }
-
-        .image-upload-section {
-          border: 2px dashed #d1d5db;
-          border-radius: 12px;
-          padding: 0;
-          overflow: hidden;
-        }
-
-        .image-preview {
-          position: relative;
-          padding: 20px;
-          text-align: center;
-        }
-
-        .preview-image {
-          max-width: 100%;
-          max-height: 200px;
-          border-radius: 8px;
-          margin-bottom: 12px;
-        }
-
-        .remove-image-btn {
-          background: #ef4444;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          padding: 8px 16px;
-          font-size: 14px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin: 0 auto;
-        }
-
-        .image-upload-area {
-          padding: 40px 20px;
-          text-align: center;
-        }
-
-        .image-input {
-          display: none;
-        }
-
-        .upload-label {
-          cursor: pointer;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .upload-label p {
-          font-size: 16px;
-          color: #374151;
-          margin: 0;
-          font-weight: 500;
-        }
-
-        .upload-label span {
-          font-size: 14px;
-          color: #6b7280;
-        }
-
-        .options-list {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-
-        .option-item {
-          border: 1px solid #e5e7eb;
-          border-radius: 12px;
-          padding: 16px;
-          background: #f9fafb;
-        }
-
-        .option-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 12px;
-        }
-
-        .option-label {
-          font-size: 14px;
-          font-weight: 600;
-          color: #374151;
-        }
-
-        .correct-answer-selector {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .correct-radio {
-          margin: 0;
-        }
-
-        .correct-answer-selector label {
-          font-size: 12px;
-          color: #059669;
-          font-weight: 600;
-          margin: 0;
-          cursor: pointer;
-        }
-
-        .option-input {
-          width: 100%;
-          padding: 12px;
-          border: 1px solid #d1d5db;
-          border-radius: 8px;
-          font-size: 14px;
-          transition: border-color 0.2s;
-        }
-
-        .option-input:focus {
-          outline: none;
-          border-color: #4f46e5;
-        }
-
-        .modal-footer {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 24px 32px 32px;
-          border-top: 1px solid #e5e7eb;
-          position: sticky;
-          bottom: 0;
-          background: white;
-          z-index: 10;
-          gap: 16px;
-        }
-
-        .footer-left,
-        .footer-right {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .nav-btn {
-          background: none;
-          border: 1px solid #d1d5db;
-          border-radius: 8px;
-          padding: 8px 16px;
-          font-size: 14px;
-          color: #374151;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .nav-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .remove-question-btn {
-          background: none;
-          border: 1px solid #ef4444;
-          color: #ef4444;
-          border-radius: 8px;
-          padding: 8px 16px;
-          font-size: 14px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .add-question-btn {
-          background: #10b981;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          padding: 8px 16px;
-          font-size: 14px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .action-btn {
-          padding: 8px 16px;
-          border-radius: 8px;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          border: none;
-        }
-
-        .save {
-          background: #4f46e5;
-          color: white;
-        }
-
-        @media (max-width: 768px) {
-          .modal-footer {
-            flex-direction: column;
-            align-items: stretch;
-          }
-
-          .footer-left,
-          .footer-right {
-            justify-content: center;
-          }
-        }
-      `}</style>
     </div>
   );
-}
+};
 
-/* ------------------------------------------------------------------ */
-/*  ClassListPanel Component                                          */
-/* ------------------------------------------------------------------ */
+// Class List Panel
 interface ClassListPanelProps {
   students: Student[];
   isOpen: boolean;
@@ -941,12 +457,12 @@ interface ClassListPanelProps {
   loading: boolean;
 }
 
-function ClassListPanel({
+const ClassListPanel: React.FC<ClassListPanelProps> = ({
   students,
   isOpen,
   toggle,
   loading,
-}: ClassListPanelProps) {
+}) => {
   return (
     <div className="card group-chats">
       <div className="card-header">
@@ -1018,12 +534,10 @@ function ClassListPanel({
       )}
     </div>
   );
-}
+};
 
-/* ------------------------------------------------------------------ */
-/*  Main Component                                                    */
-/* ------------------------------------------------------------------ */
-export default function TeacherDashboard() {
+// Main Teacher Dashboard Component
+const TeacherDashboard: React.FC = () => {
   const navigate = useNavigate();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -1036,6 +550,7 @@ export default function TeacherDashboard() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [workingHours, setWorkingHours] = useState<WorkingHoursData[]>([]);
   const [onlineStartTime, setOnlineStartTime] = useState<Date | null>(null);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   const {
     user,
@@ -1048,15 +563,27 @@ export default function TeacherDashboard() {
     signOutUser,
   } = useFirebaseStore();
 
-  /* --------------------- AUTH INITIALIZATION --------------------- */
+  // Fixed: Proper auth initialization with cleanup
   useEffect(() => {
+    console.log("Initializing auth...");
     const unsubscribe = initializeAuth();
-    return () => {
-      if (typeof unsubscribe === "function") unsubscribe();
-    };
-  }, [initializeAuth]);
 
-  /* --------------------- INITIALIZE ONLINE STATUS --------------------- */
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
+    };
+  }, []); // Removed initializeAuth from dependencies
+
+  // Fixed: Load data only when user is available and not already loaded
+  useEffect(() => {
+    if (user && !dataLoaded && !loading) {
+      console.log("Loading teacher data for user:", user.uid);
+      setDataLoaded(true);
+    }
+  }, [user, dataLoaded, loading]);
+
+  // Fixed: Initialize online status and working hours
   useEffect(() => {
     const today = new Date().toDateString();
     const lastOnlineDate = localStorage.getItem("teacher-last-online-date");
@@ -1079,7 +606,7 @@ export default function TeacherDashboard() {
     initializeWorkingHours();
   }, []);
 
-  /* --------------------- PERSIST QUIZZES TO LOCALSTORAGE --------------------- */
+  // Fixed: Load quizzes from localStorage
   useEffect(() => {
     const savedQuizzes = localStorage.getItem("teacher-quizzes");
     if (savedQuizzes) {
@@ -1098,12 +625,14 @@ export default function TeacherDashboard() {
     }
   }, []);
 
+  // Fixed: Save quizzes to localStorage
   useEffect(() => {
     if (quizzes.length > 0) {
       localStorage.setItem("teacher-quizzes", JSON.stringify(quizzes));
     }
   }, [quizzes]);
 
+  // Fixed: Save working hours to localStorage
   useEffect(() => {
     if (workingHours.length > 0) {
       localStorage.setItem(
@@ -1113,8 +642,8 @@ export default function TeacherDashboard() {
     }
   }, [workingHours]);
 
-  /* --------------------- INITIALIZE WORKING HOURS (MINUTES) --------------------- */
-  const initializeWorkingHours = () => {
+  // Fixed: Initialize working hours function
+  const initializeWorkingHours = useCallback(() => {
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const today = new Date();
     const todayIndex = (today.getDay() + 6) % 7;
@@ -1148,9 +677,9 @@ export default function TeacherDashboard() {
       setWorkingHours(hoursData);
       localStorage.setItem("working-hours-last-updated", today.toDateString());
     }
-  };
+  }, []);
 
-  /* --------------------- UPDATE WORKING MINUTES IN REAL-TIME --------------------- */
+  // Fixed: Update working minutes with proper dependencies
   useEffect(() => {
     const updateTodayMinutes = () => {
       const today = new Date();
@@ -1158,10 +687,9 @@ export default function TeacherDashboard() {
 
       setWorkingHours((prev) =>
         prev.map((day, index) => {
-          if (index === todayIndex && day.online) {
-            const startTime = onlineStartTime || new Date();
+          if (index === todayIndex && day.online && onlineStartTime) {
             const minutesOnline = Math.floor(
-              (today.getTime() - startTime.getTime()) / (1000 * 60)
+              (today.getTime() - onlineStartTime.getTime()) / (1000 * 60)
             );
 
             return {
@@ -1175,13 +703,13 @@ export default function TeacherDashboard() {
       );
     };
 
-    // Update every minute
     const interval = setInterval(updateTodayMinutes, 60000);
     updateTodayMinutes();
+
     return () => clearInterval(interval);
   }, [onlineStartTime]);
 
-  /* --------------------- UPDATE QUIZ STATUSES IN REAL-TIME --------------------- */
+  // Fixed: Update quiz statuses
   useEffect(() => {
     const updateQuizStatuses = () => {
       const now = new Date();
@@ -1209,10 +737,11 @@ export default function TeacherDashboard() {
 
     const interval = setInterval(updateQuizStatuses, 60000);
     updateQuizStatuses();
+
     return () => clearInterval(interval);
   }, []);
 
-  /* --------------------- LOGOUT HANDLER --------------------- */
+  // Fixed: Logout handler
   const handleLogout = async () => {
     try {
       await signOutUser();
@@ -1222,63 +751,68 @@ export default function TeacherDashboard() {
     }
   };
 
-  /* --------------------- QUIZ MANAGEMENT --------------------- */
-  const handleSaveQuestions = (questions: Question[]) => {
-    setTempQuestions(questions);
-    if (editingQuiz) {
-      const updatedQuizzes = quizzes.map((quiz) =>
-        quiz.id === editingQuiz.id ? { ...quiz, questions } : quiz
+  // Fixed: Quiz management functions
+  const handleSaveQuestions = useCallback(
+    (questions: Question[]) => {
+      setTempQuestions(questions);
+      if (editingQuiz) {
+        const updatedQuizzes = quizzes.map((quiz) =>
+          quiz.id === editingQuiz.id ? { ...quiz, questions } : quiz
+        );
+        setQuizzes(updatedQuizzes);
+        setEditingQuiz(null);
+        setQuizModalOpen(false);
+      } else {
+        setQuizNameModalOpen(true);
+      }
+    },
+    [editingQuiz, quizzes]
+  );
+
+  const handleSaveQuizWithName = useCallback(
+    (
+      name: string,
+      duration: number,
+      scheduledDate: string,
+      scheduledTime: string
+    ) => {
+      const totalDuration = duration + 10;
+      const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
+      const now = new Date();
+      const endTime = new Date(
+        scheduledDateTime.getTime() + totalDuration * 60000
       );
-      setQuizzes(updatedQuizzes);
-      setEditingQuiz(null);
+
+      let status: "upcoming" | "active" | "expired" = "upcoming";
+      if (now >= scheduledDateTime && now <= endTime) {
+        status = "active";
+      } else if (now > endTime) {
+        status = "expired";
+      }
+
+      const newQuiz: Quiz = {
+        id: Date.now().toString(),
+        name,
+        questions: tempQuestions,
+        duration,
+        scheduledDate,
+        scheduledTime,
+        totalDuration,
+        status,
+      };
+
+      setQuizzes((prev) => [newQuiz, ...prev]);
+      setQuizNameModalOpen(false);
       setQuizModalOpen(false);
-    } else {
-      setQuizNameModalOpen(true);
-    }
-  };
+      setTempQuestions([]);
+    },
+    [tempQuestions]
+  );
 
-  const handleSaveQuizWithName = (
-    name: string,
-    duration: number,
-    scheduledDate: string,
-    scheduledTime: string
-  ) => {
-    const totalDuration = duration + 10;
-
-    const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
-    const now = new Date();
-    const endTime = new Date(
-      scheduledDateTime.getTime() + totalDuration * 60000
-    );
-
-    let status: "upcoming" | "active" | "expired" = "upcoming";
-    if (now >= scheduledDateTime && now <= endTime) {
-      status = "active";
-    } else if (now > endTime) {
-      status = "expired";
-    }
-
-    const newQuiz: Quiz = {
-      id: Date.now().toString(),
-      name,
-      questions: tempQuestions,
-      duration,
-      scheduledDate,
-      scheduledTime,
-      totalDuration,
-      status,
-    };
-
-    setQuizzes([newQuiz, ...quizzes]);
-    setQuizNameModalOpen(false);
-    setQuizModalOpen(false);
-    setTempQuestions([]);
-  };
-
-  const handleEditQuiz = (quiz: Quiz) => {
+  const handleEditQuiz = useCallback((quiz: Quiz) => {
     setEditingQuiz(quiz);
     setQuizModalOpen(true);
-  };
+  }, []);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -1306,7 +840,7 @@ export default function TeacherDashboard() {
     }
   };
 
-  /* --------------------- LIVE DATE --------------------- */
+  // Live date and calendar
   const now = useLiveDate();
   const todayStr = now.toLocaleDateString("en-US", {
     month: "long",
@@ -1319,14 +853,13 @@ export default function TeacherDashboard() {
   });
   const dayStr = now.toLocaleString("en-US", { weekday: "long" });
 
-  /* --------------------- CALENDAR --------------------- */
   const calYear = now.getFullYear();
   const calMonth = now.getMonth();
   const { days: calDays } = useCalendar(calYear, calMonth);
   const today = now.getDate();
   const examDates = useMemo(() => [7, 14, 21], []);
 
-  /* --------------------- PROGRESS --------------------- */
+  // Progress calculation
   const progressPercent = useMemo(() => {
     if (!students || students.length === 0) return 0;
     const total = students.reduce((sum, s) => sum + (s.progress ?? 0), 0);
@@ -1335,7 +868,7 @@ export default function TeacherDashboard() {
 
   const dashArray = `${progressPercent} ${100 - progressPercent}`;
 
-  /* --------------------- MENU --------------------- */
+  // Menu items
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: Home },
     { id: "schedule", label: "Schedule", icon: Calendar },
@@ -1345,7 +878,7 @@ export default function TeacherDashboard() {
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
-  /* --------------------- UPCOMING CLASSES --------------------- */
+  // Upcoming classes
   const upcomingClasses = useMemo(() => {
     const classItems = teacherClasses.map((c, i) => ({
       id: `class-${i + 1}`,
@@ -1358,16 +891,13 @@ export default function TeacherDashboard() {
 
     const quizItems = quizzes
       .filter((quiz) => quiz.status === "upcoming" || quiz.status === "active")
-      .map((quiz, i) => ({
+      .map((quiz) => ({
         id: `quiz-${quiz.id}`,
         time: quiz.scheduledTime,
         name: quiz.name,
         location: "Online Exam",
         type: "quiz" as const,
-        status:
-          quiz.status === "active"
-            ? ("active" as const)
-            : ("upcoming" as const),
+        status: quiz.status as "active" | "upcoming",
       }));
 
     return [...classItems, ...quizItems].slice(0, 5);
@@ -1377,8 +907,8 @@ export default function TeacherDashboard() {
   const fullName = user?.displayName || "Teacher Name";
   const email = user?.email || "email@example.com";
 
-  /* --------------------- LOADING / ERROR --------------------- */
-  if (loading) {
+  // Loading and error states
+  if (loading && !dataLoaded) {
     return (
       <div className="app">
         <div className="loading">Loading dashboard...</div>
@@ -1390,23 +920,22 @@ export default function TeacherDashboard() {
     return (
       <div className="app">
         <div className="error">Error: {error}</div>
-        <button onClick={refreshStudents}>Retry</button>
+        <button onClick={() => window.location.reload()}>Retry</button>
       </div>
     );
   }
 
-  /* ------------------------------------------------------------------ */
   return (
     <div
       className={`app ${
         quizModalOpen || quizNameModalOpen ? "modal-open" : ""
       }`}
     >
-      {/* ====================== HEADER ====================== */}
+      {/* Header */}
       <header className="header">
         <div className="header-content">
           <div className="logo-section">
-            <img src={logo} alt="logo" className="logo-img" />
+            <div className="logo-img"></div>
             <span className="logo-text">SXaint</span>
             <span className="status online-indicator">
               <div className="online-dot"></div>
@@ -1425,7 +954,6 @@ export default function TeacherDashboard() {
             <button className="icon-btn">
               <Menu size={20} />
             </button>
-
             <button className="get-in-touch" onClick={handleLogout}>
               Logout
             </button>
@@ -1434,7 +962,7 @@ export default function TeacherDashboard() {
       </header>
 
       <div className="layout">
-        {/* ====================== SIDEBAR ====================== */}
+        {/* Sidebar */}
         <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
           <div className="sidebar-toggle">
             <button
@@ -1497,13 +1025,12 @@ export default function TeacherDashboard() {
           )}
         </aside>
 
-        {/* ====================== MAIN CONTENT ====================== */}
+        {/* Main Content */}
         <main
           className={`main-content ${
             quizModalOpen || quizNameModalOpen ? "blurred" : ""
           }`}
         >
-          {/* Welcome */}
           <div className="welcome">
             <h1>Welcome back, {firstName}</h1>
             <p>
@@ -1511,7 +1038,6 @@ export default function TeacherDashboard() {
             </p>
           </div>
 
-          {/* Progress Card */}
           <div className="progress-card">
             <div className="progress-ring">
               <svg viewBox="0 0 36 36" className="ring-svg">
@@ -1542,9 +1068,8 @@ export default function TeacherDashboard() {
             </div>
           </div>
 
-          {/* TOP GRID */}
+          {/* Top Grid */}
           <div className="top-grid">
-            {/* Working Hours */}
             <div className="card working-hours">
               <div className="card-header">
                 <h3>Working Hours</h3>
@@ -1554,7 +1079,6 @@ export default function TeacherDashboard() {
                 {workingHours.map((d, i) => {
                   const todayIndex = (new Date().getDay() + 6) % 7;
                   const isToday = i === todayIndex;
-                  // Calculate bar height based on minutes (max 1440 minutes = 24 hours)
                   const barHeight = Math.min(100, (d.minutes / 1440) * 100);
 
                   return (
@@ -1564,9 +1088,7 @@ export default function TeacherDashboard() {
                           className={`bar ${d.online ? "online" : "offline"} ${
                             isToday ? "today" : ""
                           }`}
-                          style={{
-                            height: `${barHeight}%`,
-                          }}
+                          style={{ height: `${barHeight}%` }}
                         >
                           {isToday && d.online && (
                             <div className="growing-indicator"></div>
@@ -1598,7 +1120,6 @@ export default function TeacherDashboard() {
               </div>
             </div>
 
-            {/* My Students */}
             <ClassListPanel
               students={students}
               isOpen={classListOpen}
@@ -1606,7 +1127,6 @@ export default function TeacherDashboard() {
               loading={loading}
             />
 
-            {/* Calendar */}
             <div className="card calendar">
               <div className="card-header">
                 <span>
@@ -1650,9 +1170,8 @@ export default function TeacherDashboard() {
             </div>
           </div>
 
-          {/* BOTTOM GRID */}
+          {/* Bottom Grid */}
           <div className="bottom-grid">
-            {/* Student Tests */}
             <div className="card student-tests">
               <div className="card-header">
                 <h3>Student Tests ({quizzes.length})</h3>
@@ -1710,7 +1229,6 @@ export default function TeacherDashboard() {
               </div>
             </div>
 
-            {/* Upcoming Classes */}
             <div className="card upcoming-classes">
               <div className="card-header">
                 <h3>Upcoming Classes & Exams</h3>
@@ -1757,7 +1275,7 @@ export default function TeacherDashboard() {
           </div>
         </main>
 
-        {/* ====================== PROFILE CARD ====================== */}
+        {/* Profile Card */}
         <div
           className={`profile-card ${
             quizModalOpen || quizNameModalOpen ? "blurred" : ""
@@ -1784,7 +1302,7 @@ export default function TeacherDashboard() {
         </div>
       </div>
 
-      {/* ====================== MODALS ====================== */}
+      {/* Modals */}
       <CreateQuizModal
         isOpen={quizModalOpen}
         onClose={() => {
@@ -1802,9 +1320,6 @@ export default function TeacherDashboard() {
         questions={tempQuestions}
       />
 
-      {/* ------------------------------------------------------------------ */}
-      {/*  ALL STYLES                                                        */}
-      {/* ------------------------------------------------------------------ */}
       <style jsx>{`
         .app.modal-open {
           overflow: hidden;
@@ -2639,4 +2154,6 @@ export default function TeacherDashboard() {
       `}</style>
     </div>
   );
-}
+};
+
+export default TeacherDashboard;
