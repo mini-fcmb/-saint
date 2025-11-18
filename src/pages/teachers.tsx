@@ -25,6 +25,7 @@ import {
   Edit3,
   Play,
   Calendar as CalendarIcon,
+  Pencil,
 } from "lucide-react";
 import { useFirebaseStore } from "../stores/useFirebaseStore";
 import { useLiveDate, useCalendar } from "../hooks/useDateUtils";
@@ -96,8 +97,6 @@ const QuizNameModal: React.FC<QuizNameModalProps> = ({
       tomorrow.setDate(tomorrow.getDate() + 1);
       setScheduledDate(tomorrow.toISOString().split("T")[0]);
       setScheduledTime("09:00");
-      setQuizName("");
-      setDuration(30);
     }
   }, [isOpen]);
 
@@ -274,11 +273,14 @@ const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
+    if (file && file.size <= 5 * 1024 * 1024) {
+      // 5MB limit
       const newQuestions = [...questions];
       newQuestions[currentQuestionIndex].image = file;
       newQuestions[currentQuestionIndex].imageUrl = URL.createObjectURL(file);
       setQuestions(newQuestions);
+    } else if (file) {
+      alert("File size must be less than 5MB");
     }
   };
 
@@ -302,6 +304,17 @@ const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
   };
 
   const handleSave = () => {
+    // Validate current question
+    const current = questions[currentQuestionIndex];
+    if (!current.text.trim()) {
+      alert("Please enter question text");
+      return;
+    }
+    if (current.options.some((opt) => !opt.trim())) {
+      alert("Please fill all options");
+      return;
+    }
+
     onSaveQuiz(questions);
   };
 
@@ -550,7 +563,6 @@ const TeacherDashboard: React.FC = () => {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [workingHours, setWorkingHours] = useState<WorkingHoursData[]>([]);
   const [onlineStartTime, setOnlineStartTime] = useState<Date | null>(null);
-  const [dataLoaded, setDataLoaded] = useState(false);
 
   const {
     user,
@@ -558,32 +570,23 @@ const TeacherDashboard: React.FC = () => {
     students,
     loading,
     error,
+    authInitialized,
     initializeAuth,
-    refreshStudents,
     signOutUser,
   } = useFirebaseStore();
 
-  // Fixed: Proper auth initialization with cleanup
+  // Fixed Auth Initialization
   useEffect(() => {
-    console.log("Initializing auth...");
+    console.log("🔄 TeacherDashboard mounted - initializing auth");
     const unsubscribe = initializeAuth();
 
     return () => {
-      if (typeof unsubscribe === "function") {
-        unsubscribe();
-      }
+      console.log("🧹 TeacherDashboard unmounting - cleaning up");
+      unsubscribe();
     };
-  }, []); // Removed initializeAuth from dependencies
+  }, [initializeAuth]);
 
-  // Fixed: Load data only when user is available and not already loaded
-  useEffect(() => {
-    if (user && !dataLoaded && !loading) {
-      console.log("Loading teacher data for user:", user.uid);
-      setDataLoaded(true);
-    }
-  }, [user, dataLoaded, loading]);
-
-  // Fixed: Initialize online status and working hours
+  // Initialize online status and working hours
   useEffect(() => {
     const today = new Date().toDateString();
     const lastOnlineDate = localStorage.getItem("teacher-last-online-date");
@@ -606,18 +609,13 @@ const TeacherDashboard: React.FC = () => {
     initializeWorkingHours();
   }, []);
 
-  // Fixed: Load quizzes from localStorage
+  // Load quizzes from localStorage
   useEffect(() => {
     const savedQuizzes = localStorage.getItem("teacher-quizzes");
     if (savedQuizzes) {
       try {
         const parsedQuizzes = JSON.parse(savedQuizzes);
-        const validatedQuizzes = parsedQuizzes.map((quiz: any) => ({
-          ...quiz,
-          status: quiz.status || "upcoming",
-          totalDuration: quiz.totalDuration || quiz.duration + 10,
-        }));
-        setQuizzes(validatedQuizzes);
+        setQuizzes(parsedQuizzes);
       } catch (error) {
         console.error("Error loading quizzes from localStorage:", error);
         setQuizzes([]);
@@ -625,14 +623,12 @@ const TeacherDashboard: React.FC = () => {
     }
   }, []);
 
-  // Fixed: Save quizzes to localStorage
+  // Save quizzes to localStorage
   useEffect(() => {
-    if (quizzes.length > 0) {
-      localStorage.setItem("teacher-quizzes", JSON.stringify(quizzes));
-    }
+    localStorage.setItem("teacher-quizzes", JSON.stringify(quizzes));
   }, [quizzes]);
 
-  // Fixed: Save working hours to localStorage
+  // Save working hours to localStorage
   useEffect(() => {
     if (workingHours.length > 0) {
       localStorage.setItem(
@@ -642,7 +638,7 @@ const TeacherDashboard: React.FC = () => {
     }
   }, [workingHours]);
 
-  // Fixed: Initialize working hours function
+  // Initialize working hours function
   const initializeWorkingHours = useCallback(() => {
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const today = new Date();
@@ -679,7 +675,7 @@ const TeacherDashboard: React.FC = () => {
     }
   }, []);
 
-  // Fixed: Update working minutes with proper dependencies
+  // Update working minutes
   useEffect(() => {
     const updateTodayMinutes = () => {
       const today = new Date();
@@ -691,11 +687,9 @@ const TeacherDashboard: React.FC = () => {
             const minutesOnline = Math.floor(
               (today.getTime() - onlineStartTime.getTime()) / (1000 * 60)
             );
-
             return {
               ...day,
               minutes: Math.min(1440, Math.max(1, minutesOnline)),
-              online: true,
             };
           }
           return day;
@@ -705,15 +699,13 @@ const TeacherDashboard: React.FC = () => {
 
     const interval = setInterval(updateTodayMinutes, 60000);
     updateTodayMinutes();
-
     return () => clearInterval(interval);
   }, [onlineStartTime]);
 
-  // Fixed: Update quiz statuses
+  // Update quiz statuses in real-time
   useEffect(() => {
     const updateQuizStatuses = () => {
       const now = new Date();
-
       setQuizzes((prevQuizzes) =>
         prevQuizzes.map((quiz) => {
           const scheduledDateTime = new Date(
@@ -729,19 +721,17 @@ const TeacherDashboard: React.FC = () => {
           } else if (now > endTime) {
             status = "expired";
           }
-
           return { ...quiz, status };
         })
       );
     };
 
-    const interval = setInterval(updateQuizStatuses, 60000);
+    const interval = setInterval(updateQuizStatuses, 30000); // Update every 30 seconds
     updateQuizStatuses();
-
     return () => clearInterval(interval);
   }, []);
 
-  // Fixed: Logout handler
+  // Logout handler
   const handleLogout = async () => {
     try {
       await signOutUser();
@@ -751,7 +741,7 @@ const TeacherDashboard: React.FC = () => {
     }
   };
 
-  // Fixed: Quiz management functions
+  // Quiz management functions
   const handleSaveQuestions = useCallback(
     (questions: Question[]) => {
       setTempQuestions(questions);
@@ -812,6 +802,12 @@ const TeacherDashboard: React.FC = () => {
   const handleEditQuiz = useCallback((quiz: Quiz) => {
     setEditingQuiz(quiz);
     setQuizModalOpen(true);
+  }, []);
+
+  const handleDeleteQuiz = useCallback((quizId: string) => {
+    if (confirm("Are you sure you want to delete this quiz?")) {
+      setQuizzes((prev) => prev.filter((quiz) => quiz.id !== quizId));
+    }
   }, []);
 
   const getStatusIcon = (status: string) => {
@@ -908,7 +904,7 @@ const TeacherDashboard: React.FC = () => {
   const email = user?.email || "email@example.com";
 
   // Loading and error states
-  if (loading && !dataLoaded) {
+  if (loading && !authInitialized) {
     return (
       <div className="app">
         <div className="loading">Loading dashboard...</div>
@@ -1199,7 +1195,14 @@ const TeacherDashboard: React.FC = () => {
                               onClick={() => handleEditQuiz(quiz)}
                               title="Edit quiz"
                             >
-                              <Edit3 size={16} />
+                              <Pencil size={16} />
+                            </button>
+                            <button
+                              className="delete-btn"
+                              onClick={() => handleDeleteQuiz(quiz.id)}
+                              title="Delete quiz"
+                            >
+                              <Trash2 size={16} />
                             </button>
                           </div>
                         </div>
@@ -1320,7 +1323,13 @@ const TeacherDashboard: React.FC = () => {
         questions={tempQuestions}
       />
 
-      <style jsx>{`
+      <style jsx="true">{`
+        /* Add all your CSS styles here with proper scrollable containers */
+        .app {
+          position: relative;
+          min-height: 100vh;
+        }
+
         .app.modal-open {
           overflow: hidden;
         }
@@ -1330,6 +1339,608 @@ const TeacherDashboard: React.FC = () => {
           filter: blur(4px);
           pointer-events: none;
           user-select: none;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: 20px;
+        }
+
+        .modal-content {
+          background: white;
+          border-radius: 24px;
+          width: 100%;
+          max-width: 700px;
+          max-height: 90vh;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        .small-modal {
+          max-width: 500px;
+        }
+
+        .modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 32px 32px 0;
+          margin-bottom: 24px;
+        }
+
+        .modal-body {
+          padding: 0 32px;
+          overflow-y: auto;
+          flex: 1;
+        }
+
+        .modal-footer {
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
+          padding: 24px 32px 32px;
+          border-top: 1px solid #e5e7eb;
+          gap: 12px;
+        }
+
+        /* Scrollable containers */
+        .test-list,
+        .class-list,
+        .students-list {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          max-height: 400px;
+          overflow-y: auto;
+          scrollbar-width: thin;
+          scrollbar-color: #c7d2fe transparent;
+        }
+
+        .test-list::-webkit-scrollbar,
+        .class-list::-webkit-scrollbar,
+        .students-list::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .test-list::-webkit-scrollbar-track,
+        .class-list::-webkit-scrollbar-track,
+        .students-list::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .test-list::-webkit-scrollbar-thumb,
+        .class-list::-webkit-scrollbar-thumb,
+        .students-list::-webkit-scrollbar-thumb {
+          background: #c7d2fe;
+          border-radius: 3px;
+        }
+
+        .test-list::-webkit-scrollbar-thumb:hover,
+        .class-list::-webkit-scrollbar-thumb:hover,
+        .students-list::-webkit-scrollbar-thumb:hover {
+          background: #a5b4fc;
+        }
+
+        .app.modal-open {
+          overflow: hidden;
+        }
+
+        .main-content.blurred,
+        .profile-card.blurred {
+          filter: blur(4px);
+          pointer-events: none;
+          user-select: none;
+        }
+        /* Modal Content Styles */
+        .modal-content {
+          background: white;
+          border-radius: 24px;
+          width: 100%;
+          max-width: 800px;
+          max-height: 90vh;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+          overflow: hidden;
+        }
+
+        .modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          padding: 32px 32px 0;
+          margin-bottom: 24px;
+          position: sticky;
+          top: 0;
+          background: white;
+          z-index: 10;
+        }
+
+        .modal-title-section h2 {
+          font-size: 24px;
+          font-weight: 700;
+          color: #111827;
+          margin: 0 0 8px 0;
+        }
+
+        .question-counter {
+          font-size: 14px;
+          color: #6b7280;
+          font-weight: 500;
+        }
+
+        .close-btn {
+          background: none;
+          border: none;
+          color: #6b7280;
+          cursor: pointer;
+          padding: 8px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background-color 0.2s;
+        }
+
+        .close-btn:hover {
+          background: #f3f4f6;
+        }
+
+        .modal-body {
+          padding: 0 32px;
+          overflow-y: auto;
+          flex: 1;
+          scrollbar-width: thin;
+          scrollbar-color: #c7d2fe transparent;
+        }
+
+        .modal-body::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .modal-body::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .modal-body::-webkit-scrollbar-thumb {
+          background: #c7d2fe;
+          border-radius: 3px;
+        }
+
+        .modal-body::-webkit-scrollbar-thumb:hover {
+          background: #a5b4fc;
+        }
+
+        /* Form Group Styles */
+        .form-group {
+          margin-bottom: 32px;
+        }
+
+        .form-group label {
+          display: block;
+          font-size: 14px;
+          font-weight: 600;
+          color: #374151;
+          margin-bottom: 8px;
+        }
+
+        /* Question Textarea */
+        .question-textarea {
+          width: 100%;
+          padding: 16px;
+          border: 2px solid #e5e7eb;
+          border-radius: 12px;
+          font-size: 14px;
+          font-family: inherit;
+          resize: vertical;
+          min-height: 100px;
+          transition: border-color 0.2s;
+          line-height: 1.5;
+        }
+
+        .question-textarea:focus {
+          outline: none;
+          border-color: #4f46e5;
+          box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        /* Image Upload Section */
+        .image-upload-section {
+          border: 2px dashed #d1d5db;
+          border-radius: 12px;
+          padding: 0;
+          overflow: hidden;
+          transition: border-color 0.2s;
+        }
+
+        .image-upload-section:hover {
+          border-color: #9ca3af;
+        }
+
+        .image-preview {
+          position: relative;
+          padding: 20px;
+          text-align: center;
+        }
+
+        .preview-image {
+          max-width: 100%;
+          max-height: 200px;
+          border-radius: 8px;
+          margin-bottom: 12px;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .remove-image-btn {
+          background: #ef4444;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 16px;
+          font-size: 14px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin: 0 auto;
+          transition: background-color 0.2s;
+        }
+
+        .remove-image-btn:hover {
+          background: #dc2626;
+        }
+
+        .image-upload-area {
+          padding: 40px 20px;
+          text-align: center;
+          cursor: pointer;
+          transition: background-color 0.2s;
+        }
+
+        .image-upload-area:hover {
+          background: #f9fafb;
+        }
+
+        .image-input {
+          display: none;
+        }
+
+        .upload-label {
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .upload-label p {
+          font-size: 16px;
+          color: #374151;
+          margin: 0;
+          font-weight: 500;
+        }
+
+        .upload-label span {
+          font-size: 14px;
+          color: #6b7280;
+        }
+
+        /* Options List Styles */
+        .options-list {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        /* Option Item Styles */
+        .option-item {
+          border: 2px solid #e5e7eb;
+          border-radius: 12px;
+          padding: 20px;
+          background: #f9fafb;
+          transition: all 0.2s;
+          position: relative;
+        }
+
+        .option-item:hover {
+          border-color: #d1d5db;
+          background: #f3f4f6;
+        }
+
+        .option-item:focus-within {
+          border-color: #4f46e5;
+          background: #f8fafc;
+          box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        /* Option Header Styles */
+        .option-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+        }
+
+        .option-label {
+          font-size: 14px;
+          font-weight: 700;
+          color: #374151;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        /* Correct Answer Selector Styles */
+        .correct-answer-selector {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 12px;
+          background: white;
+          border-radius: 20px;
+          border: 1px solid #d1d5db;
+          transition: all 0.2s;
+        }
+
+        .correct-answer-selector:hover {
+          border-color: #9ca3af;
+        }
+
+        .correct-answer-selector:has(.correct-radio:checked) {
+          background: #d1fae5;
+          border-color: #10b981;
+        }
+
+        .correct-radio {
+          margin: 0;
+          width: 16px;
+          height: 16px;
+          cursor: pointer;
+        }
+
+        .correct-answer-selector label {
+          font-size: 12px;
+          color: #059669;
+          font-weight: 600;
+          margin: 0;
+          cursor: pointer;
+          user-select: none;
+        }
+
+        .correct-answer-selector:has(.correct-radio:checked) label {
+          color: #065f46;
+        }
+
+        /* Option Input Styles */
+        .option-input {
+          width: 100%;
+          padding: 14px 16px;
+          border: 2px solid #e5e7eb;
+          border-radius: 8px;
+          font-size: 14px;
+          transition: all 0.2s;
+          background: white;
+          font-weight: 500;
+        }
+
+        .option-input:focus {
+          outline: none;
+          border-color: #4f46e5;
+          background: white;
+          box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .option-input::placeholder {
+          color: #9ca3af;
+          font-weight: normal;
+        }
+
+        /* Modal Footer Styles */
+        .modal-footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 24px 32px 32px;
+          border-top: 1px solid #e5e7eb;
+          position: sticky;
+          bottom: 0;
+          background: white;
+          z-index: 10;
+          gap: 16px;
+        }
+
+        .footer-left,
+        .footer-right {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        /* Button Styles */
+        .nav-btn {
+          background: white;
+          border: 2px solid #d1d5db;
+          border-radius: 8px;
+          padding: 10px 16px;
+          font-size: 14px;
+          color: #374151;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 600;
+          transition: all 0.2s;
+        }
+
+        .nav-btn:hover:not(:disabled) {
+          background: #f9fafb;
+          border-color: #9ca3af;
+        }
+
+        .nav-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .remove-question-btn {
+          background: white;
+          border: 2px solid #ef4444;
+          color: #ef4444;
+          border-radius: 8px;
+          padding: 10px 16px;
+          font-size: 14px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 600;
+          transition: all 0.2s;
+        }
+
+        .remove-question-btn:hover {
+          background: #fef2f2;
+          border-color: #dc2626;
+        }
+
+        .add-question-btn {
+          background: #10b981;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          padding: 10px 16px;
+          font-size: 14px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 600;
+          transition: background-color 0.2s;
+        }
+
+        .add-question-btn:hover {
+          background: #059669;
+        }
+
+        .action-btn {
+          padding: 10px 20px;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          border: none;
+          transition: all 0.2s;
+        }
+
+        .action-btn.cancel {
+          background: white;
+          color: #374151;
+          border: 2px solid #d1d5db;
+        }
+
+        .action-btn.cancel:hover {
+          background: #f9fafb;
+          border-color: #9ca3af;
+        }
+
+        .action-btn.save {
+          background: #4f46e5;
+          color: white;
+        }
+
+        .action-btn.save:hover:not(:disabled) {
+          background: #4338ca;
+        }
+
+        .action-btn.save:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        /* Test Actions (Edit/Delete in quiz list) */
+        .test-actions {
+          display: flex;
+          gap: 8px;
+          opacity: 0;
+          transition: opacity 0.2s;
+        }
+
+        .test-item:hover .test-actions {
+          opacity: 1;
+        }
+
+        .edit-btn,
+        .delete-btn {
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 6px;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background-color 0.2s;
+        }
+
+        .edit-btn {
+          color: #4f46e5;
+        }
+
+        .edit-btn:hover {
+          background: #eef2ff;
+        }
+
+        .delete-btn {
+          color: #ef4444;
+        }
+
+        .delete-btn:hover {
+          background: #fef2f2;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+          .modal-content {
+            margin: 20px;
+            max-height: 95vh;
+          }
+
+          .modal-header {
+            padding: 24px 24px 0;
+          }
+
+          .modal-body {
+            padding: 0 24px;
+          }
+
+          .modal-footer {
+            padding: 20px 24px 24px;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+          }
+
+          .footer-left,
+          .footer-right {
+            justify-content: center;
+          }
+
+          .option-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+          }
+
+          .correct-answer-selector {
+            align-self: flex-end;
+          }
         }
 
         .loading,
@@ -2150,6 +2761,314 @@ const TeacherDashboard: React.FC = () => {
             text-align: center;
             gap: 20px;
           }
+        }
+
+        //save_container
+        /* Save Quiz Modal Styles */
+        .small-modal .modal-body {
+          padding: 0 32px;
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+        }
+
+        /* Form Group Styles for Save Modal */
+        .small-modal .form-group {
+          margin-bottom: 0;
+        }
+
+        .small-modal .form-group label {
+          display: block;
+          font-size: 14px;
+          font-weight: 600;
+          color: #374151;
+          margin-bottom: 8px;
+        }
+
+        .small-modal .text-input {
+          width: 100%;
+          padding: 12px 16px;
+          border: 2px solid #e5e7eb;
+          border-radius: 12px;
+          font-size: 14px;
+          transition: all 0.2s;
+          background: white;
+          font-weight: 500;
+        }
+
+        .small-modal .text-input:focus {
+          outline: none;
+          border-color: #4f46e5;
+          background: white;
+          box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .small-modal .text-input::placeholder {
+          color: #9ca3af;
+          font-weight: normal;
+        }
+
+        .small-modal .form-group small {
+          display: block;
+          font-size: 12px;
+          color: #6b7280;
+          margin-top: 6px;
+          font-style: italic;
+        }
+
+        /* Quiz Summary Styles */
+        .quiz-summary {
+          background: #f8fafc;
+          border-radius: 16px;
+          padding: 24px;
+          border: 2px solid #e2e8f0;
+          margin-top: 8px;
+        }
+
+        .quiz-summary h4 {
+          font-size: 16px;
+          font-weight: 700;
+          color: #1e293b;
+          margin: 0 0 16px 0;
+          padding-bottom: 12px;
+          border-bottom: 2px solid #e2e8f0;
+        }
+
+        .quiz-summary p {
+          font-size: 14px;
+          color: #475569;
+          margin: 12px 0;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .quiz-summary p strong {
+          color: #334155;
+          font-weight: 600;
+          min-width: 120px;
+        }
+
+        .quiz-summary p:last-child {
+          margin-bottom: 0;
+        }
+
+        /* Date and Time Input Specific Styles */
+        .small-modal input[type="date"],
+        .small-modal input[type="time"] {
+          appearance: none;
+          -webkit-appearance: none;
+          background: white;
+          cursor: pointer;
+        }
+
+        .small-modal input[type="date"]:focus,
+        .small-modal input[type="time"]:focus {
+          border-color: #4f46e5;
+        }
+
+        /* Number Input Specific Styles */
+        .small-modal input[type="number"] {
+          appearance: textfield;
+          -moz-appearance: textfield;
+        }
+
+        .small-modal input[type="number"]::-webkit-outer-spin-button,
+        .small-modal input[type="number"]::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+
+        /* Modal Footer for Save Modal */
+        .small-modal .modal-footer {
+          padding: 24px 32px 32px;
+          border-top: 1px solid #e5e7eb;
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+          background: white;
+        }
+
+        /* Action Buttons for Save Modal */
+        .small-modal .action-btn {
+          padding: 12px 24px;
+          border-radius: 10px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          border: none;
+          transition: all 0.2s;
+          min-width: 100px;
+        }
+
+        .small-modal .action-btn.cancel {
+          background: white;
+          color: #374151;
+          border: 2px solid #d1d5db;
+        }
+
+        .small-modal .action-btn.cancel:hover {
+          background: #f9fafb;
+          border-color: #9ca3af;
+          transform: translateY(-1px);
+        }
+
+        .small-modal .action-btn.save {
+          background: #4f46e5;
+          color: white;
+          box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
+        }
+
+        .small-modal .action-btn.save:hover:not(:disabled) {
+          background: #4338ca;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
+        }
+
+        .small-modal .action-btn.save:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
+        }
+
+        /* Form Validation Styles */
+        .small-modal .text-input:invalid:not(:focus):not(:placeholder-shown) {
+          border-color: #ef4444;
+          background: #fef2f2;
+        }
+
+        .small-modal .text-input:valid:not(:focus):not(:placeholder-shown) {
+          border-color: #10b981;
+          background: #f0fdf4;
+        }
+
+        /* Responsive Design for Save Modal */
+        @media (max-width: 640px) {
+          .small-modal .modal-body {
+            padding: 0 24px;
+            gap: 20px;
+          }
+
+          .small-modal .modal-footer {
+            padding: 20px 24px 24px;
+            flex-direction: column;
+          }
+
+          .small-modal .action-btn {
+            width: 100%;
+            min-width: auto;
+          }
+
+          .quiz-summary {
+            padding: 20px;
+          }
+
+          .quiz-summary p {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+          }
+
+          .quiz-summary p strong {
+            min-width: auto;
+          }
+        }
+
+        /* Loading State for Save Button */
+        .small-modal .action-btn.save:disabled::after {
+          content: "";
+          width: 16px;
+          height: 16px;
+          border: 2px solid transparent;
+          border-top: 2px solid white;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+          margin-left: 8px;
+          display: inline-block;
+        }
+
+        @keyframes spin {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
+        }
+
+        /* Success State */
+        .small-modal .action-btn.save.success {
+          background: #10b981;
+        }
+
+        .small-modal .action-btn.save.success:hover {
+          background: #059669;
+        }
+
+        /* Error State */
+        .small-modal .error-message {
+          color: #ef4444;
+          font-size: 12px;
+          margin-top: 4px;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        /* Info Tooltip Style */
+        .form-group:has(.text-input:focus) ~ .quiz-summary {
+          border-color: #4f46e5;
+          background: #f8fafc;
+        }
+
+        /* Duration Input Container */
+        .duration-input-container {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .duration-input-container::after {
+          content: "minutes";
+          position: absolute;
+          right: 16px;
+          color: #6b7280;
+          font-size: 12px;
+          font-weight: 500;
+          pointer-events: none;
+        }
+
+        .small-modal input[type="number"] {
+          padding-right: 80px;
+        }
+
+        /* Date and Time Container */
+        .datetime-container {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
+
+        @media (max-width: 480px) {
+          .datetime-container {
+            grid-template-columns: 1fr;
+            gap: 12px;
+          }
+        }
+
+        /* Required Field Indicator */
+        .small-modal .form-group label::after {
+          content: " *";
+          color: #ef4444;
+        }
+
+        /* Focus States for Accessibility */
+        .small-modal .text-input:focus {
+          outline: 2px solid transparent;
+          outline-offset: 2px;
+          border-color: #4f46e5;
+          box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1), 0 0 0 1px #4f46e5;
         }
       `}</style>
     </div>
