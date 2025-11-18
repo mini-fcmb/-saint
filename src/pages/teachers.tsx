@@ -26,6 +26,15 @@ import {
   Play,
   Calendar as CalendarIcon,
   Pencil,
+  BarChart3,
+  Upload,
+  Download,
+  BookOpen,
+  Award,
+  Users2,
+  Eye,
+  FileSpreadsheet,
+  Calculator,
 } from "lucide-react";
 import { useFirebaseStore } from "../stores/useFirebaseStore";
 import { useLiveDate, useCalendar } from "../hooks/useDateUtils";
@@ -67,7 +76,497 @@ interface WorkingHoursData {
   startTime?: Date;
 }
 
-// Quiz Name Modal
+interface CACategory {
+  id: string;
+  name: string;
+  maxScore: number;
+  weight: number;
+  isActive: boolean;
+}
+
+interface CAResult {
+  studentId: string;
+  categoryId: string;
+  score: number;
+  maxScore: number;
+  uploadedBy: string;
+  uploadedAt: Date;
+  remarks?: string;
+}
+
+interface TheoryResult {
+  studentId: string;
+  examId: string;
+  score: number;
+  maxScore: number;
+  uploadedBy: string;
+  uploadedAt: Date;
+  gradedBy: string;
+  comments?: string;
+}
+
+interface FinalGrade {
+  studentId: string;
+  subject: string;
+  term: string;
+  session: string;
+  cbtScore: number;
+  caScores: { [category: string]: number };
+  theoryScore: number;
+  totalScore: number;
+  percentage: number;
+  grade: "A" | "B" | "C" | "D" | "E" | "F";
+  positionInClass?: number;
+  remark: string;
+}
+
+// Performance Management Menu Component
+interface PerformanceMenuProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onFeatureSelect: (feature: string) => void;
+}
+
+const PerformanceMenu: React.FC<PerformanceMenuProps> = ({
+  isOpen,
+  onClose,
+  onFeatureSelect,
+}) => {
+  const menuItems = [
+    {
+      id: "live-monitoring",
+      label: "Live Exam Monitoring",
+      icon: Eye,
+      description: "Real-time tracking of active quizzes",
+      color: "#10b981",
+    },
+    {
+      id: "upload-ca",
+      label: "Upload CA Scores",
+      icon: Upload,
+      description: "Bulk upload continuous assessment scores",
+      color: "#3b82f6",
+    },
+    {
+      id: "upload-theory",
+      label: "Upload Theory Results",
+      icon: BookOpen,
+      description: "Upload theory exam scores",
+      color: "#8b5cf6",
+    },
+    {
+      id: "manage-ca",
+      label: "Manage CA Categories",
+      icon: Award,
+      description: "Set up CA categories and weights",
+      color: "#f59e0b",
+    },
+    {
+      id: "view-grades",
+      label: "View Final Grades",
+      icon: BarChart3,
+      description: "See calculated grades and reports",
+      color: "#ef4444",
+    },
+    {
+      id: "export-reports",
+      label: "Export Reports",
+      icon: Download,
+      description: "Download report cards and analytics",
+      color: "#06b6d4",
+    },
+    {
+      id: "student-performance",
+      label: "Student Performance",
+      icon: Users2,
+      description: "Detailed student analytics",
+      color: "#84cc16",
+    },
+    {
+      id: "bulk-upload",
+      label: "Bulk Upload Scores",
+      icon: FileSpreadsheet,
+      description: "Upload scores via CSV template",
+      color: "#f97316",
+    },
+    {
+      id: "grading-system",
+      label: "Grading System",
+      icon: Calculator,
+      description: "Configure grading scales",
+      color: "#ec4899",
+    },
+  ];
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="performance-menu-overlay" onClick={onClose}>
+      <div
+        className="performance-menu-content"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="performance-menu-header">
+          <h2>Performance Management</h2>
+          <p>Manage student assessments and grades</p>
+          <button className="close-btn" onClick={onClose}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="performance-menu-grid">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={item.id}
+                className="performance-menu-item"
+                onClick={() => onFeatureSelect(item.id)}
+              >
+                <div
+                  className="menu-item-icon"
+                  style={{ backgroundColor: `${item.color}15` }}
+                >
+                  <Icon size={24} color={item.color} />
+                </div>
+                <div className="menu-item-content">
+                  <h4>{item.label}</h4>
+                  <p>{item.description}</p>
+                </div>
+                <div className="menu-item-arrow">
+                  <ChevronRight size={16} color="#6b7280" />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="performance-menu-footer">
+          <div className="quick-stats">
+            <div className="stat">
+              <span className="stat-value">0</span>
+              <span className="stat-label">Students</span>
+            </div>
+            <div className="stat">
+              <span className="stat-value">0</span>
+              <span className="stat-label">Active Tests</span>
+            </div>
+            <div className="stat">
+              <span className="stat-value">0</span>
+              <span className="stat-label">Pending Grades</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Upload CA Modal Component
+interface UploadCAModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  students: Student[];
+}
+
+const UploadCAModal: React.FC<UploadCAModalProps> = ({
+  isOpen,
+  onClose,
+  students,
+}) => {
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [scores, setScores] = useState<{ [key: string]: number }>({});
+  const [uploadMethod, setUploadMethod] = useState<"manual" | "csv">("manual");
+
+  const caCategories = [
+    { id: "1st-ca", name: "1st CA Test", maxScore: 20 },
+    { id: "2nd-ca", name: "2nd CA Test", maxScore: 20 },
+    { id: "3rd-ca", name: "3rd CA Test", maxScore: 20 },
+    { id: "assignment", name: "Assignment", maxScore: 10 },
+    { id: "project", name: "Project", maxScore: 10 },
+    { id: "practical", name: "Practical", maxScore: 10 },
+  ];
+
+  const handleScoreChange = (studentId: string, score: number) => {
+    setScores((prev) => ({
+      ...prev,
+      [studentId]: Math.min(
+        score,
+        caCategories.find((cat) => cat.id === selectedCategory)?.maxScore || 0
+      ),
+    }));
+  };
+
+  const handleBulkUpload = () => {
+    // Implement CSV upload logic
+    console.log("Bulk upload scores");
+  };
+
+  const handleSaveScores = () => {
+    // Implement save logic
+    console.log("Saving scores:", scores);
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div
+        className="modal-content medium-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <h2>Upload CA Scores</h2>
+          <button className="close-btn" onClick={onClose}>
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="modal-body">
+          <div className="upload-method-selector">
+            <button
+              className={`method-btn ${
+                uploadMethod === "manual" ? "active" : ""
+              }`}
+              onClick={() => setUploadMethod("manual")}
+            >
+              <Edit3 size={16} />
+              Manual Entry
+            </button>
+            <button
+              className={`method-btn ${uploadMethod === "csv" ? "active" : ""}`}
+              onClick={() => setUploadMethod("csv")}
+            >
+              <FileSpreadsheet size={16} />
+              CSV Upload
+            </button>
+          </div>
+
+          {uploadMethod === "manual" ? (
+            <>
+              <div className="form-group">
+                <label>Select CA Category</label>
+                <select
+                  className="text-input"
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                >
+                  <option value="">Choose category...</option>
+                  {caCategories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name} (Max: {cat.maxScore})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedCategory && (
+                <div className="scores-table">
+                  <div className="table-header">
+                    <span>Student</span>
+                    <span>
+                      Score (Max:{" "}
+                      {
+                        caCategories.find((cat) => cat.id === selectedCategory)
+                          ?.maxScore
+                      }
+                      )
+                    </span>
+                  </div>
+                  {students.map((student) => (
+                    <div key={student.id} className="score-row">
+                      <span>
+                        {student.first} {student.last}
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        max={
+                          caCategories.find(
+                            (cat) => cat.id === selectedCategory
+                          )?.maxScore
+                        }
+                        value={scores[student.id] || ""}
+                        onChange={(e) =>
+                          handleScoreChange(
+                            student.id,
+                            parseInt(e.target.value) || 0
+                          )
+                        }
+                        className="score-input"
+                        placeholder="Enter score"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="csv-upload-section">
+              <div className="upload-area">
+                <FileSpreadsheet size={48} color="#6b7280" />
+                <p>Upload CSV file with student scores</p>
+                <button className="upload-csv-btn" onClick={handleBulkUpload}>
+                  <Upload size={16} />
+                  Choose CSV File
+                </button>
+                <small>Download template for correct format</small>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="modal-footer">
+          <button className="action-btn cancel" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="action-btn save"
+            onClick={handleSaveScores}
+            disabled={!selectedCategory && uploadMethod === "manual"}
+          >
+            Save Scores
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Live Monitoring Modal Component
+interface LiveMonitoringModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  activeQuizzes: Quiz[];
+  students: Student[];
+}
+
+const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
+  isOpen,
+  onClose,
+  activeQuizzes,
+  students,
+}) => {
+  const [monitoringData, setMonitoringData] = useState<any[]>([]);
+
+  // Simulate live data
+  useEffect(() => {
+    if (isOpen) {
+      const interval = setInterval(() => {
+        setMonitoringData(
+          students.map((student) => ({
+            studentId: student.id,
+            studentName: `${student.first} ${student.last}`,
+            progress: Math.floor(Math.random() * 100),
+            timeSpent: `${Math.floor(Math.random() * 30)}:${Math.floor(
+              Math.random() * 60
+            )
+              .toString()
+              .padStart(2, "0")}`,
+            status: Math.random() > 0.2 ? "active" : "submitted",
+            lastActivity: new Date(),
+          }))
+        );
+      }, 3000);
+
+      return () => clearInterval(interval);
+    }
+  }, [isOpen, students]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div
+        className="modal-content large-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <h2>Live Exam Monitoring</h2>
+            <p>Real-time tracking of active quizzes</p>
+          </div>
+          <div className="live-indicator">
+            <div className="live-dot"></div>
+            Live
+          </div>
+        </div>
+
+        <div className="modal-body">
+          <div className="monitoring-stats">
+            <div className="stat-card">
+              <span className="stat-number">{activeQuizzes.length}</span>
+              <span className="stat-label">Active Quizzes</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-number">
+                {monitoringData.filter((d) => d.status === "active").length}
+              </span>
+              <span className="stat-label">Students Active</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-number">
+                {monitoringData.filter((d) => d.status === "submitted").length}
+              </span>
+              <span className="stat-label">Submitted</span>
+            </div>
+          </div>
+
+          <div className="students-monitoring">
+            <h4>Student Progress</h4>
+            <div className="monitoring-list">
+              {monitoringData.map((data) => (
+                <div key={data.studentId} className="monitoring-item">
+                  <div className="student-info">
+                    <div className="student-avatar-small">
+                      {data.studentName
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")}
+                    </div>
+                    <div>
+                      <strong>{data.studentName}</strong>
+                      <div className="student-meta">
+                        <span>Time: {data.timeSpent}</span>
+                        <span className={`status ${data.status}`}>
+                          {data.status === "active"
+                            ? "In Progress"
+                            : "Submitted"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="progress-display">
+                    <div className="progress-bar">
+                      <div
+                        className="progress-fill"
+                        style={{ width: `${data.progress}%` }}
+                      ></div>
+                    </div>
+                    <span className="progress-text">{data.progress}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="action-btn export-btn">
+            <Download size={16} />
+            Export Report
+          </button>
+          <button className="action-btn primary" onClick={onClose}>
+            Close Monitoring
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Quiz Name Modal Component
 interface QuizNameModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -203,7 +702,7 @@ const QuizNameModal: React.FC<QuizNameModalProps> = ({
   );
 };
 
-// Create Quiz Modal
+// Create Quiz Modal Component
 interface CreateQuizModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -274,7 +773,6 @@ const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && file.size <= 5 * 1024 * 1024) {
-      // 5MB limit
       const newQuestions = [...questions];
       newQuestions[currentQuestionIndex].image = file;
       newQuestions[currentQuestionIndex].imageUrl = URL.createObjectURL(file);
@@ -304,7 +802,6 @@ const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
   };
 
   const handleSave = () => {
-    // Validate current question
     const current = questions[currentQuestionIndex];
     if (!current.text.trim()) {
       alert("Please enter question text");
@@ -462,7 +959,7 @@ const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
   );
 };
 
-// Class List Panel
+// Class List Panel Component
 interface ClassListPanelProps {
   students: Student[];
   isOpen: boolean;
@@ -477,11 +974,31 @@ const ClassListPanel: React.FC<ClassListPanelProps> = ({
   loading,
 }) => {
   return (
-    <div className="card group-chats">
+    <div className="card group-chats" id="group-chats">
       <div className="card-header">
         <h3>My Students ({students.length})</h3>
         <button onClick={toggle} className="view-all">
-          {isOpen ? "Collapse" : "Expand"}
+          {isOpen ? (
+            <i
+              className="bx bx-expand"
+              style={{
+                fontSize: "16px",
+                color: "#000",
+                backgroundColor: "#fff",
+                border: "1px solid #fff !important",
+              }}
+            />
+          ) : (
+            <i
+              className="bx bx-collapse"
+              style={{
+                fontSize: "16px",
+                color: "#000",
+                backgroundColor: "#fff",
+                border: "1px solid #fff !important",
+              }}
+            />
+          )}
         </button>
       </div>
 
@@ -563,6 +1080,10 @@ const TeacherDashboard: React.FC = () => {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [workingHours, setWorkingHours] = useState<WorkingHoursData[]>([]);
   const [onlineStartTime, setOnlineStartTime] = useState<Date | null>(null);
+  const [performanceMenuOpen, setPerformanceMenuOpen] = useState(false);
+  const [uploadCAModalOpen, setUploadCAModalOpen] = useState(false);
+  const [liveMonitoringModalOpen, setLiveMonitoringModalOpen] = useState(false);
+  const [selectedFeature, setSelectedFeature] = useState<string>("");
 
   const {
     user,
@@ -575,13 +1096,17 @@ const TeacherDashboard: React.FC = () => {
     signOutUser,
   } = useFirebaseStore();
 
-  // Fixed Auth Initialization
+  // Auth Initialization
+  // CORRECTED VERSION - Only initialize if not already initialized
+  // FIXED: Always return a cleanup function
   useEffect(() => {
-    console.log("🔄 TeacherDashboard mounted - initializing auth");
+    console.log("🔄 TeacherDashboard - Setting up auth");
+
+    // Initialize auth - the store handles duplicate initializations
     const unsubscribe = initializeAuth();
 
     return () => {
-      console.log("🧹 TeacherDashboard unmounting - cleaning up");
+      console.log("🧹 TeacherDashboard - Cleaning up auth");
       unsubscribe();
     };
   }, [initializeAuth]);
@@ -726,10 +1251,44 @@ const TeacherDashboard: React.FC = () => {
       );
     };
 
-    const interval = setInterval(updateQuizStatuses, 30000); // Update every 30 seconds
+    const interval = setInterval(updateQuizStatuses, 30000);
     updateQuizStatuses();
     return () => clearInterval(interval);
   }, []);
+
+  // Performance feature handler
+  const handlePerformanceFeatureSelect = (feature: string) => {
+    setSelectedFeature(feature);
+    setPerformanceMenuOpen(false);
+
+    switch (feature) {
+      case "live-monitoring":
+        setLiveMonitoringModalOpen(true);
+        break;
+      case "upload-ca":
+        setUploadCAModalOpen(true);
+        break;
+      case "upload-theory":
+        // Open theory upload modal
+        break;
+      case "manage-ca":
+        // Open CA categories management
+        break;
+      case "view-grades":
+        // Open grades view
+        break;
+      case "export-reports":
+        // Handle export
+        break;
+      default:
+        break;
+    }
+  };
+
+  const activeQuizzes = useMemo(
+    () => quizzes.filter((quiz) => quiz.status === "active"),
+    [quizzes]
+  );
 
   // Logout handler
   const handleLogout = async () => {
@@ -863,15 +1422,17 @@ const TeacherDashboard: React.FC = () => {
   }, [students]);
 
   const dashArray = `${progressPercent} ${100 - progressPercent}`;
-
   // Menu items
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: Home },
-    { id: "schedule", label: "Schedule", icon: Calendar },
-    { id: "inbox", label: "Inbox", icon: MessageSquare },
-    { id: "students", label: "Students", icon: Users },
-    { id: "report", label: "Report", icon: FileText },
-    { id: "settings", label: "Settings", icon: Settings },
+    {
+      id: "schedule",
+      label: "Schedule",
+      icon: Calendar,
+      Hash: "#upcoming-classes",
+    },
+    { id: "inbox", label: "Inbox", icon: MessageSquare, Hash: "#" },
+    { id: "students", label: "Students", icon: Users, Hash: "#group-chats" },
   ];
 
   // Upcoming classes
@@ -924,7 +1485,13 @@ const TeacherDashboard: React.FC = () => {
   return (
     <div
       className={`app ${
-        quizModalOpen || quizNameModalOpen ? "modal-open" : ""
+        quizModalOpen ||
+        quizNameModalOpen ||
+        performanceMenuOpen ||
+        uploadCAModalOpen ||
+        liveMonitoringModalOpen
+          ? "modal-open"
+          : ""
       }`}
     >
       {/* Header */}
@@ -947,10 +1514,28 @@ const TeacherDashboard: React.FC = () => {
             <button className="icon-btn">
               <Bell size={20} />
             </button>
+
+            {/* Performance Menu Button */}
+            <div className="performance-menu-wrapper">
+              <button
+                className="icon-btn performance-btn"
+                onClick={() => setPerformanceMenuOpen(!performanceMenuOpen)}
+              >
+                <BarChart3 size={20} />
+              </button>
+
+              <PerformanceMenu
+                isOpen={performanceMenuOpen}
+                onClose={() => setPerformanceMenuOpen(false)}
+                onFeatureSelect={handlePerformanceFeatureSelect}
+              />
+            </div>
+
             <button className="icon-btn">
               <Menu size={20} />
             </button>
             <button className="get-in-touch" onClick={handleLogout}>
+              <i className="bx bx-log-out" />
               Logout
             </button>
           </div>
@@ -1024,7 +1609,13 @@ const TeacherDashboard: React.FC = () => {
         {/* Main Content */}
         <main
           className={`main-content ${
-            quizModalOpen || quizNameModalOpen ? "blurred" : ""
+            quizModalOpen ||
+            quizNameModalOpen ||
+            performanceMenuOpen ||
+            uploadCAModalOpen ||
+            liveMonitoringModalOpen
+              ? "blurred"
+              : ""
           }`}
         >
           <div className="welcome">
@@ -1232,7 +1823,7 @@ const TeacherDashboard: React.FC = () => {
               </div>
             </div>
 
-            <div className="card upcoming-classes">
+            <div className="card upcoming-classes" id="upcoming-classes">
               <div className="card-header">
                 <h3>Upcoming Classes & Exams</h3>
                 <a href="#" className="view-all">
@@ -1281,7 +1872,13 @@ const TeacherDashboard: React.FC = () => {
         {/* Profile Card */}
         <div
           className={`profile-card ${
-            quizModalOpen || quizNameModalOpen ? "blurred" : ""
+            quizModalOpen ||
+            quizNameModalOpen ||
+            performanceMenuOpen ||
+            uploadCAModalOpen ||
+            liveMonitoringModalOpen
+              ? "blurred"
+              : ""
           }`}
         >
           <div className="profile-avatar">
@@ -1323,7 +1920,451 @@ const TeacherDashboard: React.FC = () => {
         questions={tempQuestions}
       />
 
+      <UploadCAModal
+        isOpen={uploadCAModalOpen}
+        onClose={() => setUploadCAModalOpen(false)}
+        students={students}
+      />
+
+      <LiveMonitoringModal
+        isOpen={liveMonitoringModalOpen}
+        onClose={() => setLiveMonitoringModalOpen(false)}
+        activeQuizzes={activeQuizzes}
+        students={students}
+      />
+
       <style jsx="true">{`
+        /* Add all your CSS styles here */
+        /* ... (include all the CSS styles from your original code) */
+
+        /* Performance Menu Styles */
+        .performance-menu-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1001;
+          padding: 20px;
+        }
+
+        .performance-menu-content {
+          background: white;
+          border-radius: 24px;
+          width: 100%;
+          max-width: 800px;
+          max-height: 80vh;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        .performance-menu-header {
+          padding: 32px 32px 0;
+          margin-bottom: 24px;
+          position: relative;
+        }
+
+        .performance-menu-header h2 {
+          font-size: 24px;
+          font-weight: 700;
+          color: #111827;
+          margin: 0 0 8px 0;
+        }
+
+        .performance-menu-header p {
+          font-size: 14px;
+          color: #6b7280;
+          margin: 0;
+        }
+
+        .performance-menu-header .close-btn {
+          position: absolute;
+          top: 32px;
+          right: 32px;
+        }
+
+        .performance-menu-grid {
+          padding: 0 24px 24px;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 16px;
+          overflow-y: auto;
+        }
+
+        .performance-menu-item {
+          display: flex;
+          align-items: center;
+          padding: 20px;
+          border: 2px solid #f3f4f6;
+          border-radius: 16px;
+          cursor: pointer;
+          transition: all 0.2s;
+          gap: 16px;
+        }
+
+        .performance-menu-item:hover {
+          border-color: #4f46e5;
+          background: #f8fafc;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .menu-item-icon {
+          width: 56px;
+          height: 56px;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .menu-item-content {
+          flex: 1;
+        }
+
+        .menu-item-content h4 {
+          font-size: 16px;
+          font-weight: 600;
+          color: #111827;
+          margin: 0 0 4px 0;
+        }
+
+        .menu-item-content p {
+          font-size: 13px;
+          color: #6b7280;
+          margin: 0;
+          line-height: 1.4;
+        }
+
+        .menu-item-arrow {
+          opacity: 0;
+          transition: opacity 0.2s;
+        }
+
+        .performance-menu-item:hover .menu-item-arrow {
+          opacity: 1;
+        }
+
+        .performance-menu-footer {
+          padding: 24px 32px 32px;
+          border-top: 1px solid #e5e7eb;
+        }
+
+        .quick-stats {
+          display: flex;
+          justify-content: space-around;
+          text-align: center;
+        }
+
+        .stat {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .stat-value {
+          font-size: 24px;
+          font-weight: 700;
+          color: #4f46e5;
+        }
+
+        .stat-label {
+          font-size: 12px;
+          color: #6b7280;
+          font-weight: 500;
+        }
+
+        /* Upload CA Modal Styles */
+        .medium-modal {
+          max-width: 600px;
+        }
+
+        .large-modal {
+          max-width: 900px;
+        }
+
+        .upload-method-selector {
+          display: flex;
+          gap: 12px;
+          margin-bottom: 24px;
+        }
+
+        .method-btn {
+          flex: 1;
+          padding: 16px;
+          border: 2px solid #e5e7eb;
+          border-radius: 12px;
+          background: white;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          font-weight: 600;
+          transition: all 0.2s;
+        }
+
+        .method-btn.active {
+          border-color: #4f46e5;
+          background: #eef2ff;
+          color: #4f46e5;
+        }
+
+        .method-btn:hover:not(.active) {
+          border-color: #d1d5db;
+        }
+
+        .scores-table {
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          overflow: hidden;
+        }
+
+        .table-header {
+          display: flex;
+          justify-content: space-between;
+          padding: 16px;
+          background: #f9fafb;
+          font-weight: 600;
+          color: #374151;
+          border-bottom: 1px solid #e5e7eb;
+        }
+
+        .score-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 12px 16px;
+          border-bottom: 1px solid #e5e7eb;
+          align-items: center;
+        }
+
+        .score-row:last-child {
+          border-bottom: none;
+        }
+
+        .score-input {
+          width: 100px;
+          padding: 8px 12px;
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          text-align: center;
+        }
+
+        .csv-upload-section {
+          text-align: center;
+          padding: 40px 20px;
+        }
+
+        .upload-area {
+          border: 2px dashed #d1d5db;
+          border-radius: 12px;
+          padding: 40px;
+          cursor: pointer;
+          transition: border-color 0.2s;
+        }
+
+        .upload-area:hover {
+          border-color: #9ca3af;
+        }
+
+        .upload-csv-btn {
+          background: #4f46e5;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          padding: 12px 24px;
+          margin: 16px 0 8px;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 600;
+        }
+
+        /* Live Monitoring Styles */
+        .live-indicator {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: #ef4444;
+          font-weight: 600;
+          font-size: 14px;
+        }
+
+        .live-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #ef4444;
+          animation: pulse 1s infinite;
+        }
+
+        .monitoring-stats {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+
+        .stat-card {
+          background: #f8fafc;
+          border-radius: 12px;
+          padding: 20px;
+          text-align: center;
+          border: 1px solid #e5e7eb;
+        }
+
+        .stat-number {
+          display: block;
+          font-size: 32px;
+          font-weight: 700;
+          color: #4f46e5;
+          margin-bottom: 4px;
+        }
+
+        .stat-label {
+          font-size: 14px;
+          color: #6b7280;
+          font-weight: 500;
+        }
+
+        .students-monitoring {
+          margin-top: 24px;
+        }
+
+        .students-monitoring h4 {
+          font-size: 18px;
+          font-weight: 600;
+          margin-bottom: 16px;
+          color: #111827;
+        }
+
+        .monitoring-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          max-height: 400px;
+          overflow-y: auto;
+        }
+
+        .monitoring-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 16px;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          background: white;
+        }
+
+        .student-info {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .student-avatar-small {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background: #e0e7ff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 600;
+          color: #4f46e5;
+          font-size: 14px;
+        }
+
+        .student-meta {
+          display: flex;
+          gap: 12px;
+          font-size: 12px;
+          color: #6b7280;
+          margin-top: 4px;
+        }
+
+        .status.active {
+          color: #10b981;
+          font-weight: 600;
+        }
+
+        .status.submitted {
+          color: #8b5cf6;
+          font-weight: 600;
+        }
+
+        .progress-display {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .progress-bar {
+          width: 120px;
+          height: 8px;
+          background: #e5e7eb;
+          border-radius: 4px;
+          overflow: hidden;
+        }
+
+        .progress-fill {
+          height: 100%;
+          background: #10b981;
+          transition: width 0.3s ease;
+        }
+
+        .progress-text {
+          font-size: 14px;
+          font-weight: 600;
+          color: #374151;
+          min-width: 40px;
+        }
+
+        .performance-menu-wrapper {
+          position: relative;
+        }
+
+        .performance-btn {
+          position: relative;
+        }
+
+        .performance-btn::after {
+          content: "";
+          position: absolute;
+          top: 6px;
+          right: 6px;
+          width: 8px;
+          height: 8px;
+          background: #ef4444;
+          border-radius: 50%;
+          border: 2px solid white;
+        }
+
+        /* Add to existing responsive styles */
+        @media (max-width: 768px) {
+          .performance-menu-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .monitoring-stats {
+            grid-template-columns: 1fr;
+          }
+
+          .monitoring-item {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+          }
+
+          .progress-display {
+            width: 100%;
+            justify-content: space-between;
+          }
+        }
         /* Add all your CSS styles here with proper scrollable containers */
         .app {
           position: relative;
@@ -2578,7 +3619,7 @@ const TeacherDashboard: React.FC = () => {
           position: fixed;
           top: 100px;
           right: 48px;
-          width: 320px;
+          width: 380px;
           background: #fff;
           border-radius: 24px;
           padding: 32px;
