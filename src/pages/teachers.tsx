@@ -1096,9 +1096,26 @@ const TeacherDashboard: React.FC = () => {
     signOutUser,
   } = useFirebaseStore();
 
-  // Auth Initialization
-  // CORRECTED VERSION - Only initialize if not already initialized
-  // FIXED: Always return a cleanup function
+  //colorchange
+  const getStudentColor = (studentId: string) => {
+    const colors = [
+      "#ef4444", // red
+      "#f59e0b", // amber
+      "#10b981", // emerald
+      "#3b82f6", // blue
+      "#8b5cf6", // violet
+      "#ec4899", // pink
+      "#06b6d4", // cyan
+      "#84cc16", // lime
+    ];
+
+    const hash = studentId.split("").reduce((a, b) => {
+      a = (a << 5) - a + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+
+    return colors[Math.abs(hash) % colors.length];
+  };
   useEffect(() => {
     console.log("🔄 TeacherDashboard - Setting up auth");
 
@@ -1530,10 +1547,6 @@ const TeacherDashboard: React.FC = () => {
                 onFeatureSelect={handlePerformanceFeatureSelect}
               />
             </div>
-
-            <button className="icon-btn">
-              <Menu size={20} />
-            </button>
             <button className="get-in-touch" onClick={handleLogout}>
               <i className="bx bx-log-out" />
               Logout
@@ -2068,7 +2081,7 @@ const TeacherDashboard: React.FC = () => {
         .stat-value {
           font-size: 24px;
           font-weight: 700;
-          color: #4f46e5;
+          color: #4299e1;
         }
 
         .stat-label {
@@ -2221,7 +2234,7 @@ const TeacherDashboard: React.FC = () => {
           display: block;
           font-size: 32px;
           font-weight: 700;
-          color: #4f46e5;
+          color: #4299e1;
           margin-bottom: 4px;
         }
 
@@ -2275,7 +2288,7 @@ const TeacherDashboard: React.FC = () => {
           align-items: center;
           justify-content: center;
           font-weight: 600;
-          color: #4f46e5;
+          color: #4299e1;
           font-size: 14px;
         }
 
@@ -3120,7 +3133,7 @@ const TeacherDashboard: React.FC = () => {
           color: #6b7280;
         }
         .get-in-touch {
-          background: #4f46e5;
+          background: #4299e1;
           color: #fff;
           border: none;
           border-radius: 12px;
@@ -3190,7 +3203,7 @@ const TeacherDashboard: React.FC = () => {
         .nav-item.active,
         .nav-item:hover {
           background: #eef2ff;
-          color: #4f46e5;
+          color: #4299e1;
           font-weight: 600;
         }
         .nav-icon {
@@ -3223,7 +3236,7 @@ const TeacherDashboard: React.FC = () => {
           border-radius: 50%;
         }
         .create-chat-btn {
-          background: #4f46e5;
+          background: #4299e1;
           color: #fff;
           border: none;
           border-radius: 16px;
@@ -3240,7 +3253,7 @@ const TeacherDashboard: React.FC = () => {
         }
         .create-class-link {
           background: transparent;
-          color: #4f46e5;
+          color: #4299e1;
           border: none;
           font-size: 15px;
           font-weight: 600;
@@ -3277,7 +3290,7 @@ const TeacherDashboard: React.FC = () => {
           margin: 0;
         }
         .progress-card {
-          background: #4f46e5;
+          background: #4299e1;
           border-radius: 24px;
           padding: 15px;
           margin: 40px 0;
@@ -3351,7 +3364,7 @@ const TeacherDashboard: React.FC = () => {
         }
         .view-all {
           font-size: 15px;
-          color: #4f46e5;
+          color: #4299e1;
           text-decoration: none;
           font-weight: 600;
         }
@@ -3602,7 +3615,7 @@ const TeacherDashboard: React.FC = () => {
           transition: all 0.2s;
         }
         .calendar-day.today {
-          background: #4f46e5;
+          background: #4299e1;
           color: #fff;
           font-weight: 700;
         }
@@ -3641,7 +3654,7 @@ const TeacherDashboard: React.FC = () => {
           justify-content: center;
           font-size: 28px;
           font-weight: 700;
-          color: #4f46e5;
+          color: #4299e1;
         }
         .profile-info h4 {
           font-size: 18px;
@@ -3679,8 +3692,8 @@ const TeacherDashboard: React.FC = () => {
           width: 36px;
           height: 36px;
           border-radius: 50%;
-          background: #eef2ff;
-          color: #4f46e5;
+          background: #4299e1;
+          color: #fff;
           display: flex;
           align-items: center;
           justify-content: center;
