@@ -35,18 +35,22 @@ import {
   Eye,
   FileSpreadsheet,
   Calculator,
+  Table,
+  Save,
 } from "lucide-react";
 import { useFirebaseStore } from "../stores/useFirebaseStore";
 import { useLiveDate, useCalendar } from "../hooks/useDateUtils";
 import { useNavigate } from "react-router-dom";
 
-// Types
+// Enhanced Types
 interface Student {
   id: string;
   first: string;
   last: string;
   email: string;
   progress: number;
+  classId: string;
+  className: string;
 }
 
 interface Question {
@@ -67,6 +71,8 @@ interface Quiz {
   scheduledTime: string;
   status: "upcoming" | "active" | "expired";
   totalDuration: number;
+  subject: string;
+  maxScore: number;
 }
 
 interface WorkingHoursData {
@@ -76,48 +82,54 @@ interface WorkingHoursData {
   startTime?: Date;
 }
 
-interface CACategory {
+// Grade Management Types
+interface GradeRecord {
   id: string;
-  name: string;
-  maxScore: number;
-  weight: number;
-  isActive: boolean;
-}
-
-interface CAResult {
   studentId: string;
-  categoryId: string;
-  score: number;
-  maxScore: number;
-  uploadedBy: string;
-  uploadedAt: Date;
-  remarks?: string;
-}
-
-interface TheoryResult {
-  studentId: string;
-  examId: string;
-  score: number;
-  maxScore: number;
-  uploadedBy: string;
-  uploadedAt: Date;
-  gradedBy: string;
-  comments?: string;
-}
-
-interface FinalGrade {
-  studentId: string;
+  studentName: string;
+  className: string;
   subject: string;
   term: string;
   session: string;
-  cbtScore: number;
-  caScores: { [category: string]: number };
+  objScore: number; // Auto from quiz results
+  caScores: {
+    ca1: number;
+    ca2: number;
+    ca3: number;
+    assignment: number;
+    project: number;
+    practical: number;
+  };
   theoryScore: number;
   totalScore: number;
   percentage: number;
-  grade: "A" | "B" | "C" | "D" | "E" | "F";
+  grade: string;
   positionInClass?: number;
   remark: string;
+}
+
+interface GradeSystem {
+  grades: {
+    A1: { min: number; max: number; points: number };
+    B2: { min: number; max: number; points: number };
+    B3: { min: number; max: number; points: number };
+    C4: { min: number; max: number; points: number };
+    C5: { min: number; max: number; points: number };
+    C6: { min: number; max: number; points: number };
+    D7: { min: number; max: number; points: number };
+    E8: { min: number; max: number; points: number };
+    F9: { min: number; max: number; points: number };
+  };
+  maxScores: {
+    obj: number;
+    ca1: number;
+    ca2: number;
+    ca3: number;
+    assignment: number;
+    project: number;
+    practical: number;
+    theory: number;
+  };
 }
 
 // Performance Management Menu Component
@@ -134,67 +146,74 @@ const PerformanceMenu: React.FC<PerformanceMenuProps> = ({
 }) => {
   const menuItems = [
     {
+      id: "grade-management",
+      label: "Grade Management System",
+      icon: Table,
+      description: "Manage student grades and results",
+      color: "#10b981",
+    },
+    {
       id: "live-monitoring",
       label: "Live Exam Monitoring",
       icon: Eye,
       description: "Real-time tracking of active quizzes",
-      color: "#10b981",
+      color: "#3b82f6",
     },
     {
       id: "upload-ca",
       label: "Upload CA Scores",
       icon: Upload,
       description: "Bulk upload continuous assessment scores",
-      color: "#3b82f6",
+      color: "#8b5cf6",
     },
     {
       id: "upload-theory",
       label: "Upload Theory Results",
       icon: BookOpen,
       description: "Upload theory exam scores",
-      color: "#8b5cf6",
+      color: "#f59e0b",
     },
     {
       id: "manage-ca",
       label: "Manage CA Categories",
       icon: Award,
       description: "Set up CA categories and weights",
-      color: "#f59e0b",
+      color: "#ef4444",
     },
     {
       id: "view-grades",
       label: "View Final Grades",
       icon: BarChart3,
       description: "See calculated grades and reports",
-      color: "#ef4444",
+      color: "#06b6d4",
     },
     {
       id: "export-reports",
       label: "Export Reports",
       icon: Download,
       description: "Download report cards and analytics",
-      color: "#06b6d4",
+      color: "#84cc16",
     },
     {
       id: "student-performance",
       label: "Student Performance",
       icon: Users2,
       description: "Detailed student analytics",
-      color: "#84cc16",
+      color: "#f97316",
     },
     {
       id: "bulk-upload",
       label: "Bulk Upload Scores",
       icon: FileSpreadsheet,
       description: "Upload scores via CSV template",
-      color: "#f97316",
+      color: "#ec4899",
     },
     {
       id: "grading-system",
       label: "Grading System",
       icon: Calculator,
       description: "Configure grading scales",
-      color: "#ec4899",
+      color: "#6366f1",
     },
   ];
 
@@ -262,6 +281,626 @@ const PerformanceMenu: React.FC<PerformanceMenuProps> = ({
   );
 };
 
+// Grade Management System Modal
+interface GradeManagementModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  students: Student[];
+  currentSubject: string;
+}
+
+const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
+  isOpen,
+  onClose,
+  students,
+  currentSubject,
+}) => {
+  const [gradeRecords, setGradeRecords] = useState<GradeRecord[]>([]);
+  const [activeTerm, setActiveTerm] = useState("First Term");
+  const [activeSession, setActiveSession] = useState("2024/2025");
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Initialize grade system
+  const gradeSystem: GradeSystem = {
+    grades: {
+      A1: { min: 75, max: 100, points: 1 },
+      B2: { min: 70, max: 74, points: 2 },
+      B3: { min: 65, max: 69, points: 3 },
+      C4: { min: 60, max: 64, points: 4 },
+      C5: { min: 55, max: 59, points: 5 },
+      C6: { min: 50, max: 54, points: 6 },
+      D7: { min: 45, max: 49, points: 7 },
+      E8: { min: 40, max: 44, points: 8 },
+      F9: { min: 0, max: 39, points: 9 },
+    },
+    maxScores: {
+      obj: 40,
+      ca1: 10,
+      ca2: 10,
+      ca3: 10,
+      assignment: 10,
+      project: 10,
+      practical: 10,
+      theory: 60,
+    },
+  };
+
+  // Calculate grade based on percentage
+  const calculateGrade = (percentage: number): string => {
+    for (const [grade, range] of Object.entries(gradeSystem.grades)) {
+      if (percentage >= range.min && percentage <= range.max) {
+        return grade;
+      }
+    }
+    return "F9";
+  };
+
+  // Calculate remark based on grade
+  const calculateRemark = (grade: string): string => {
+    const remarks: { [key: string]: string } = {
+      A1: "Excellent",
+      B2: "Very Good",
+      B3: "Good",
+      C4: "Credit",
+      C5: "Credit",
+      C6: "Credit",
+      D7: "Pass",
+      E8: "Pass",
+      F9: "Fail",
+    };
+    return remarks[grade] || "Fail";
+  };
+
+  // Initialize grade records from students
+  useEffect(() => {
+    if (isOpen && students.length > 0) {
+      const initialRecords: GradeRecord[] = students.map((student) => ({
+        id: `grade-${student.id}-${currentSubject}-${activeTerm}`,
+        studentId: student.id,
+        studentName: `${student.first} ${student.last}`,
+        className: student.className,
+        subject: currentSubject,
+        term: activeTerm,
+        session: activeSession,
+        objScore: 0,
+        caScores: {
+          ca1: 0,
+          ca2: 0,
+          ca3: 0,
+          assignment: 0,
+          project: 0,
+          practical: 0,
+        },
+        theoryScore: 0,
+        totalScore: 0,
+        percentage: 0,
+        grade: "F9",
+        remark: "Fail",
+      }));
+      setGradeRecords(initialRecords);
+    }
+  }, [isOpen, students, currentSubject, activeTerm, activeSession]);
+
+  // Calculate totals when scores change
+  useEffect(() => {
+    const updatedRecords = gradeRecords.map((record) => {
+      const caTotal = Object.values(record.caScores).reduce(
+        (sum, score) => sum + score,
+        0
+      );
+      const totalScore = record.objScore + caTotal + record.theoryScore;
+      const maxTotal =
+        gradeSystem.maxScores.obj +
+        gradeSystem.maxScores.ca1 +
+        gradeSystem.maxScores.ca2 +
+        gradeSystem.maxScores.ca3 +
+        gradeSystem.maxScores.assignment +
+        gradeSystem.maxScores.project +
+        gradeSystem.maxScores.practical +
+        gradeSystem.maxScores.theory;
+      const percentage = (totalScore / maxTotal) * 100;
+      const grade = calculateGrade(percentage);
+      const remark = calculateRemark(grade);
+
+      return {
+        ...record,
+        totalScore: Math.round(totalScore),
+        percentage: Math.round(percentage),
+        grade,
+        remark,
+      };
+    });
+
+    // Calculate positions
+    const sortedRecords = [...updatedRecords].sort(
+      (a, b) => b.totalScore - a.totalScore
+    );
+    const recordsWithPositions = sortedRecords.map((record, index) => ({
+      ...record,
+      positionInClass: index + 1,
+    }));
+
+    setGradeRecords(recordsWithPositions);
+  }, [gradeRecords]);
+
+  const handleScoreChange = (
+    studentId: string,
+    field:
+      | keyof Omit<
+          GradeRecord,
+          | "caScores"
+          | "id"
+          | "studentId"
+          | "studentName"
+          | "className"
+          | "subject"
+          | "term"
+          | "session"
+          | "totalScore"
+          | "percentage"
+          | "grade"
+          | "remark"
+          | "positionInClass"
+        >
+      | `caScores.${keyof GradeRecord["caScores"]}`,
+    value: number
+  ) => {
+    setGradeRecords((prev) =>
+      prev.map((record) => {
+        if (record.studentId === studentId) {
+          if (field.startsWith("caScores.")) {
+            const caField = field.split(
+              "."
+            )[1] as keyof GradeRecord["caScores"];
+            const maxScore =
+              gradeSystem.maxScores[
+                caField as keyof typeof gradeSystem.maxScores
+              ];
+            return {
+              ...record,
+              caScores: {
+                ...record.caScores,
+                [caField]: Math.min(Math.max(0, value), maxScore),
+              },
+            };
+          } else {
+            const maxScore =
+              gradeSystem.maxScores[
+                field as keyof typeof gradeSystem.maxScores
+              ];
+            return {
+              ...record,
+              [field]: Math.min(Math.max(0, value), maxScore || 100),
+            };
+          }
+        }
+        return record;
+      })
+    );
+  };
+
+  const handleSaveGrades = () => {
+    // Save to localStorage (replace with actual database call)
+    const key = `grades-${currentSubject}-${activeTerm}-${activeSession}`;
+    localStorage.setItem(key, JSON.stringify(gradeRecords));
+    setIsEditing(false);
+    alert("Grades saved successfully!");
+  };
+
+  const handleExportCSV = () => {
+    const headers = [
+      "S/N",
+      "Student Name",
+      "Class",
+      "OBJ Score",
+      "CA1",
+      "CA2",
+      "CA3",
+      "Assignment",
+      "Project",
+      "Practical",
+      "Theory Score",
+      "Total Score",
+      "Percentage",
+      "Grade",
+      "Position",
+      "Remark",
+    ];
+
+    const csvData = gradeRecords.map((record, index) => [
+      index + 1,
+      record.studentName,
+      record.className,
+      record.objScore,
+      record.caScores.ca1,
+      record.caScores.ca2,
+      record.caScores.ca3,
+      record.caScores.assignment,
+      record.caScores.project,
+      record.caScores.practical,
+      record.theoryScore,
+      record.totalScore,
+      `${record.percentage}%`,
+      record.grade,
+      record.positionInClass,
+      record.remark,
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...csvData.map((row) => row.join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `grades-${currentSubject}-${activeTerm}-${activeSession}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div
+        className="modal-content xl-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <h2>Grade Management System</h2>
+            <p>Manage student grades for {currentSubject}</p>
+          </div>
+          <button className="close-btn" onClick={onClose}>
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="modal-body">
+          {/* Controls */}
+          <div className="grade-controls">
+            <div className="control-group">
+              <label>Subject</label>
+              <select className="text-input" value={currentSubject} disabled>
+                <option value={currentSubject}>{currentSubject}</option>
+              </select>
+            </div>
+            <div className="control-group">
+              <label>Term</label>
+              <select
+                className="text-input"
+                value={activeTerm}
+                onChange={(e) => setActiveTerm(e.target.value)}
+              >
+                <option value="First Term">First Term</option>
+                <option value="Second Term">Second Term</option>
+                <option value="Third Term">Third Term</option>
+              </select>
+            </div>
+            <div className="control-group">
+              <label>Session</label>
+              <select
+                className="text-input"
+                value={activeSession}
+                onChange={(e) => setActiveSession(e.target.value)}
+              >
+                <option value="2023/2024">2023/2024</option>
+                <option value="2024/2025">2024/2025</option>
+                <option value="2025/2026">2025/2026</option>
+              </select>
+            </div>
+            <div className="control-group">
+              <label>Actions</label>
+              <div className="action-buttons">
+                <button
+                  className={`action-btn ${isEditing ? "cancel" : "edit"}`}
+                  onClick={() => setIsEditing(!isEditing)}
+                >
+                  {isEditing ? "Cancel Editing" : "Edit Grades"}
+                </button>
+                <button
+                  className="action-btn save"
+                  onClick={handleSaveGrades}
+                  disabled={!isEditing}
+                >
+                  <Save size={16} />
+                  Save Grades
+                </button>
+                <button className="action-btn export" onClick={handleExportCSV}>
+                  <Download size={16} />
+                  Export CSV
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Grades Table */}
+          <div className="grades-table-container">
+            <table className="grades-table">
+              <thead>
+                <tr>
+                  <th rowSpan={2}>S/N</th>
+                  <th rowSpan={2}>Student Name</th>
+                  <th rowSpan={2}>Class</th>
+                  <th colSpan={7}>Continuous Assessment</th>
+                  <th colSpan={5}>Examination</th>
+                  <th colSpan={4}>Results</th>
+                </tr>
+                <tr>
+                  {/* CA Headers */}
+                  <th>OBJ</th>
+                  <th>CA1</th>
+                  <th>CA2</th>
+                  <th>CA3</th>
+                  <th>Assignment</th>
+                  <th>Project</th>
+                  <th>Practical</th>
+
+                  {/* Exam Headers */}
+                  <th>Theory</th>
+                  <th>Total</th>
+                  <th>%</th>
+                  <th>Grade</th>
+                  <th>Position</th>
+
+                  {/* Result Headers */}
+                  <th>Remark</th>
+                </tr>
+                <tr className="max-scores-row">
+                  <th colSpan={3}>Max Scores</th>
+                  <th>{gradeSystem.maxScores.obj}</th>
+                  <th>{gradeSystem.maxScores.ca1}</th>
+                  <th>{gradeSystem.maxScores.ca2}</th>
+                  <th>{gradeSystem.maxScores.ca3}</th>
+                  <th>{gradeSystem.maxScores.assignment}</th>
+                  <th>{gradeSystem.maxScores.project}</th>
+                  <th>{gradeSystem.maxScores.practical}</th>
+                  <th>{gradeSystem.maxScores.theory}</th>
+                  <th>
+                    {gradeSystem.maxScores.obj +
+                      gradeSystem.maxScores.ca1 +
+                      gradeSystem.maxScores.ca2 +
+                      gradeSystem.maxScores.ca3 +
+                      gradeSystem.maxScores.assignment +
+                      gradeSystem.maxScores.project +
+                      gradeSystem.maxScores.practical +
+                      gradeSystem.maxScores.theory}
+                  </th>
+                  <th>100%</th>
+                  <th>-</th>
+                  <th>-</th>
+                  <th>-</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gradeRecords.map((record, index) => (
+                  <tr key={record.id} className="grade-row">
+                    <td className="serial-number">{index + 1}</td>
+                    <td className="student-name">{record.studentName}</td>
+                    <td className="class-name">{record.className}</td>
+
+                    {/* CA Scores */}
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        max={gradeSystem.maxScores.obj}
+                        value={record.objScore}
+                        onChange={(e) =>
+                          handleScoreChange(
+                            record.studentId,
+                            "objScore",
+                            parseInt(e.target.value) || 0
+                          )
+                        }
+                        disabled={!isEditing}
+                        className="score-input"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        max={gradeSystem.maxScores.ca1}
+                        value={record.caScores.ca1}
+                        onChange={(e) =>
+                          handleScoreChange(
+                            record.studentId,
+                            "caScores.ca1",
+                            parseInt(e.target.value) || 0
+                          )
+                        }
+                        disabled={!isEditing}
+                        className="score-input"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        max={gradeSystem.maxScores.ca2}
+                        value={record.caScores.ca2}
+                        onChange={(e) =>
+                          handleScoreChange(
+                            record.studentId,
+                            "caScores.ca2",
+                            parseInt(e.target.value) || 0
+                          )
+                        }
+                        disabled={!isEditing}
+                        className="score-input"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        max={gradeSystem.maxScores.ca3}
+                        value={record.caScores.ca3}
+                        onChange={(e) =>
+                          handleScoreChange(
+                            record.studentId,
+                            "caScores.ca3",
+                            parseInt(e.target.value) || 0
+                          )
+                        }
+                        disabled={!isEditing}
+                        className="score-input"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        max={gradeSystem.maxScores.assignment}
+                        value={record.caScores.assignment}
+                        onChange={(e) =>
+                          handleScoreChange(
+                            record.studentId,
+                            "caScores.assignment",
+                            parseInt(e.target.value) || 0
+                          )
+                        }
+                        disabled={!isEditing}
+                        className="score-input"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        max={gradeSystem.maxScores.project}
+                        value={record.caScores.project}
+                        onChange={(e) =>
+                          handleScoreChange(
+                            record.studentId,
+                            "caScores.project",
+                            parseInt(e.target.value) || 0
+                          )
+                        }
+                        disabled={!isEditing}
+                        className="score-input"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        max={gradeSystem.maxScores.practical}
+                        value={record.caScores.practical}
+                        onChange={(e) =>
+                          handleScoreChange(
+                            record.studentId,
+                            "caScores.practical",
+                            parseInt(e.target.value) || 0
+                          )
+                        }
+                        disabled={!isEditing}
+                        className="score-input"
+                      />
+                    </td>
+
+                    {/* Exam Scores */}
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        max={gradeSystem.maxScores.theory}
+                        value={record.theoryScore}
+                        onChange={(e) =>
+                          handleScoreChange(
+                            record.studentId,
+                            "theoryScore",
+                            parseInt(e.target.value) || 0
+                          )
+                        }
+                        disabled={!isEditing}
+                        className="score-input"
+                      />
+                    </td>
+
+                    {/* Results - Auto-calculated */}
+                    <td className="total-score">{record.totalScore}</td>
+                    <td className="percentage">{record.percentage}%</td>
+                    <td className={`grade grade-${record.grade.toLowerCase()}`}>
+                      {record.grade}
+                    </td>
+                    <td className="position">{record.positionInClass}</td>
+                    <td
+                      className={`remark ${record.remark
+                        .toLowerCase()
+                        .replace(" ", "-")}`}
+                    >
+                      {record.remark}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Grade Legend */}
+          <div className="grade-legend">
+            <h4>Grading System</h4>
+            <div className="legend-grid">
+              {Object.entries(gradeSystem.grades).map(([grade, range]) => (
+                <div key={grade} className="legend-item">
+                  <span className={`grade-badge grade-${grade.toLowerCase()}`}>
+                    {grade}
+                  </span>
+                  <span className="grade-range">
+                    {range.min}% - {range.max}%
+                  </span>
+                  <span className="grade-remark">{calculateRemark(grade)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <div className="footer-stats">
+            <div className="stat">
+              <span className="stat-label">Total Students:</span>
+              <span className="stat-value">{gradeRecords.length}</span>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Class Average:</span>
+              <span className="stat-value">
+                {gradeRecords.length > 0
+                  ? Math.round(
+                      gradeRecords.reduce((sum, r) => sum + r.percentage, 0) /
+                        gradeRecords.length
+                    )
+                  : 0}
+                %
+              </span>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Pass Rate:</span>
+              <span className="stat-value">
+                {gradeRecords.length > 0
+                  ? Math.round(
+                      (gradeRecords.filter((r) => r.grade !== "F9").length /
+                        gradeRecords.length) *
+                        100
+                    )
+                  : 0}
+                %
+              </span>
+            </div>
+          </div>
+          <button className="action-btn primary" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Upload CA Modal Component
 interface UploadCAModalProps {
   isOpen: boolean;
@@ -279,9 +918,9 @@ const UploadCAModal: React.FC<UploadCAModalProps> = ({
   const [uploadMethod, setUploadMethod] = useState<"manual" | "csv">("manual");
 
   const caCategories = [
-    { id: "1st-ca", name: "1st CA Test", maxScore: 20 },
-    { id: "2nd-ca", name: "2nd CA Test", maxScore: 20 },
-    { id: "3rd-ca", name: "3rd CA Test", maxScore: 20 },
+    { id: "ca1", name: "1st CA Test", maxScore: 10 },
+    { id: "ca2", name: "2nd CA Test", maxScore: 10 },
+    { id: "ca3", name: "3rd CA Test", maxScore: 10 },
     { id: "assignment", name: "Assignment", maxScore: 10 },
     { id: "project", name: "Project", maxScore: 10 },
     { id: "practical", name: "Practical", maxScore: 10 },
@@ -574,7 +1213,9 @@ interface QuizNameModalProps {
     name: string,
     duration: number,
     scheduledDate: string,
-    scheduledTime: string
+    scheduledTime: string,
+    subject: string,
+    maxScore: number
   ) => void;
   questions: Question[];
 }
@@ -589,6 +1230,8 @@ const QuizNameModal: React.FC<QuizNameModalProps> = ({
   const [duration, setDuration] = useState(30);
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
+  const [subject, setSubject] = useState("Mathematics");
+  const [maxScore, setMaxScore] = useState(40);
 
   useEffect(() => {
     if (isOpen) {
@@ -601,7 +1244,14 @@ const QuizNameModal: React.FC<QuizNameModalProps> = ({
 
   const handleSave = () => {
     if (quizName.trim() && scheduledDate && scheduledTime) {
-      onSave(quizName.trim(), duration, scheduledDate, scheduledTime);
+      onSave(
+        quizName.trim(),
+        duration,
+        scheduledDate,
+        scheduledTime,
+        subject,
+        maxScore
+      );
     }
   };
 
@@ -630,6 +1280,34 @@ const QuizNameModal: React.FC<QuizNameModalProps> = ({
               value={quizName}
               onChange={(e) => setQuizName(e.target.value)}
             />
+          </div>
+
+          <div className="form-group">
+            <label>Subject *</label>
+            <select
+              className="text-input"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+            >
+              <option value="Mathematics">Mathematics</option>
+              <option value="English">English</option>
+              <option value="Science">Science</option>
+              <option value="Social Studies">Social Studies</option>
+              <option value="ICT">ICT</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>Maximum Score *</label>
+            <input
+              type="number"
+              min="10"
+              max="100"
+              className="text-input"
+              value={maxScore}
+              onChange={(e) => setMaxScore(parseInt(e.target.value) || 40)}
+            />
+            <small>Total points for this quiz</small>
           </div>
 
           <div className="form-group">
@@ -670,6 +1348,12 @@ const QuizNameModal: React.FC<QuizNameModalProps> = ({
             <h4>Quiz Summary</h4>
             <p>
               <strong>Questions:</strong> {questions.length}
+            </p>
+            <p>
+              <strong>Subject:</strong> {subject}
+            </p>
+            <p>
+              <strong>Max Score:</strong> {maxScore}
             </p>
             <p>
               <strong>Total Duration:</strong> {duration + 10} minutes
@@ -1083,7 +1767,10 @@ const TeacherDashboard: React.FC = () => {
   const [performanceMenuOpen, setPerformanceMenuOpen] = useState(false);
   const [uploadCAModalOpen, setUploadCAModalOpen] = useState(false);
   const [liveMonitoringModalOpen, setLiveMonitoringModalOpen] = useState(false);
+  const [gradeManagementModalOpen, setGradeManagementModalOpen] =
+    useState(false);
   const [selectedFeature, setSelectedFeature] = useState<string>("");
+  const [currentSubject, setCurrentSubject] = useState("Mathematics");
 
   const {
     user,
@@ -1096,32 +1783,18 @@ const TeacherDashboard: React.FC = () => {
     signOutUser,
   } = useFirebaseStore();
 
-  //colorchange
-  const getStudentColor = (studentId: string) => {
-    const colors = [
-      "#ef4444", // red
-      "#f59e0b", // amber
-      "#10b981", // emerald
-      "#3b82f6", // blue
-      "#8b5cf6", // violet
-      "#ec4899", // pink
-      "#06b6d4", // cyan
-      "#84cc16", // lime
-    ];
+  // Enhanced students with class information
+  const enhancedStudents = useMemo(() => {
+    return students.map((student) => ({
+      ...student,
+      classId: teacherClasses[0]?.id || "default-class",
+      className: teacherClasses[0]?.name || "Default Class",
+    }));
+  }, [students, teacherClasses]);
 
-    const hash = studentId.split("").reduce((a, b) => {
-      a = (a << 5) - a + b.charCodeAt(0);
-      return a & a;
-    }, 0);
-
-    return colors[Math.abs(hash) % colors.length];
-  };
   useEffect(() => {
     console.log("🔄 TeacherDashboard - Setting up auth");
-
-    // Initialize auth - the store handles duplicate initializations
     const unsubscribe = initializeAuth();
-
     return () => {
       console.log("🧹 TeacherDashboard - Cleaning up auth");
       unsubscribe();
@@ -1279,6 +1952,9 @@ const TeacherDashboard: React.FC = () => {
     setPerformanceMenuOpen(false);
 
     switch (feature) {
+      case "grade-management":
+        setGradeManagementModalOpen(true);
+        break;
       case "live-monitoring":
         setLiveMonitoringModalOpen(true);
         break;
@@ -1340,7 +2016,9 @@ const TeacherDashboard: React.FC = () => {
       name: string,
       duration: number,
       scheduledDate: string,
-      scheduledTime: string
+      scheduledTime: string,
+      subject: string,
+      maxScore: number
     ) => {
       const totalDuration = duration + 10;
       const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
@@ -1365,6 +2043,8 @@ const TeacherDashboard: React.FC = () => {
         scheduledTime,
         totalDuration,
         status,
+        subject,
+        maxScore,
       };
 
       setQuizzes((prev) => [newQuiz, ...prev]);
@@ -1433,12 +2113,16 @@ const TeacherDashboard: React.FC = () => {
 
   // Progress calculation
   const progressPercent = useMemo(() => {
-    if (!students || students.length === 0) return 0;
-    const total = students.reduce((sum, s) => sum + (s.progress ?? 0), 0);
-    return Math.round(total / students.length);
-  }, [students]);
+    if (!enhancedStudents || enhancedStudents.length === 0) return 0;
+    const total = enhancedStudents.reduce(
+      (sum, s) => sum + (s.progress ?? 0),
+      0
+    );
+    return Math.round(total / enhancedStudents.length);
+  }, [enhancedStudents]);
 
   const dashArray = `${progressPercent} ${100 - progressPercent}`;
+
   // Menu items
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: Home },
@@ -1506,7 +2190,8 @@ const TeacherDashboard: React.FC = () => {
         quizNameModalOpen ||
         performanceMenuOpen ||
         uploadCAModalOpen ||
-        liveMonitoringModalOpen
+        liveMonitoringModalOpen ||
+        gradeManagementModalOpen
           ? "modal-open"
           : ""
       }`}
@@ -1626,7 +2311,8 @@ const TeacherDashboard: React.FC = () => {
             quizNameModalOpen ||
             performanceMenuOpen ||
             uploadCAModalOpen ||
-            liveMonitoringModalOpen
+            liveMonitoringModalOpen ||
+            gradeManagementModalOpen
               ? "blurred"
               : ""
           }`}
@@ -1721,7 +2407,7 @@ const TeacherDashboard: React.FC = () => {
             </div>
 
             <ClassListPanel
-              students={students}
+              students={enhancedStudents}
               isOpen={classListOpen}
               toggle={() => setClassListOpen((v) => !v)}
               loading={loading}
@@ -1824,6 +2510,10 @@ const TeacherDashboard: React.FC = () => {
                             <Users size={16} /> {quiz.questions.length}{" "}
                             questions
                           </span>
+                          <span>
+                            <BookOpen size={16} /> {quiz.subject} (Max:{" "}
+                            {quiz.maxScore})
+                          </span>
                         </div>
                       </div>
                       <div className={`status ${quiz.status}`}>
@@ -1889,7 +2579,8 @@ const TeacherDashboard: React.FC = () => {
             quizNameModalOpen ||
             performanceMenuOpen ||
             uploadCAModalOpen ||
-            liveMonitoringModalOpen
+            liveMonitoringModalOpen ||
+            gradeManagementModalOpen
               ? "blurred"
               : ""
           }`}
@@ -1936,20 +2627,384 @@ const TeacherDashboard: React.FC = () => {
       <UploadCAModal
         isOpen={uploadCAModalOpen}
         onClose={() => setUploadCAModalOpen(false)}
-        students={students}
+        students={enhancedStudents}
       />
 
       <LiveMonitoringModal
         isOpen={liveMonitoringModalOpen}
         onClose={() => setLiveMonitoringModalOpen(false)}
         activeQuizzes={activeQuizzes}
-        students={students}
+        students={enhancedStudents}
+      />
+
+      <GradeManagementModal
+        isOpen={gradeManagementModalOpen}
+        onClose={() => setGradeManagementModalOpen(false)}
+        students={enhancedStudents}
+        currentSubject={currentSubject}
       />
 
       <style jsx="true">{`
-        /* Add all your CSS styles here */
-        /* ... (include all the CSS styles from your original code) */
+        /* Add all your existing CSS styles here */
+        /* ... (include all previous CSS) */
 
+        /* Grade Management Specific Styles */
+        .xl-modal {
+          max-width: 95vw;
+          max-height: 90vh;
+        }
+
+        .grade-controls {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 16px;
+          margin-bottom: 24px;
+          padding: 20px;
+          background: #f8fafc;
+          border-radius: 12px;
+          border: 1px solid #e5e7eb;
+        }
+
+        .control-group {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .control-group label {
+          font-size: 14px;
+          font-weight: 600;
+          color: #374151;
+        }
+
+        .action-buttons {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .action-buttons .action-btn {
+          padding: 8px 16px;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 600;
+          border: none;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .action-btn.edit {
+          background: #3b82f6;
+          color: white;
+        }
+
+        .action-btn.edit:hover {
+          background: #2563eb;
+        }
+
+        .action-btn.cancel {
+          background: #6b7280;
+          color: white;
+        }
+
+        .action-btn.cancel:hover {
+          background: #4b5563;
+        }
+
+        .action-btn.save {
+          background: #10b981;
+          color: white;
+        }
+
+        .action-btn.save:hover:not(:disabled) {
+          background: #059669;
+        }
+
+        .action-btn.save:disabled {
+          background: #9ca3af;
+          cursor: not-allowed;
+        }
+
+        .action-btn.export {
+          background: #f59e0b;
+          color: white;
+        }
+
+        .action-btn.export:hover {
+          background: #d97706;
+        }
+
+        .grades-table-container {
+          overflow-x: auto;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          margin-bottom: 24px;
+        }
+
+        .grades-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 12px;
+          background: white;
+        }
+
+        .grades-table th {
+          background: #f8fafc;
+          padding: 12px 8px;
+          text-align: center;
+          font-weight: 600;
+          color: #374151;
+          border: 1px solid #e5e7eb;
+          white-space: nowrap;
+        }
+
+        .grades-table td {
+          padding: 8px;
+          text-align: center;
+          border: 1px solid #e5e7eb;
+          vertical-align: middle;
+        }
+
+        .max-scores-row th {
+          background: #e5e7eb;
+          font-size: 11px;
+          color: #6b7280;
+        }
+
+        .grade-row:hover {
+          background: #f9fafb;
+        }
+
+        .serial-number {
+          font-weight: 600;
+          color: #374151;
+          background: #f8fafc;
+        }
+
+        .student-name {
+          text-align: left;
+          font-weight: 600;
+          min-width: 150px;
+        }
+
+        .class-name {
+          min-width: 100px;
+        }
+
+        .score-input {
+          width: 60px;
+          padding: 4px 8px;
+          border: 1px solid #d1d5db;
+          border-radius: 4px;
+          text-align: center;
+          font-size: 12px;
+        }
+
+        .score-input:disabled {
+          background: #f9fafb;
+          color: #6b7280;
+          cursor: not-allowed;
+        }
+
+        .score-input:focus {
+          outline: none;
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+
+        .total-score,
+        .percentage {
+          font-weight: 700;
+          background: #f0f9ff;
+        }
+
+        .grade {
+          font-weight: 700;
+          border-radius: 4px;
+          padding: 4px 8px;
+        }
+
+        .grade-a1 {
+          background: #dcfce7;
+          color: #166534;
+        }
+        .grade-b2 {
+          background: #bbf7d0;
+          color: #15803d;
+        }
+        .grade-b3 {
+          background: #86efac;
+          color: #15803d;
+        }
+        .grade-c4 {
+          background: #fef9c3;
+          color: #854d0e;
+        }
+        .grade-c5 {
+          background: #fef08a;
+          color: #854d0e;
+        }
+        .grade-c6 {
+          background: #fde047;
+          color: #854d0e;
+        }
+        .grade-d7 {
+          background: #fed7aa;
+          color: #9a3412;
+        }
+        .grade-e8 {
+          background: #fdba74;
+          color: #9a3412;
+        }
+        .grade-f9 {
+          background: #fecaca;
+          color: #991b1b;
+        }
+
+        .position {
+          font-weight: 700;
+          color: #1e40af;
+        }
+
+        .remark {
+          font-weight: 600;
+          border-radius: 4px;
+          padding: 4px 8px;
+          min-width: 80px;
+        }
+
+        .remark.excellent {
+          background: #dcfce7;
+          color: #166534;
+        }
+        .remark.very-good {
+          background: #bbf7d0;
+          color: #15803d;
+        }
+        .remark.good {
+          background: #86efac;
+          color: #15803d;
+        }
+        .remark.credit {
+          background: #fef9c3;
+          color: #854d0e;
+        }
+        .remark.pass {
+          background: #fed7aa;
+          color: #9a3412;
+        }
+        .remark.fail {
+          background: #fecaca;
+          color: #991b1b;
+        }
+
+        .grade-legend {
+          background: #f8fafc;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          padding: 20px;
+        }
+
+        .grade-legend h4 {
+          margin: 0 0 16px 0;
+          font-size: 16px;
+          color: #374151;
+        }
+
+        .legend-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 12px;
+        }
+
+        .legend-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 8px;
+          background: white;
+          border-radius: 8px;
+          border: 1px solid #e5e7eb;
+        }
+
+        .grade-badge {
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-weight: 700;
+          font-size: 11px;
+          min-width: 30px;
+          text-align: center;
+        }
+
+        .grade-range {
+          font-size: 12px;
+          color: #6b7280;
+          flex: 1;
+        }
+
+        .grade-remark {
+          font-size: 12px;
+          font-weight: 600;
+          color: #374151;
+        }
+
+        .footer-stats {
+          display: flex;
+          gap: 24px;
+          align-items: center;
+        }
+
+        .footer-stats .stat {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+
+        .footer-stats .stat-label {
+          font-size: 12px;
+          color: #6b7280;
+        }
+
+        .footer-stats .stat-value {
+          font-size: 18px;
+          font-weight: 700;
+          color: #1e40af;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+          .xl-modal {
+            margin: 10px;
+            max-width: calc(100vw - 20px);
+          }
+
+          .grade-controls {
+            grid-template-columns: 1fr;
+          }
+
+          .action-buttons {
+            flex-direction: column;
+          }
+
+          .grades-table {
+            font-size: 10px;
+          }
+
+          .score-input {
+            width: 50px;
+            font-size: 10px;
+          }
+
+          .footer-stats {
+            flex-direction: column;
+            gap: 12px;
+          }
+        }
+
+        /* Add all previous modal styles, loading states, etc. */
         /* Performance Menu Styles */
         .performance-menu-overlay {
           position: fixed;
