@@ -1,678 +1,154 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import {
-  Clock,
-  Flag,
-  ChevronLeft,
-  ChevronRight,
-  AlertTriangle,
-  Lock,
-  AlertCircle,
-} from "lucide-react";
+// QuizDashboard.tsx
+import React, { useState } from "react";
 
-const QuizDashboard: React.FC = () => {
-  const { subjectId } = useParams<{ subjectId: string }>();
-  const navigate = useNavigate();
+export default function QuizDashboard() {
+  const [selected, setSelected] = useState("B");
 
-  const [timeLeft, setTimeLeft] = useState(7200); // 2 hours in seconds
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState<{ [key: number]: string }>({});
-  const [flagged, setFlagged] = useState<number[]>([]);
-  const [quizStarted, setQuizStarted] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false); // Add this state
+  const questions = Array.from({ length: 13 }, (_, i) => i + 1);
 
-  // Strict mode restrictions
-  const [fullscreen, setFullscreen] = useState(false);
-
-  const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hours.toString().padStart(2, "0")}:${minutes
-      .toString()
-      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  // Prevent leaving the page
-  const preventNavigation = useCallback(
-    (e: BeforeUnloadEvent) => {
-      if (quizStarted) {
-        e.preventDefault();
-        e.returnValue =
-          "Are you sure you want to leave? Your quiz progress will be lost.";
-        return e.returnValue;
-      }
-    },
-    [quizStarted]
-  );
-
-  // Prevent right-click context menu
-  const preventContextMenu = useCallback(
-    (e: MouseEvent) => {
-      if (quizStarted) {
-        e.preventDefault();
-      }
-    },
-    [quizStarted]
-  );
-
-  // Prevent keyboard shortcuts
-  const preventShortcuts = useCallback(
-    (e: KeyboardEvent) => {
-      if (
-        quizStarted &&
-        (e.ctrlKey ||
-          e.metaKey ||
-          e.key === "F12" ||
-          (e.altKey && e.key === "Tab") ||
-          (e.ctrlKey && e.shiftKey && e.key === "I") ||
-          (e.ctrlKey && e.shiftKey && e.key === "J") ||
-          (e.ctrlKey && e.key === "U"))
-      ) {
-        e.preventDefault();
-      }
-    },
-    [quizStarted]
-  );
-
-  useEffect(() => {
-    if (quizStarted) {
-      // Add event listeners for restrictions
-      window.addEventListener("beforeunload", preventNavigation);
-      window.addEventListener("contextmenu", preventContextMenu);
-      window.addEventListener("keydown", preventShortcuts);
-
-      // Try to enter fullscreen
-      const enterFullscreen = async () => {
-        try {
-          if (document.documentElement.requestFullscreen) {
-            await document.documentElement.requestFullscreen();
-            setFullscreen(true);
-          }
-        } catch (error) {
-          console.log("Fullscreen not supported");
-        }
-      };
-      enterFullscreen();
-
-      return () => {
-        window.removeEventListener("beforeunload", preventNavigation);
-        window.removeEventListener("contextmenu", preventContextMenu);
-        window.removeEventListener("keydown", preventShortcuts);
-      };
-    }
-  }, [quizStarted, preventNavigation, preventContextMenu, preventShortcuts]);
-
-  // Timer countdown
-  useEffect(() => {
-    if (quizStarted && timeLeft > 0) {
-      const timer = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            handleSubmitQuiz();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-      return () => clearInterval(timer);
-    }
-  }, [quizStarted, timeLeft]);
-
-  const handleStartQuiz = () => {
-    setQuizStarted(true);
-  };
-
-  const handleAnswerSelect = (questionIndex: number, answer: string) => {
-    setAnswers((prev) => ({
-      ...prev,
-      [questionIndex]: answer,
-    }));
-  };
-
-  const handleFlagQuestion = (questionIndex: number) => {
-    setFlagged((prev) =>
-      prev.includes(questionIndex)
-        ? prev.filter((q) => q !== questionIndex)
-        : [...prev, questionIndex]
-    );
-  };
-
-  // Add this function to show confirmation modal
-  const handleSubmitClick = () => {
-    setShowConfirmModal(true);
-  };
-
-  // Add this function to handle confirmed submission
-  const handleConfirmSubmit = () => {
-    setShowConfirmModal(false);
-    handleSubmitQuiz();
-  };
-
-  // Add this function to cancel submission
-  const handleCancelSubmit = () => {
-    setShowConfirmModal(false);
-  };
-
-  const handleSubmitQuiz = () => {
-    // Calculate results
-    const totalQuestions = questions.length;
-    const correctAnswers = Object.keys(answers).filter(
-      (qIndex) => answers[parseInt(qIndex)] === "B" // Mock correct answer
-    ).length;
-    const score = Math.round((correctAnswers / totalQuestions) * 100);
-
-    // Prepare result data
-    const result = {
-      score,
-      totalQuestions,
-      correctAnswers,
-      wrongAnswers: totalQuestions - correctAnswers,
-      timeSpent: formatTime(7200 - timeLeft),
-      subject: subjectId || "Mathematics",
-      answers: questions.map((question, index) => ({
-        question: question.text,
-        userAnswer: answers[index] || "Not answered",
-        correctAnswer: "B", // Mock correct answer
-        isCorrect: answers[index] === "B",
-      })),
-    };
-
-    // Exit fullscreen
-    if (document.exitFullscreen) {
-      document.exitFullscreen();
-    }
-
-    // Navigate to results page
-    navigate(`/quiz/${subjectId}/results`, { state: { result } });
-  };
-
-  // Mock questions data
-  const questions = [
-    {
-      id: 1,
-      text: "Berapa panjang sisi AB dari segitiga di bawah ini?",
-      type: "diagram",
-      options: [
-        { id: "A", value: "6√2" },
-        { id: "B", value: "3√2" },
-        { id: "C", value: "12√2" },
-        { id: "D", value: "3" },
-      ],
-    },
-    {
-      id: 2,
-      text: "Jika x² + 3x - 10 = 0, maka nilai x adalah...",
-      type: "text",
-      options: [
-        { id: "A", value: "2 dan -5" },
-        { id: "B", value: "-2 dan 5" },
-        { id: "C", value: "2 dan 5" },
-        { id: "D", value: "-2 dan -5" },
-      ],
-    },
-    // Add more questions as needed
+  const options = [
+    { letter: "A", value: "6√2" },
+    { letter: "B", value: "3√2" },
+    { letter: "C", value: "12√2" },
+    { letter: "D", value: "3" },
   ];
 
-  // Calculate answered questions for confirmation modal
-  const answeredQuestions = Object.keys(answers).length;
-  const totalQuestions = questions.length;
-
-  if (!quizStarted) {
-    return (
-      <div className="quiz-instructions">
-        <div className="instructions-container">
-          <div className="instructions-header">
-            <Lock size={48} />
-            <h1>Quiz Instructions</h1>
-            <p>Mathematics - Final Assessment</p>
-          </div>
-
-          <div className="instructions-content">
-            <div className="warning-section">
-              <AlertTriangle size={24} />
-              <h3>Strict Mode Enabled</h3>
-              <p>
-                This quiz will run in strict mode with the following
-                restrictions:
-              </p>
-            </div>
-
-            <div className="rules-list">
-              <div className="rule-item">
-                <div className="rule-icon">🚫</div>
-                <div className="rule-text">
-                  <strong>Cannot leave the page</strong>
-                  <span>Closing the tab or browser will submit the quiz</span>
-                </div>
-              </div>
-              <div className="rule-item">
-                <div className="rule-icon">🚫</div>
-                <div className="rule-text">
-                  <strong>No new tabs/windows</strong>
-                  <span>Opening new tabs is restricted</span>
-                </div>
-              </div>
-              <div className="rule-item">
-                <div className="rule-icon">🚫</div>
-                <div className="rule-text">
-                  <strong>Right-click disabled</strong>
-                  <span>Context menu is not available</span>
-                </div>
-              </div>
-              <div className="rule-item">
-                <div className="rule-icon">🚫</div>
-                <div className="rule-text">
-                  <strong>Developer tools disabled</strong>
-                  <span>F12 and other dev shortcuts are blocked</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="quiz-info">
-              <div className="info-item">
-                <strong>Duration:</strong>
-                <span>2 Hours</span>
-              </div>
-              <div className="info-item">
-                <strong>Questions:</strong>
-                <span>{questions.length}</span>
-              </div>
-              <div className="info-item">
-                <strong>Subject:</strong>
-                <span>Mathematics</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="instructions-actions">
-            <button
-              className="back-btn"
-              onClick={() => navigate("/quiz-subjects")}
-            >
-              <ChevronLeft size={20} />
-              Back to Subjects
-            </button>
-            <button className="start-btn" onClick={handleStartQuiz}>
-              Start Quiz
-            </button>
-          </div>
-        </div>
-
-        <style>{`
-          .quiz-instructions {
-            min-height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-          }
-
-          .instructions-container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            max-width: 600px;
-            width: 100%;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-          }
-
-          .instructions-header {
-            text-align: center;
-            margin-bottom: 32px;
-          }
-
-          .instructions-header h1 {
-            margin: 16px 0 8px 0;
-            font-size: 2rem;
-            color: #1e293b;
-          }
-
-          .instructions-header p {
-            margin: 0;
-            color: #64748b;
-            font-size: 1.1rem;
-          }
-
-          .warning-section {
-            background: #fef3c7;
-            border: 1px solid #f59e0b;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 24px;
-            text-align: center;
-          }
-
-          .warning-section h3 {
-            margin: 8px 0;
-            color: #d97706;
-          }
-
-          .rules-list {
-            margin-bottom: 32px;
-          }
-
-          .rule-item {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            padding: 16px 0;
-            border-bottom: 1px solid #e2e8f0;
-          }
-
-          .rule-item:last-child {
-            border-bottom: none;
-          }
-
-          .rule-icon {
-            font-size: 1.2rem;
-          }
-
-          .rule-text {
-            flex: 1;
-          }
-
-          .rule-text strong {
-            display: block;
-            color: #1e293b;
-            margin-bottom: 4px;
-          }
-
-          .rule-text span {
-            color: #64748b;
-            font-size: 0.9rem;
-          }
-
-          .quiz-info {
-            background: #f8fafc;
-            border-radius: 12px;
-            padding: 20px;
-          }
-
-          .info-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-          }
-
-          .info-item:not(:last-child) {
-            border-bottom: 1px solid #e2e8f0;
-          }
-
-          .instructions-actions {
-            display: flex;
-            gap: 16px;
-            margin-top: 32px;
-          }
-
-          .back-btn {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            background: #f1f5f9;
-            border: 1px solid #e2e8f0;
-            color: #64748b;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-          }
-
-          .back-btn:hover {
-            background: #e2e8f0;
-          }
-
-          .start-btn {
-            flex: 2;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-          }
-
-          .start-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-          }
-        `}</style>
-      </div>
-    );
-  }
-
   return (
-    <div className="quiz-dashboard">
-      {/* Header */}
-      <header className="quiz-header">
-        <div className="header-left">
-          <div className="quiz-logo">Q</div>
-          <div className="quiz-info">
-            <h1>Mathematics - Final Assessment</h1>
-            <p>
-              Question {currentQuestion + 1} of {questions.length}
-            </p>
+    <div className="page">
+      <div className="exam-wrapper">
+        {/* Header */}
+        <header className="header">
+          <div className="header-left">
+            <div className="logo">S</div>
+            <h1>Halaman Ujian - Penilaian Akhir Semester Matematika</h1>
           </div>
-        </div>
-
-        <div className="header-right">
-          <div className="timer-display">
-            <Clock size={20} />
-            <span className="timer">{formatTime(timeLeft)}</span>
+          <div className="timer">
+            Waktu tersisa <strong>01:50:29</strong>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Progress Navigation */}
-      <div className="progress-nav">
-        <div className="question-grid">
-          {questions.map((_, index) => (
-            <button
-              key={index}
-              className={`question-indicator ${
-                index === currentQuestion ? "current" : ""
-              } ${answers[index] ? "answered" : ""} ${
-                flagged.includes(index) ? "flagged" : ""
-              }`}
-              onClick={() => setCurrentQuestion(index)}
-            >
-              {index + 1}
-              {flagged.includes(index) && <Flag size={12} />}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="quiz-content">
-        {/* Question Area */}
-        <div className="question-area">
-          <div className="question-header">
-            <h2>{questions[currentQuestion].text}</h2>
-            <button
-              className={`flag-btn ${
-                flagged.includes(currentQuestion) ? "flagged" : ""
-              }`}
-              onClick={() => handleFlagQuestion(currentQuestion)}
-            >
-              <Flag size={16} />
-              {flagged.includes(currentQuestion) ? "Unflag" : "Flag Question"}
-            </button>
-          </div>
-
-          {questions[currentQuestion].type === "diagram" && (
-            <div className="diagram-container">
-              <svg viewBox="0 0 300 200" className="triangle-svg">
-                <line
-                  x1="50"
-                  y1="150"
-                  x2="250"
-                  y2="150"
-                  stroke="black"
-                  strokeWidth="2"
-                />
-                <line
-                  x1="50"
-                  y1="150"
-                  x2="150"
-                  y2="50"
-                  stroke="black"
-                  strokeWidth="2"
-                />
-                <line
-                  x1="150"
-                  y1="50"
-                  x2="250"
-                  y2="150"
-                  stroke="black"
-                  strokeWidth="2"
-                />
-                <text x="45" y="170" className="label">
-                  A
-                </text>
-                <text x="255" y="170" className="label">
-                  B
-                </text>
-                <text x="145" y="40" className="label">
-                  C
-                </text>
-                <text x="80" y="145" className="angle">
-                  45°
-                </text>
-                <text x="210" y="145" className="angle">
-                  75°
-                </text>
-                <text x="195" y="100" className="side-label">
-                  √12
-                </text>
-              </svg>
+        {/* Main Layout */}
+        <div className="main-layout">
+          {/* Left Sidebar */}
+          <aside className="sidebar">
+            <div className="question-palette">
+              {questions.map((n) => (
+                <button
+                  key={n}
+                  className={`qbtn ${n === 7 ? "current" : ""} ${
+                    n === 5 ? "answered" : ""
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
             </div>
-          )}
+            <button className="arrow-btn">&gt;</button>
+          </aside>
 
-          <div className="options-grid">
-            {questions[currentQuestion].options.map((option) => (
-              <button
-                key={option.id}
-                className={`option-btn ${
-                  answers[currentQuestion] === option.id ? "selected" : ""
-                }`}
-                onClick={() => handleAnswerSelect(currentQuestion, option.id)}
-              >
-                <span className="option-letter">{option.id}</span>
-                <span className="option-value">{option.value}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+          {/* Question Area */}
+          <main className="question-area">
+            <div className="question-box">
+              <h2 className="question-title">
+                Berapa panjang sisi AB dari segitiga di bawah ini?
+              </h2>
 
-        {/* Navigation Controls */}
-        <div className="navigation-controls">
-          <button
-            className="nav-btn prev"
-            onClick={() => setCurrentQuestion((prev) => Math.max(0, prev - 1))}
-            disabled={currentQuestion === 0}
-          >
-            <ChevronLeft size={20} />
-            Previous
-          </button>
+              {/* Triangle */}
+              <div className="triangle-wrapper">
+                <svg width="320" height="220" viewBox="0 0 320 220">
+                  <polygon
+                    points="40,180 280,180 160,40"
+                    fill="none"
+                    stroke="#222"
+                    strokeWidth="2"
+                  />
+                  <text x="155" y="30" fontSize="16" textAnchor="middle">
+                    C
+                  </text>
+                  <text x="30" y="195" fontSize="16">
+                    A
+                  </text>
+                  <text x="290" y="195" fontSize="16">
+                    B
+                  </text>
+                  <text x="90" y="170" fontSize="14">
+                    45°
+                  </text>
+                  <text x="230" y="170" fontSize="14">
+                    75°
+                  </text>
+                  <text x="230" y="100" fontSize="18" fontWeight="bold">
+                    √12
+                  </text>
+                </svg>
+              </div>
 
-          <div className="nav-center">
-            <span>
-              Question {currentQuestion + 1} of {questions.length}
-            </span>
-          </div>
+              {/* Options */}
+              <div className="options">
+                {options.map((opt) => (
+                  <button
+                    key={opt.letter}
+                    className={`option ${
+                      selected === opt.letter ? "selected" : ""
+                    }`}
+                    onClick={() => setSelected(opt.letter)}
+                  >
+                    <span className="letter-circle">{opt.letter}</span>
+                    <span className="option-text">{opt.value}</span>
+                  </button>
+                ))}
+              </div>
 
-          {currentQuestion === questions.length - 1 ? (
-            <button className="nav-btn submit" onClick={handleSubmitClick}>
-              Submit Quiz
-            </button>
-          ) : (
-            <button
-              className="nav-btn next"
-              onClick={() =>
-                setCurrentQuestion((prev) =>
-                  Math.min(questions.length - 1, prev + 1)
-                )
-              }
-            >
-              Next
-              <ChevronRight size={20} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Confirmation Modal */}
-      {showConfirmModal && (
-        <div className="confirmation-modal">
-          <div className="modal-overlay" onClick={handleCancelSubmit}></div>
-          <div className="modal-content">
-            <div className="modal-header">
-              <AlertCircle size={24} className="modal-icon" />
-              <h3>Confirm Submission</h3>
-            </div>
-
-            <div className="modal-body">
-              <p>Are you sure you want to submit your quiz?</p>
-              <div className="submission-stats">
-                <div className="stat-item">
-                  <span className="stat-label">Questions Answered:</span>
-                  <span className="stat-value">
-                    {answeredQuestions}/{totalQuestions}
-                  </span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Flagged Questions:</span>
-                  <span className="stat-value">{flagged.length}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Time Remaining:</span>
-                  <span className="stat-value">{formatTime(timeLeft)}</span>
+              {/* Bottom Actions */}
+              <div className="bottom-actions">
+                <button className="flag-btn">Flag Tandai soal</button>
+                <div className="nav-btns">
+                  <button className="prev-btn">← Sebelumnya</button>
+                  <button className="next-btn">Selanjutnya →</button>
                 </div>
               </div>
-              <p className="warning-text">
-                Once submitted, you cannot change your answers.
-              </p>
             </div>
-
-            <div className="modal-actions">
-              <button className="modal-btn cancel" onClick={handleCancelSubmit}>
-                Cancel
-              </button>
-              <button
-                className="modal-btn confirm"
-                onClick={handleConfirmSubmit}
-              >
-                Yes, Submit Quiz
-              </button>
-            </div>
-          </div>
+          </main>
         </div>
-      )}
+      </div>
 
-      <style>{`
-        .quiz-dashboard {
-          min-height: 100vh;
-          background: #f8fafc;
-          font-family: 'Inter', sans-serif;
+      {/* Inline CSS */}
+      <style jsx>{`
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
         }
 
-        .quiz-header {
-          background: white;
-          border-bottom: 1px solid #e2e8f0;
-          padding: 16px 32px;
+        .page {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          background: linear-gradient(to bottom, #ffe4b5, #ffb347);
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+            sans-serif;
+        }
+
+        .exam-wrapper {
+          width: 1100px;
+          height: 680px;
+          background: #fff;
+          border-radius: 16px;
+          overflow: hidden;
+          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+          display: flex;
+          flex-direction: column;
+        }
+
+        .header {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          padding: 20px 30px;
+          border-bottom: 1px solid #eee;
+          background: white;
         }
 
         .header-left {
@@ -681,458 +157,228 @@ const QuizDashboard: React.FC = () => {
           gap: 16px;
         }
 
-        .quiz-logo {
-          width: 40px;
-          height: 40px;
-          background: linear-gradient(135deg, #667eea, #764ba2);
-          border-radius: 8px;
+        .logo {
+          width: 44px;
+          height: 44px;
+          background: #007bff;
+          color: white;
+          font-weight: bold;
+          font-size: 24px;
+          border-radius: 12px;
           display: flex;
           align-items: center;
           justify-content: center;
-          color: white;
-          font-weight: bold;
-          font-size: 1.2rem;
         }
 
-        .quiz-info h1 {
-          margin: 0;
-          font-size: 1.25rem;
-          color: #1e293b;
+        .header h1 {
+          font-size: 17px;
+          font-weight: 500;
+          color: #333;
         }
 
-        .quiz-info p {
-          margin: 4px 0 0 0;
-          color: #64748b;
-          font-size: 0.9rem;
-        }
-
-        .timer-display {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          background: #fef2f2;
-          padding: 8px 16px;
-          border-radius: 20px;
-          color: #dc2626;
+        .timer {
+          background: #ffe5e5;
+          color: #e91e1e;
+          padding: 10px 20px;
+          border-radius: 30px;
+          font-size: 15px;
           font-weight: 600;
         }
 
-        .progress-nav {
-          background: white;
-          border-bottom: 1px solid #e2e8f0;
-          padding: 16px 32px;
-          overflow-x: auto;
+        .main-layout {
+          display: flex;
+          flex: 1;
         }
 
-        .question-grid {
+        .sidebar {
+          width: 90px;
+          background: #f8f9fc;
+          border-right: 1px solid #eee;
           display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-        }
-
-        .question-indicator {
-          width: 40px;
-          height: 40px;
-          border: 2px solid #e2e8f0;
-          border-radius: 8px;
-          display: flex;
+          flex-direction: column;
           align-items: center;
-          justify-content: center;
+          padding-top: 30px;
+        }
+
+        .question-palette {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+
+        .qbtn {
+          width: 42px;
+          height: 42px;
+          border: 2px solid #ddd;
           background: white;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          font-weight: 500;
-          position: relative;
-        }
-
-        .question-indicator:hover {
-          border-color: #667eea;
-        }
-
-        .question-indicator.current {
-          border-color: #667eea;
-          background: #667eea;
-          color: white;
-        }
-
-        .question-indicator.answered {
-          background: #10b981;
-          border-color: #10b981;
-          color: white;
-        }
-
-        .question-indicator.flagged {
-          border-color: #f59e0b;
-        }
-
-        .question-indicator.flagged::after {
-          content: '';
-          position: absolute;
-          top: 2px;
-          right: 2px;
-          width: 8px;
-          height: 8px;
-          background: #f59e0b;
           border-radius: 50%;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
         }
 
-        .quiz-content {
-          max-width: 1000px;
-          margin: 0 auto;
-          padding: 32px;
+        .qbtn:hover {
+          border-color: #007bff;
+        }
+
+        .qbtn.current {
+          background: #007bff;
+          color: white;
+          border-color: #007bff;
+        }
+
+        .qbtn.answered {
+          background: #e1f5fe;
+          color: #007bff;
+          border-color: #81d4fa;
+        }
+
+        .arrow-btn {
+          margin-top: 30px;
+          background: none;
+          border: none;
+          font-size: 28px;
+          color: #aaa;
+          cursor: pointer;
         }
 
         .question-area {
-          background: white;
-          border-radius: 16px;
-          padding: 32px;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-          margin-bottom: 24px;
+          flex: 1;
+          background: #fdfdfd;
+          display: flex;
+          justify-content: center;
+          align-items: flex-start;
+          padding: 40px;
         }
 
-        .question-header {
+        .question-box {
+          width: 100%;
+          max-width: 620px;
+        }
+
+        .question-title {
+          font-size: 19px;
+          text-align: center;
+          color: #222;
+          margin-bottom: 40px;
+          line-height: 1.5;
+        }
+
+        .triangle-wrapper {
+          background: #f9f9f9;
+          border: 2px dashed #ccc;
+          border-radius: 12px;
+          padding: 30px;
+          text-align: center;
+          margin-bottom: 40px;
+        }
+
+        .options {
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+          margin-bottom: 50px;
+        }
+
+        .option {
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          padding: 20px 24px;
+          background: #f8f9fc;
+          border-radius: 12px;
+          border: 2px solid transparent;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 18px;
+        }
+
+        .option:hover {
+          background: #edf2ff;
+        }
+
+        .option.selected {
+          background: #007bff;
+          color: white;
+          border-color: #007bff;
+        }
+
+        .letter-circle {
+          width: 42px;
+          height: 42px;
+          background: white;
+          color: #007bff;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: bold;
+          font-size: 16px;
+          flex-shrink: 0;
+        }
+
+        .option.selected .letter-circle {
+          background: #0056b3;
+          color: white;
+        }
+
+        .option-text {
+          font-weight: 500;
+        }
+
+        .bottom-actions {
           display: flex;
           justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 24px;
-        }
-
-        .question-header h2 {
-          margin: 0;
-          font-size: 1.5rem;
-          color: #1e293b;
-          line-height: 1.4;
-          flex: 1;
+          align-items: center;
         }
 
         .flag-btn {
           display: flex;
           align-items: center;
           gap: 8px;
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          color: #64748b;
-          padding: 8px 16px;
+          background: white;
+          border: 1px solid #ddd;
+          padding: 10px 16px;
           border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          white-space: nowrap;
-        }
-
-        .flag-btn:hover {
-          background: #f1f5f9;
-        }
-
-        .flag-btn.flagged {
-          background: #fef3c7;
-          border-color: #f59e0b;
-          color: #d97706;
-        }
-
-        .diagram-container {
-          margin: 24px 0;
-          text-align: center;
-        }
-
-        .triangle-svg {
-          max-width: 400px;
-          height: auto;
-        }
-
-        .label, .angle, .side-label {
-          font-family: 'Inter', sans-serif;
           font-size: 14px;
-          font-weight: 500;
-        }
-
-        .options-grid {
-          display: grid;
-          gap: 12px;
-          margin-top: 24px;
-        }
-
-        .option-btn {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          padding: 16px 20px;
-          border: 2px solid #e2e8f0;
-          border-radius: 12px;
-          background: white;
           cursor: pointer;
-          transition: all 0.3s ease;
-          text-align: left;
         }
 
-        .option-btn:hover {
-          border-color: #667eea;
-          background: #f8fafc;
+        .flag-btn::before {
+          content: "Flag";
+          font-size: 18px;
         }
 
-        .option-btn.selected {
-          border-color: #667eea;
-          background: #eff6ff;
-        }
-
-        .option-letter {
-          width: 32px;
-          height: 32px;
-          border: 2px solid #64748b;
-          border-radius: 6px;
+        .nav-btns {
           display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 600;
-          color: #64748b;
-          transition: all 0.3s ease;
+          gap: 12px;
         }
 
-        .option-btn.selected .option-letter {
-          border-color: #667eea;
-          background: #667eea;
-          color: white;
-        }
-
-        .option-value {
-          font-size: 1rem;
-          color: #1e293b;
-          font-weight: 500;
-        }
-
-        .navigation-controls {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          background: white;
-          padding: 20px 32px;
-          border-radius: 16px;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
-        .nav-btn {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 12px 24px;
-          border: 1px solid #e2e8f0;
+        .prev-btn,
+        .next-btn {
+          padding: 12px 28px;
           border-radius: 8px;
-          background: white;
-          color: #64748b;
+          font-size: 15px;
           cursor: pointer;
-          transition: all 0.3s ease;
-          font-weight: 500;
-        }
-
-        .nav-btn:hover:not(:disabled) {
-          background: #f8fafc;
-          border-color: #667eea;
-          color: #667eea;
-        }
-
-        .nav-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .nav-btn.submit {
-          background: #10b981;
-          border-color: #10b981;
-          color: white;
-        }
-
-        .nav-btn.submit:hover {
-          background: #059669;
-        }
-
-        .nav-center {
-          color: #64748b;
-          font-weight: 500;
-        }
-
-        /* Confirmation Modal Styles */
-        .confirmation-modal {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-          padding: 20px;
-        }
-
-        .modal-overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.5);
-          backdrop-filter: blur(4px);
-        }
-
-        .modal-content {
-          position: relative;
-          background: white;
-          border-radius: 16px;
-          padding: 32px;
-          max-width: 500px;
-          width: 100%;
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-          animation: modalSlideIn 0.3s ease;
-        }
-
-        @keyframes modalSlideIn {
-          from {
-            opacity: 0;
-            transform: scale(0.9) translateY(-20px);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
-        }
-
-        .modal-header {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 20px;
-        }
-
-        .modal-icon {
-          color: #f59e0b;
-        }
-
-        .modal-header h3 {
-          margin: 0;
-          font-size: 1.5rem;
-          color: #1e293b;
-        }
-
-        .modal-body {
-          margin-bottom: 24px;
-        }
-
-        .modal-body p {
-          margin: 0 0 16px 0;
-          color: #64748b;
-          line-height: 1.5;
-        }
-
-        .submission-stats {
-          background: #f8fafc;
-          border-radius: 8px;
-          padding: 16px;
-          margin-bottom: 16px;
-        }
-
-        .stat-item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 8px 0;
-        }
-
-        .stat-item:not(:last-child) {
-          border-bottom: 1px solid #e2e8f0;
-        }
-
-        .stat-label {
-          color: #64748b;
-          font-weight: 500;
-        }
-
-        .stat-value {
-          color: #1e293b;
-          font-weight: 600;
-        }
-
-        .warning-text {
-          color: #dc2626 !important;
-          font-weight: 500;
-          background: #fef2f2;
-          padding: 12px;
-          border-radius: 8px;
-          border-left: 4px solid #dc2626;
-        }
-
-        .modal-actions {
-          display: flex;
-          gap: 12px;
-        }
-
-        .modal-btn {
-          flex: 1;
-          padding: 12px 24px;
           border: none;
-          border-radius: 8px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.3s ease;
         }
 
-        .modal-btn.cancel {
-          background: #f1f5f9;
-          color: #64748b;
-          border: 1px solid #e2e8f0;
+        .prev-btn {
+          background: #f8f9fc;
+          color: #555;
+          border: 1px solid #ddd;
         }
 
-        .modal-btn.cancel:hover {
-          background: #e2e8f0;
-        }
-
-        .modal-btn.confirm {
-          background: #dc2626;
+        .next-btn {
+          background: #007bff;
           color: white;
         }
 
-        .modal-btn.confirm:hover {
-          background: #b91c1c;
-        }
-
-        @media (max-width: 768px) {
-          .quiz-header {
-            padding: 16px;
-            flex-direction: column;
-            gap: 16px;
-          }
-
-          .quiz-content {
-            padding: 16px;
-          }
-
-          .question-area {
-            padding: 24px;
-          }
-
-          .question-header {
-            flex-direction: column;
-            gap: 16px;
-          }
-
-          .navigation-controls {
-            flex-direction: column;
-            gap: 16px;
-          }
-
-          .nav-center {
-            order: -1;
-          }
-
-          .modal-actions {
-            flex-direction: column;
-          }
-
-          .modal-content {
-            padding: 24px;
-          }
+        .next-btn:hover {
+          background: #0056b3;
         }
       `}</style>
     </div>
   );
-};
-
-export default QuizDashboard;
+}
