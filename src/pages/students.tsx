@@ -1126,6 +1126,9 @@ const StrictQuizInterface: React.FC<{
           font-family: 'Inter', sans-serif;
           z-index: 2000;
         }
+        .modal-btn confirm{
+          background-color:#4299e1;
+        }
         .violation-warning {
           position: fixed;
           top: 0;
@@ -1266,7 +1269,8 @@ const StrictQuizInterface: React.FC<{
           padding: 32px;
           margin-bottom: 24px;
           flex: 1;
-          overflow-y: auto;
+          overfloww:hidden;
+          overflow:auto;  
           border: 2px solid #334155;
         }
         .question-header {
@@ -1424,6 +1428,7 @@ const StrictQuizInterface: React.FC<{
           padding: 32px;
           max-width: 500px;
           width: 100%;
+          height:250px;
           box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
           animation: modalSlideIn 0.3s ease;
         }

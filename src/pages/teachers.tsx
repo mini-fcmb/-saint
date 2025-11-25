@@ -1838,7 +1838,11 @@ const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
               <Plus size={16} />
               Add Another Question
             </button>
-            <button className="action-btn save" onClick={handleSave}>
+            <button
+              className="action-btn save"
+              onClick={handleSave}
+              style={{ backgroundColor: "#4299e1 !important" }}
+            >
               {editingQuiz ? "Update Questions" : "Save Questions"} (
               {questions.length} questions)
             </button>
@@ -3848,7 +3852,7 @@ const TeacherDashboard: React.FC = () => {
           font-weight: 600;
         }
         .calendar-day.today.exam {
-          background: #4f46e5;
+          background: #4299e1;
           color: #fff;
         }
         .profile-card {
