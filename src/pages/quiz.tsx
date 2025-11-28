@@ -113,7 +113,7 @@ export default function QuizDashboard() {
       </div>
 
       {/* Inline CSS */}
-      <style jsx>{`
+      <style>{`
         * {
           margin: 0;
           padding: 0;
