@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import "../styles/home.css";
 import { Link } from "react-router-dom";
 import logo from "../assets/logo.png";
+import { Menu, X } from "lucide-react"; // You'll need to install lucide-react: npm install lucide-react
 
 const images = {
   hero: "https://picsum.photos/seed/sxaint-hero/1200/600",
@@ -26,6 +27,7 @@ const directions = [
 const GetStartedDashboard: React.FC = () => {
   const [currentScene, setCurrentScene] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const scenes = [
     {
@@ -82,7 +84,7 @@ const GetStartedDashboard: React.FC = () => {
     directions[Math.floor(Math.random() * directions.length)];
 
   useEffect(() => {
-    const duration = currentScene === scenes.length - 1 ? 8000 : 4000; // CTA stays longer
+    const duration = currentScene === scenes.length - 1 ? 8000 : 4000;
     const timer = setTimeout(() => {
       const next = (currentScene + 1) % scenes.length;
       setCurrentScene(next);
@@ -101,37 +103,68 @@ const GetStartedDashboard: React.FC = () => {
       <header className="fixed-header">
         <div className="header-content">
           <div className="logo-section">
-            {/* ← DROP YOUR LOGO HERE */}
-            <div className="logo-placeholder">
-              <img
-                src={logo}
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  objectFit: "contain",
-                  borderRadius: "50%",
-                  display: "block",
-                }}
-              />
-            </div>
+            <img src={logo} className="logo" alt="SXaint Logo" />
             <h1 className="site-name">SXaint</h1>
           </div>
-          <div className="progress-section">
-            <div className="progress-bar">
-              <div
-                className="progress-fill"
-                style={{ width: `${progress}%` }}
-              />
+
+          {/* Desktop Navigation */}
+          <div className="nav-section desktop-nav">
+            <div className="progress-section">
+              <div className="progress-wrapper">
+                <div className="progress-bar">
+                  <div
+                    className="progress-fill"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <div className="progress-dots">{progressDots}</div>
+              </div>
+              <div className="auth-buttons">
+                <Link to="/login">
+                  <button className="auth-btn login-btn">Login</button>
+                </Link>
+                <Link to="/signup">
+                  <button className="auth-btn signup-btn">Get Started</button>
+                </Link>
+              </div>
             </div>
-            <div className="progress-dots">{progressDots}</div>
-            <Link to={"/login"}>
-              <button className="restart-btn">Login</button>
-            </Link>
-            <Link to={"/signup"}>
-              <button className="getstarted-btn">Get Started</button>
-            </Link>
           </div>
+
+          {/* Mobile Menu Button */}
+          <button
+            className="mobile-menu-btn"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          >
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
         </div>
+
+        {/* Mobile Menu Overlay */}
+        {isMobileMenuOpen && (
+          <div className="mobile-menu-overlay">
+            <div className="mobile-menu-content">
+              <div className="mobile-progress">
+                <div className="progress-bar">
+                  <div
+                    className="progress-fill"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <div className="progress-dots mobile-dots">{progressDots}</div>
+              </div>
+              <div className="mobile-auth-buttons">
+                <Link to="/login" onClick={() => setIsMobileMenuOpen(false)}>
+                  <button className="mobile-auth-btn login-btn">Login</button>
+                </Link>
+                <Link to="/signup" onClick={() => setIsMobileMenuOpen(false)}>
+                  <button className="mobile-auth-btn signup-btn">
+                    Get Started
+                  </button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Main Animated Content */}
@@ -173,7 +206,6 @@ const GetStartedDashboard: React.FC = () => {
                   {index === scenes.length - 1 && (
                     <div className="cta-section">
                       <Link to="/signup">
-                        {" "}
                         <button className="cta-btn">Get Started Now</button>
                       </Link>
                       <p className="cta-subtext">
