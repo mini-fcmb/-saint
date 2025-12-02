@@ -5,11 +5,11 @@ import logo from "../assets/logo.png";
 
 const images = {
   hero: "https://picsum.photos/seed/sxaint-hero/1200/600",
-  proctoring: "https://picsum.photos/seed/sxaint-proctor/800/500",
+  proctoring: "/images/protocoling.jpg",
   grading: "https://picsum.photos/seed/sxaint-grade/800/500",
-  questionBank: "https://picsum.photos/seed/sxaint-bank/800/500",
-  mobileTest: "https://picsum.photos/seed/sxaint-mobile/800/500",
-  analytics: "https://picsum.photos/seed/sxaint-analytics/800/500",
+  questionBank: "/images/question_bank.jpg",
+  mobileTest: "/images/mobile_test.jpg",
+  analytics: "/images/analytics.png",
 };
 
 const directions = [
