@@ -35,7 +35,9 @@
   color: #fff;
   box-shadow: 0 100px 1000px rgba(0, 0, 0, 0.3);
   max-height: 90vh;                 /* More room */
-  overflow-y: auto;                 /* Scroll only if needed */
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;/* Scroll only if needed */
   -webkit-overflow-scrolling: touch;
 }
 
