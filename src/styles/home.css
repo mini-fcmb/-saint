@@ -328,7 +328,6 @@ body {
   .mobile-menu-overlay {
         
         top: 90 !important;
-        left: 10 !important;
         right: 0 !important;
         background: rgba(255, 255, 255, .98)!important;
         backdrop-filter: blur(50px) !important;
