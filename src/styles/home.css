@@ -339,18 +339,17 @@ body {
 }
 @media(max-width: 425px){
  .mobile-menu-overlay {
-        display: block;
-        position: fixed;
-        top: 70px;
-        left: 0;
-        right: 0;
-        background: rgba(255, 255, 255, .98);
-        -webkit-backdrop-filter: blur(10px);
-        backdrop-filter: blur(10px);
-        border-bottom: 1px solid #e2e8f0;
-        z-index: 999;
-        padding: 1.5rem;
-        animation: slideDown .3s 
-ease-out;
+        display: block !important;
+        position: fixed !important;
+        top: 70px !important;
+        left: 0 !important;
+        right: 0 !important;
+        background: rgba(255, 255, 255, .98) !important;
+        -webkit-backdrop-filter: blur(10px) !important;
+        backdrop-filter: blur(10px) !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        z-index: 999 !important;
+        padding: 1.5rem !important;
+        animation: slideDown .3s ease-out !important;
     }
   }
