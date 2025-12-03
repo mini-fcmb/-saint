@@ -338,6 +338,7 @@ body {
     }
 }
 @media(max-width: 425px){
+  /* Your existing styles */
   .main-content {
     padding: 1.5rem;
   }
@@ -358,13 +359,26 @@ body {
     padding: 1.2rem 2.4rem;
     font-size: 1.3rem;
   }
-}
-.mobile-menu-overlay {
-        top: 70 !important;
-        left: 0 !important;
-        right: 0 !important;
-        background: rgba(255, 255, 255, .98)!important;
-        backdrop-filter: blur(50px) !important;
-        animation: slideDown 1s ease-out !important;
-        background-color: #fff !important;
-}
+
+  .mobile-menu-overlay {
+    top: 70px !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    width: 100vw !important;
+    position: fixed !important;
+    background: rgba(255, 255, 255, .98) !important;
+    backdrop-filter: blur(50px) !important;
+    animation: slideDown 1s ease-out !important;
+    background-color: #fff !important;
+    
+    /* Center content horizontally */
+    text-align: center !important;
+  }
+
+  /* Center all direct children */
+  .mobile-menu-overlay > * {
+    margin-left: auto !important;
+    margin-right: auto !important;
+    text-align: center !important;
+  }
