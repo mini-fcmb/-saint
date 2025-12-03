@@ -328,7 +328,7 @@ body {
   .mobile-menu-overlay {
         
         top: 90 !important;
-        right: 0 !important;
+        right: 50px !important;
         background: rgba(255, 255, 255, .98)!important;
         backdrop-filter: blur(50px) !important;
         animation: slideDown 1s ease-out !important;
