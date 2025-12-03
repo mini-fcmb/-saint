@@ -325,4 +325,20 @@ body {
     padding: 1.2rem 2.4rem;
     font-size: 1.3rem;
   }
+  .mobile-menu-overlay {
+        display: block !important;
+        position: fixed!important;
+        top: 90 !important;
+        left: 10 !important;
+        right: 0 !important;
+        background: rgba(255, 255, 255, .98)!important;
+        -webkit-backdrop-filter: blur(10px)!important;
+        backdrop-filter: blur(100px) !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        z-index: 999 !important;
+        padding: 1.5rem !important;
+        animation: slideDown 1s ease-out !important;
+        background-color: #FFF !important;
+        width: 30% !important;
+    }
 }
