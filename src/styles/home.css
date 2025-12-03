@@ -337,3 +337,34 @@ body {
         width: 30% !important;
     }
 }
+@media(max-width: 425px){
+  .main-content {
+    padding: 1.5rem;
+  }
+  .scene-wrapper {
+    height: 75vh;
+    border-radius: 16px;
+  }
+  .scene {
+    padding: 2rem 1rem;
+  }
+  .scene-title {
+    font-size: 2.3rem;
+  }
+  .scene-subtitle {
+    font-size: 1.3rem;
+  }
+  .cta-btn {
+    padding: 1.2rem 2.4rem;
+    font-size: 1.3rem;
+  }
+}
+.mobile-menu-overlay {
+        top: 70 !important;
+        left: 0 !important;
+        right: 0 !important;
+        background: rgba(255, 255, 255, .98)!important;
+        backdrop-filter: blur(50px) !important;
+        animation: slideDown 1s ease-out !important;
+        background-color: #fff !important;
+}
