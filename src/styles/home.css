@@ -343,7 +343,7 @@ body {
     min-width: 200px !important;
     max-width: 300px !important;
     z-index: 999 !important;
-    height: calc(100vh - 90px) !important;
+    height: fit-content !important;
     overflow-y: auto !important;
     padding: 1.5rem !important;
     border-left: 1px solid #e2e8f0 !important;
