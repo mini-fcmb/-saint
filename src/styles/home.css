@@ -321,11 +321,11 @@ body {
    
   }
   .progress-bar {
-  width: 100px;
-  height: 5px;
-  background: #e2e8f0;
-  border-radius: 3px;
-  overflow: hidden;
+  width: 100% !important;
+  height: 5px !important;
+  background: #e2e8f0 !important;
+  border-radius: 3px !important;
+  overflow: hidden !important;
 }
   
   .mobile-auth-btn {
