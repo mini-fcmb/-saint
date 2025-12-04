@@ -398,7 +398,6 @@ body {
     align-items: center !important;
     justify-content: center !important;
     gap: 0.5rem !important;
-    width: 100% !important;
     position: relative;
      display: flex !important;
   flex-direction: column !important;
@@ -411,7 +410,7 @@ display:none;
   
   
   .mobile-auth-btn {
-    width: 100% !important;
+    width: 10000px !important;
     text-align: center !important;
     display: block !important;
     padding: 0.5rem 1rem !important;
@@ -460,6 +459,7 @@ display:none;
     overflow-y: auto !important;
     border-left: none !important;
     box-shadow: none !important;
+    border-radius:none !important;
   }
 }
 
