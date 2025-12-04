@@ -338,6 +338,7 @@ body {
     text-decoration: none;
     margin-bottom: .5rem !important;
      margin-top: .5rem !important;
+    height: 30px;
   }
   
   .scene-wrapper {
@@ -380,6 +381,7 @@ body {
     border-left: 1px solid #e2e8f0 !important;
     border-bottom: 1px solid #e2e8f0 !important;
     box-shadow: -5px 5px 20px rgba(0, 0, 0, 0.1) !important;
+    border-radius:20px;
   }
 }
 
