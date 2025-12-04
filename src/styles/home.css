@@ -390,6 +390,10 @@ body {
     justify-content: center !important;
     gap: 0.5rem !important;
     width: 100% !important;
+    position: relative;
+     display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
    
   }
   
@@ -435,13 +439,13 @@ body {
     min-width: 100% !important;
     background: rgba(255, 255, 255, 0.98) !important;
     -webkit-backdrop-filter: blur(10px) !important;
-    backdrop-filter: blur(10px) !important;
+    backdrop-filter: blur(40px) !important;
     animation: slideDown 0.3s ease-out !important;
-    background-color: #fff !important;
+    background-color: rgba(0, 0, 0, .1) !important;
     border-bottom: 1px solid #e2e8f0 !important;
     z-index: 999 !important;
     padding: 1.5rem !important;
-    height: calc(100vh - 70px) !important;
+    height: fit-content !important;
     overflow-y: auto !important;
     border-left: none !important;
     box-shadow: none !important;
