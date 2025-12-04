@@ -320,6 +320,13 @@ body {
     width: 100% !important;
    
   }
+  .progress-bar {
+  width: 100px;
+  height: 5px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
   
   .mobile-auth-btn {
     width: 100% !important;
@@ -355,7 +362,7 @@ body {
   .mobile-menu-overlay {
     position: fixed !important;
     display: block !important;
-    top: 90px !important;
+    top: 80px !important;
     left: auto !important;
     right: 0 !important;
     background: rgba(255, 255, 255, 0.98) !important;
@@ -439,7 +446,7 @@ body {
     min-width: 100% !important;
     background: rgba(255, 255, 255, 0.98) !important;
     -webkit-backdrop-filter: blur(10px) !important;
-    backdrop-filter: blur(40px) !important;
+    backdrop-filter: blur(50px) !important;
     animation: slideDown 0.3s ease-out !important;
     background-color: rgba(0, 0, 0, .1) !important;
     border-bottom: 1px solid #e2e8f0 !important;
