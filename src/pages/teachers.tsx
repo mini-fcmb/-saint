@@ -4979,7 +4979,7 @@ const TeacherDashboard: React.FC = () => {
           }
           .main-content {
             padding: 32px !important;
-          
+          }
           .profile-card {
             width: 280px !important;
             padding: 20px !important;
