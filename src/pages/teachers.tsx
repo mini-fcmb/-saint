@@ -2801,9 +2801,6 @@ const TeacherDashboard: React.FC = () => {
               </div>
             </div>
           </div>
-          <button className="profile-arrow">
-            <ArrowRight size={18} />
-          </button>
         </div>
       </div>
 
