@@ -2013,6 +2013,29 @@ const TeacherDashboard: React.FC = () => {
 
     initializeWorkingHours();
   }, []);
+  //handle scroll
+  useEffect(() => {
+  let lastScroll = window.scrollY;
+
+  const handleScroll = () => {
+    const card = document.querySelector(".profile-card");
+    if (!card) return;
+
+    if (window.scrollY > lastScroll) {
+      // scrolling down → hide
+      card.classList.add("hide-card");
+    } else {
+      // scrolling up → show
+      card.classList.remove("hide-card");
+    }
+
+    lastScroll = window.scrollY;
+  };
+
+  window.addEventListener("scroll", handleScroll);
+  return () => window.removeEventListener("scroll", handleScroll);
+}, []);
+
 
   // Load quizzes from localStorage
   useEffect(() => {
@@ -4945,7 +4968,7 @@ const TeacherDashboard: React.FC = () => {
         }
 
         /* Responsive Design */
-        @media (max-width: 1200px) {
+        @media (max-width: 1024px) {
           .top-grid {
             grid-template-columns: 1fr;
             gap: 24px;
@@ -4956,7 +4979,44 @@ const TeacherDashboard: React.FC = () => {
           }
           .main-content {
             padding: 32px;
-          }
+          
+          @media (max-width: 1024px) {
+  .profile-card {
+    width: 280px;
+    padding: 20px;
+    gap: 14px;
+    top: 80px; /* optional: move slightly up for tighter layout */
+  }
+
+  .profile-card img {
+    width: 55px;
+    height: 55px;
+  }
+
+  .profile-card h2 {
+    font-size: 1rem;
+  }
+
+  .profile-card p {
+    font-size: 0.85rem;
+  }
+
+  .profile-card button {
+    font-size: 0.85rem;
+    padding: 6px 14px;
+  }
+  .profile-card {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.profile-card.hide-card {
+  transform: translateY(-40px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+}
+
         }
 
         @media (max-width: 768px) {
