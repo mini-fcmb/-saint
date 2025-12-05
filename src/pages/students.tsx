@@ -750,7 +750,7 @@ const StrictQuizInterface: React.FC<{
       }, 1000);
       return () => clearInterval(timer);
     }
-  }, [quizStarted, timeLeft, strictModeActive]);
+  }, [quizStarted, strictModeActive]);
 
   const handleStartQuiz = () => {
     setQuizStarted(true);
