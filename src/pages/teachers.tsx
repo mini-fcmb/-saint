@@ -2452,10 +2452,29 @@ const TeacherDashboard: React.FC = () => {
                 onFeatureSelect={handlePerformanceFeatureSelect}
               />
             </div>
-            <button className="get-in-touch" onClick={handleLogout}>
-              <i className="bx bx-log-out" />
-              Logout
-            </button>
+           {user && (
+  <>
+    {/* Avatar button */}
+    <div
+      className="profile-avatar"
+      onClick={() => setDropdownOpen(!dropdownOpen)}
+    >
+      {/* Use your existing avatar logic */}
+      <span>{user.firstName.charAt(0).toUpperCase()}</span>
+    </div>
+
+    {/* Dropdown with full info */}
+    <div className={`profile-dropdown ${dropdownOpen ? "show" : ""}`}>
+      <h2>
+        {user.firstName.charAt(0).toUpperCase() + user.firstName.slice(1)}{" "}
+        {user.lastName.charAt(0).toUpperCase() + user.lastName.slice(1)}
+      </h2>
+      <p>{user.email}</p>
+      <button onClick={handleLogout}>Logout</button>
+    </div>
+  </>
+)}
+
           </div>
         </div>
       </header>
@@ -5147,11 +5166,7 @@ const TeacherDashboard: React.FC = () => {
   .sidebar:not(.open) ~ .main-content {
     margin-left: 0;
   }
-
-  .sidebar {
-    transform: translateX(-100%);
-  }
-
+  
   .sidebar.open {
     transform: translateX(0);
   }
