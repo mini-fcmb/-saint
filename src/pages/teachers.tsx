@@ -5012,6 +5012,76 @@ const TeacherDashboard: React.FC = () => {
               opacity: 0 !important;
               pointer-events: none !important;
             }
+            .avatar-placeholder {
+              width: 50px;
+              height: 50px;
+              background: #c7d2fe;
+              border-radius: 50%;
+             }
+            .sidebar {
+              width: 320px;
+              background: #fff;
+              border-right: 1px solid #e5e7eb;
+              height: calc(100vh - 80px);
+              position: fixed;
+              left: 0;
+              top: 80px;
+              transition: width 0.3s  cubic-bezier(0.4, 0, 0.2, 1);
+              padding: 20px 0;
+              box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
+              z-index: 40;
+          }
+          .create-card {
+            background: #eef2ff;
+            border-radius: 24px;
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            height: fit-content;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .create-chat-btn {
+          background: #4299e1;
+          color: #fff;
+          border: none;
+          border-radius: 16px;
+          padding: 14px 20px;
+          font-size: 10px;
+          font-weight: 600;
+          width: 80%;
+          height: 30px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
+          cursor: pointer;
+      }
+      .avatar-placeholder {
+        width: 50px;
+        height: 50px;
+        background: #c7d2fe;
+        border-radius: 50%;
+    }
+    .copyright {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #9ca3af;
+      text-align: center;
+  }
+  .create-class-link {
+    background: transparent;
+    color: #4299e1;
+    border: none;
+    font-size: 10px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
           }
 
     
