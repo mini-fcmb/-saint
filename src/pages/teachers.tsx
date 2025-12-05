@@ -4970,54 +4970,51 @@ const TeacherDashboard: React.FC = () => {
         /* Responsive Design */
         @media (max-width: 1024px) {
           .top-grid {
-            grid-template-columns: 1fr;
-            gap: 24px;
+            grid-template-columns: 1fr !important;
+            gap: 24px !important;
           }
           .bottom-grid {
-            grid-template-columns: 1fr;
-            gap: 24px;
+            grid-template-columns: 1fr !important;
+            gap: 24px !important;
           }
           .main-content {
-            padding: 32px;
+            padding: 32px !important;
           
-          @media (max-width: 1024px) {
-  .profile-card {
-    width: 280px;
-    padding: 20px;
-    gap: 14px;
-    top: 80px; /* optional: move slightly up for tighter layout */
-  }
+          .profile-card {
+            width: 280px !important;
+            padding: 20px !important;
+            gap: 14px !important;
+          }
 
-  .profile-card img {
-    width: 55px;
-    height: 55px;
-  }
+            .profile-card img {
+              width: 55px !important;
+              height: 55px !important;
+            }
+          
+            .profile-card h2 {
+              font-size: 1rem !important;
+            }
+          
+            .profile-card p {
+              font-size: 0.85rem !important;
+            }
+          
+            .profile-card button {
+              font-size: 0.85rem !important;
+              padding: 6px 14px !important;
+            }
+              .profile-card {
+              transition: transform 0.3s ease, opacity 0.3s ease !important;
+            }
+            
+            .profile-card.hide-card {
+              transform: translateY(-40px) !important;
+              opacity: 0 !important;
+              pointer-events: none !important;
+            }
+          }
 
-  .profile-card h2 {
-    font-size: 1rem;
-  }
-
-  .profile-card p {
-    font-size: 0.85rem;
-  }
-
-  .profile-card button {
-    font-size: 0.85rem;
-    padding: 6px 14px;
-  }
-  .profile-card {
-  transition: transform 0.3s ease, opacity 0.3s ease;
-}
-
-.profile-card.hide-card {
-  transform: translateY(-40px);
-  opacity: 0;
-  pointer-events: none;
-}
-
-}
-
-        }
+    
 
         @media (max-width: 768px) {
           .header {
