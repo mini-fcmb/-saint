@@ -5155,6 +5155,9 @@ const TeacherDashboard: React.FC = () => {
   .sidebar.open {
     transform: translateX(0);
   }
+  .sidebar:not(.open) {
+    width: 88px;
+}
 
   .profile-card {
     display: none !important; /* hide full profile card on mobile */
