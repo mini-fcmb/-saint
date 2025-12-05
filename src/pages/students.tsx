@@ -30,6 +30,7 @@ import {
 import { useFirebaseStore } from "../stores/useFirebaseStore";
 import { useLiveDate, useCalendar } from "../hooks/useDateUtils";
 import { useNavigate } from "react-router-dom";
+import { useRef } from "react";
 
 // Types (keep your existing types the same)
 interface Student {
@@ -591,6 +592,7 @@ const StrictQuizInterface: React.FC<{
   const [adminCode, setAdminCode] = useState("");
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Enhanced violation detection
   const reportViolation = useCallback(
@@ -737,24 +739,61 @@ const StrictQuizInterface: React.FC<{
   ]);
 
   // Timer
-  useEffect(() => {
-    if (quizStarted && timeLeft > 0 && strictModeActive) {
-      const timer = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            handleAutoSubmit();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [quizStarted, strictModeActive]);
+ // ========== FIXED TIMER ==========
+useEffect(() => {
+  console.log("Timer check:", { quizStarted, timeLeft });
 
-  const handleStartQuiz = () => {
-    setQuizStarted(true);
+  // Clear any existing timer
+  if (timerRef.current) {
+    clearInterval(timerRef.current);
+    timerRef.current = null;
+  }
+
+  // Only start timer if quiz has started AND there's time left
+  if (quizStarted && timeLeft > 0) {
+    console.log("Starting timer with", timeLeft, "seconds remaining");
+    
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        console.log("Timer tick - previous:", prev, "seconds");
+        
+        if (prev <= 1) {
+          console.log("Time's up! Auto-submitting...");
+          // Clear the timer
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          // Auto-submit
+          handleAutoSubmit();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+
+  // Cleanup function
+  return () => {
+    console.log("Cleaning up timer");
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
   };
+}, [quizStarted]); // Only depend on quizStarted
+
+ const handleStartQuiz = () => {
+  console.log("🎬 Starting quiz now");
+  
+  // Reset time to full duration
+  setTimeLeft(quiz.duration * 60);
+  
+  // Start quiz AFTER setting timeLeft
+  setTimeout(() => {
+    setQuizStarted(true);
+  }, 0);
+};
 
   const handleEmergencyExit = () => {
     console.log("🚨 Emergency exit requested");
@@ -835,6 +874,10 @@ const StrictQuizInterface: React.FC<{
   };
 
   const handleAutoSubmit = () => {
+     if (timerRef.current) {
+    clearInterval(timerRef.current);
+    timerRef.current = null;
+  }
     calculateResults();
   };
 
