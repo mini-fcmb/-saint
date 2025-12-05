@@ -4967,20 +4967,6 @@ const TeacherDashboard: React.FC = () => {
         /* Responsive Design */
 
 @media (max-width: 1440px) {
-  .top-grid {
-    grid-template-columns: 1fr !important;
-    gap: 24px !important;
-  }
-
-  .bottom-grid {
-    grid-template-columns: 1fr !important;
-    gap: 24px !important;
-  }
-
-  .main-content {
-    padding: 32px !important;
-  } /* ← FIXED: closing brace added here */
-
   .profile-card {
     width: 280px !important;
     padding: 20px !important;
