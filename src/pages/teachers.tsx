@@ -4965,6 +4965,54 @@ const TeacherDashboard: React.FC = () => {
         }
 
         /* Responsive Design */
+
+@media (max-width: 1440px) {
+  .top-grid {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+
+  .bottom-grid {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+
+  .main-content {
+    padding: 32px !important;
+  } /* ← FIXED: closing brace added here */
+
+  .profile-card {
+    width: 280px !important;
+    padding: 20px !important;
+    gap: 14px !important;
+    transition: transform 0.3s ease, opacity 0.3s ease !important;
+  }
+
+  .profile-card img {
+    width: 55px !important;
+    height: 55px !important;
+  }
+
+  .profile-card h2 {
+    font-size: 1rem !important;
+  }
+
+  .profile-card p {
+    font-size: 0.85rem !important;
+  }
+
+  .profile-card button {
+    font-size: 0.85rem !important;
+    padding: 6px 14px !important;
+  }
+
+  .profile-card.hide-card {
+    transform: translateY(-40px) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
+
         @media (max-width: 1024px) {
           .top-grid {
             grid-template-columns: 1fr !important;
