@@ -387,6 +387,25 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
   ).length;
 
   if (!isOpen) return null;
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+const handleLogout = () => {
+  console.log("Logging out...");
+};
+
+// Optional: close dropdown when clicking outside
+useEffect(() => {
+  const handleClickOutside = (e: MouseEvent) => {
+    const avatar = document.querySelector(".profile-avatar");
+    const dropdown = document.querySelector(".profile-dropdown");
+    if (avatar && dropdown && !avatar.contains(e.target as Node) && !dropdown.contains(e.target as Node)) {
+      setDropdownOpen(false);
+    }
+  };
+  document.addEventListener("click", handleClickOutside);
+  return () => document.removeEventListener("click", handleClickOutside);
+}, []);
+
 
   return (
     <div className="modal-overlay">
@@ -5114,65 +5133,129 @@ const TeacherDashboard: React.FC = () => {
     cursor: pointer;
 }
           }
+@media (max-width: 768px) {
+  /* Existing responsive adjustments */
+  .header {
+    padding: 0 24px;
+  }
 
-    
+  .main-content {
+    padding: 24px;
+    margin-left: 0;
+  }
 
-        @media (max-width: 768px) {
-          .header {
-            padding: 0 24px;
-          }
-          .main-content {
-            padding: 24px;
-            margin-left: 0;
-          }
-          .sidebar:not(.open) ~ .main-content {
-            margin-left: 0;
-          }
-          .sidebar {
-            transform: translateX(-100%);
-          }
-          .sidebar.open {
-            transform: translateX(0);
-          }
-          .profile-card {
-            position: static;
-            width: 100%;
-            margin-top: 24px;
-          }
-          .progress-card {
-            flex-direction: column;
-            text-align: center;
-            gap: 20px;
-          }
-          .monitoring-stats {
-            grid-template-columns: repeat(2, 1fr);
-          }
-          .monitoring-item {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 12px;
-          }
-          .progress-display {
-            width: 100%;
-            justify-content: space-between;
-          }
-          .grade-controls {
-            grid-template-columns: 1fr;
-          }
-          .action-buttons {
-            flex-direction: column;
-          }
-          .modal-footer {
-            flex-direction: column;
-          }
-          .footer-left,
-          .footer-right {
-            justify-content: center;
-            width: 100%;
-          }
-        }
+  .sidebar:not(.open) ~ .main-content {
+    margin-left: 0;
+  }
 
-        @media (max-width: 480px) {
+  .sidebar {
+    transform: translateX(-100%);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .profile-card {
+    display: none !important; /* hide full profile card on mobile */
+    position: static;
+    width: 100%;
+    margin-top: 24px;
+  }
+
+  .progress-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 20px;
+  }
+
+  .monitoring-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .monitoring-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .progress-display {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .grade-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+  }
+
+  .modal-footer {
+    flex-direction: column;
+  }
+
+  .footer-left,
+  .footer-right {
+    justify-content: center;
+    width: 100%;
+  }
+
+  /* ------------------ New avatar + dropdown ------------------ */
+  .profile-avatar {
+    display: block;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    cursor: pointer;
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 50;
+  }
+
+  .profile-dropdown {
+    display: none; /* initially hidden */
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    width: 220px;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 10px 15px rgba(0,0,0,0.1);
+    padding: 16px;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 50;
+  }
+
+  .profile-dropdown.show {
+    display: flex;
+  }
+
+  .profile-dropdown h2 {
+    font-size: 1rem;
+    margin: 0;
+  }
+
+  .profile-dropdown p {
+    font-size: 0.85rem;
+    margin: 0;
+  }
+
+  .profile-dropdown button {
+    font-size: 0.85rem;
+    padding: 6px 12px;
+    border: none;
+    background-color: #f87171;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+}
+
+@media (max-width: 480px) {
           .performance-menu-grid {
             grid-template-columns: 1fr;
           }
