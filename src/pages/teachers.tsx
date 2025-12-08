@@ -5339,6 +5339,115 @@ get-in-touch{
           flex-direction: column;
           gap: 16px;
         }
+        @media (max-width: 480px) {
+
+  /* Reduce overall padding for small screens */
+  .header {
+    padding: 0 16px;
+  }
+
+  .main-content {
+    padding: 16px;
+    margin-left: 0 !important;
+  }
+
+  /* Sidebar behavior on very small screens */
+  .sidebar.open ~ .main-content {
+    margin-left: 260px; /* slightly smaller than 300px */
+  }
+
+  .sidebar:not(.open) ~ .main-content {
+    margin-left: 70px; /* reduced from 88px */
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar:not(.open) {
+    width: 70px !important;
+  }
+
+  /* Hide non-essential sections */
+  .profile-card {
+    display: none !important;
+  }
+
+  .get-in-touch {
+    display: none !important;
+  }
+
+  /* Cards & grids collapse */
+  .progress-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 16px;
+  }
+
+  .monitoring-stats {
+    grid-template-columns: 1fr; /* 1 column for tiny screens */
+  }
+
+  .monitoring-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .progress-display {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .grade-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .action-buttons,
+  .modal-footer {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .footer-left,
+  .footer-right {
+    justify-content: center;
+    width: 100%;
+  }
+
+  /* Mobile avatar + dropdown */
+  .profile-avatar-container {
+    display: block;
+  }
+
+  .profile-avatar-mobile {
+    width: 36px;
+    height: 36px;
+    font-size: 0.85rem;
+  }
+
+  .profile-dropdown {
+    top: 45px;
+    right: 0;
+    width: 180px;
+    padding: 0.5rem;
+  }
+
+  .profile-dropdown h2 {
+    font-size: 0.85rem;
+  }
+
+  .profile-dropdown p {
+    font-size: 0.75rem;
+  }
+
+  .profile-dropdown button {
+    height: 28px;
+    font-size: 14px;
+    padding: 0 20px;
+  }
+}
+
       `}</style>
     </div>
   );
