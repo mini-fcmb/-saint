@@ -5190,7 +5190,7 @@ get-in-touch{
   }
 
   .sidebar:not(.open) ~ .main-content {
-    margin-left: 0;
+    margin-left: 88px;
   }
   
   .sidebar.open {
