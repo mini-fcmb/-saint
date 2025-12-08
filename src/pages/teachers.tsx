@@ -5188,6 +5188,10 @@ get-in-touch{
     padding: 24px;
     margin-left: 0;
   }
+  .sidebar.open ~ .main-content {
+    margin-left: 260px;
+}
+
 
   .sidebar:not(.open) ~ .main-content {
     margin-left: 88px;
