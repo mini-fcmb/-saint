@@ -278,7 +278,6 @@ interface LiveMonitoringModalProps {
   activeQuizzes: Quiz[];
   students: Student[];
 }
-
 const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
   isOpen,
   onClose,
@@ -389,23 +388,27 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
   if (!isOpen) return null;
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-const handleLogout = () => {
-  console.log("Logging out...");
-};
-
-// Optional: close dropdown when clicking outside
-useEffect(() => {
-  const handleClickOutside = (e: MouseEvent) => {
-    const avatar = document.querySelector(".profile-avatar");
-    const dropdown = document.querySelector(".profile-dropdown");
-    if (avatar && dropdown && !avatar.contains(e.target as Node) && !dropdown.contains(e.target as Node)) {
-      setDropdownOpen(false);
-    }
+  const handleLogout = () => {
+    console.log("Logging out...");
   };
-  document.addEventListener("click", handleClickOutside);
-  return () => document.removeEventListener("click", handleClickOutside);
-}, []);
 
+  // Optional: close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const avatar = document.querySelector(".profile-avatar");
+      const dropdown = document.querySelector(".profile-dropdown");
+      if (
+        avatar &&
+        dropdown &&
+        !avatar.contains(e.target as Node) &&
+        !dropdown.contains(e.target as Node)
+      ) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
 
   return (
     <div className="modal-overlay">
@@ -1961,6 +1964,23 @@ const ClassListPanel: React.FC<ClassListPanelProps> = ({
 
 // Main Teacher Dashboard Component
 const TeacherDashboard: React.FC = () => {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const {
+    user,
+    userData,
+    teacherClasses,
+    students,
+    loading,
+    error,
+    authInitialized,
+    initializeAuth,
+    signOutUser,
+  } = useFirebaseStore();
+
+  const fullNameAvatar = userData?.fullName || "";
+  const [firstNameAvatar = " ", ...rest] = fullNameAvatar.split(" ");
+  const lastNameAvatar = rest.join(" ");
+
   const navigate = useNavigate();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -1980,17 +2000,6 @@ const TeacherDashboard: React.FC = () => {
     useState(false);
   const [selectedFeature, setSelectedFeature] = useState<string>("");
   const [currentSubject, setCurrentSubject] = useState("Mathematics");
-
-  const {
-    user,
-    teacherClasses,
-    students,
-    loading,
-    error,
-    authInitialized,
-    initializeAuth,
-    signOutUser,
-  } = useFirebaseStore();
 
   // Enhanced students with class information
   const enhancedStudents = useMemo(() => {
@@ -2034,27 +2043,26 @@ const TeacherDashboard: React.FC = () => {
   }, []);
   //handle scroll
   useEffect(() => {
-  let lastScroll = window.scrollY;
+    let lastScroll = window.scrollY;
 
-  const handleScroll = () => {
-    const card = document.querySelector(".profile-card");
-    if (!card) return;
+    const handleScroll = () => {
+      const card = document.querySelector(".profile-card");
+      if (!card) return;
 
-    if (window.scrollY > lastScroll) {
-      // scrolling down → hide
-      card.classList.add("hide-card");
-    } else {
-      // scrolling up → show
-      card.classList.remove("hide-card");
-    }
+      if (window.scrollY > lastScroll) {
+        // scrolling down → hide
+        card.classList.add("hide-card");
+      } else {
+        // scrolling up → show
+        card.classList.remove("hide-card");
+      }
 
-    lastScroll = window.scrollY;
-  };
+      lastScroll = window.scrollY;
+    };
 
-  window.addEventListener("scroll", handleScroll);
-  return () => window.removeEventListener("scroll", handleScroll);
-}, []);
-
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // Load quizzes from localStorage
   useEffect(() => {
@@ -2419,6 +2427,7 @@ const TeacherDashboard: React.FC = () => {
       {/* Header */}
       <header className="header">
         <div className="header-content">
+          {/* Logo Section */}
           <div className="logo-section">
             <div className="logo-img"></div>
             <span className="logo-text">SXaint</span>
@@ -2429,6 +2438,7 @@ const TeacherDashboard: React.FC = () => {
             <button className="follow-btn">Follow</button>
           </div>
 
+          {/* Header Actions */}
           <div className="header-actions">
             <button className="icon-btn">
               <Search size={20} />
@@ -2452,29 +2462,39 @@ const TeacherDashboard: React.FC = () => {
                 onFeatureSelect={handlePerformanceFeatureSelect}
               />
             </div>
-           {user && (
-  <>
-    {/* Avatar button */}
-    <div
-      className="profile-avatar"
-      onClick={() => setDropdownOpen(!dropdownOpen)}
-    >
-      {/* Use your existing avatar logic */}
-      <span>{user.firstName.charAt(0).toUpperCase()}</span>
-    </div>
+            <button className="get-in-touch">
+              <i className="bx bx-log-out">Logout</i>
+            </button>
 
-    {/* Dropdown with full info */}
-    <div className={`profile-dropdown ${dropdownOpen ? "show" : ""}`}>
-      <h2>
-        {user.firstName.charAt(0).toUpperCase() + user.firstName.slice(1)}{" "}
-        {user.lastName.charAt(0).toUpperCase() + user.lastName.slice(1)}
-      </h2>
-      <p>{user.email}</p>
-      <button onClick={handleLogout}>Logout</button>
-    </div>
-  </>
-)}
+            {/* Mobile Profile Avatar */}
+            {user && (
+              <div className="profile-avatar-container">
+                <div
+                  className="profile-avatar-mobile"
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                >
+                  <span>{firstNameAvatar?.charAt(0)?.toUpperCase() || ""}</span>
+                </div>
 
+                <div
+                  className={`profile-dropdown ${dropdownOpen ? "show" : ""}`}
+                >
+                  <h2>
+                    {firstNameAvatar && lastNameAvatar
+                      ? `${
+                          firstNameAvatar.charAt(0).toUpperCase() +
+                          firstNameAvatar.slice(1)
+                        } ${
+                          lastNameAvatar.charAt(0).toUpperCase() +
+                          lastNameAvatar.slice(1)
+                        }`
+                      : "Unknown User"}
+                  </h2>
+                  <p>{user?.email || "No email available"}</p>
+                  <button onClick={handleLogout}>Logout</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -3939,7 +3959,7 @@ const TeacherDashboard: React.FC = () => {
           justify-content: center;
           font-size: 28px;
           font-weight: 700;
-          color: #4299e1;
+          color: #4299e1; 
         }
         .profile-info h4 {
           font-size: 18px;
@@ -4659,6 +4679,10 @@ const TeacherDashboard: React.FC = () => {
           overflow: hidden;
           transition: border-color 0.2s;
         }
+        .profile-avatar-container {
+          display: none;
+          position: relative;
+        }
 
         .image-upload-section:hover {
           border-color: #9ca3af;
@@ -5157,7 +5181,9 @@ const TeacherDashboard: React.FC = () => {
   .header {
     padding: 0 24px;
   }
-
+get-in-touch{
+  display:none;
+}
   .main-content {
     padding: 24px;
     margin-left: 0;
@@ -5221,57 +5247,71 @@ const TeacherDashboard: React.FC = () => {
   }
 
   /* ------------------ New avatar + dropdown ------------------ */
-  .profile-avatar {
+  .profile-avatar-container {
     display: block;
-    width: 50px;
-    height: 50px;
+  }
+
+  .profile-avatar-mobile {
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
+    background-color: #cce0ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
     cursor: pointer;
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 50;
+    color: #4299e1;
+    user-select: none;
   }
 
   .profile-dropdown {
-    display: none; /* initially hidden */
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    width: 220px;
-    background: #fff;
-    border-radius: 16px;
-    box-shadow: 0 10px 15px rgba(0,0,0,0.1);
-    padding: 16px;
-    flex-direction: column;
-    gap: 10px;
-    z-index: 50;
+    position: absolute;
+    top: 50px; /* adjust based on header height */
+    right: 0;
+    width: 200px;
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 0.75rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    display: none; /* hidden by default */
+    z-index: 100;
   }
-
   .profile-dropdown.show {
-    display: flex;
+    display: block;
   }
-
   .profile-dropdown h2 {
-    font-size: 1rem;
-    margin: 0;
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+    font-weight: 600;
   }
 
   .profile-dropdown p {
-    font-size: 0.85rem;
-    margin: 0;
+    font-size: 0.8rem;
+    color: #555;
+    margin-bottom: 0.5rem;
+  }
+  .get-in-touch{
+    display:none;
   }
 
   .profile-dropdown button {
-    font-size: 0.85rem;
-    padding: 6px 12px;
+    background: #4299e1;
+    color: #fff;
     border: none;
-    background-color: #f87171;
-    color: white;
     border-radius: 8px;
-    cursor: pointer;
+    padding: 0 24px;
+    height: 30px;
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    width:100%;
+    gap: 8px;
+    justify-content:center;
   }
 }
+
 
 @media (max-width: 480px) {
           .performance-menu-grid {

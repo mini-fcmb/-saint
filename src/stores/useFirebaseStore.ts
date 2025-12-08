@@ -267,7 +267,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
 
         try {
           const { userData, role } = await loadUserData(user.uid);
-          
+         
           // FIXED: Only update if we're still dealing with the same user
           const currentState = get();
           if (currentState.user?.uid !== user.uid) {

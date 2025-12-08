@@ -580,10 +580,12 @@ const StrictQuizInterface: React.FC<{
   studentId,
 }) => {
   const [timeLeft, setTimeLeft] = useState(quiz.duration * 60);
+  const [quizStarted, setQuizStarted] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<{ [key: number]: number }>({});
   const [flagged, setFlagged] = useState<number[]>([]);
-  const [quizStarted, setQuizStarted] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [violationAttempts, setViolationAttempts] = useState(0);
   const [showViolationWarning, setShowViolationWarning] = useState(false);
@@ -592,7 +594,6 @@ const StrictQuizInterface: React.FC<{
   const [adminCode, setAdminCode] = useState("");
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Enhanced violation detection
   const reportViolation = useCallback(
@@ -739,61 +740,93 @@ const StrictQuizInterface: React.FC<{
   ]);
 
   // Timer
- // ========== FIXED TIMER ==========
-useEffect(() => {
-  console.log("Timer check:", { quizStarted, timeLeft });
+  // ========== FIXED TIMER ==========
 
-  // Clear any existing timer
-  if (timerRef.current) {
-    clearInterval(timerRef.current);
-    timerRef.current = null;
-  }
+  useEffect(() => {
+    // Only start the timer if quiz has started
+    if (!quizStarted) return;
 
-  // Only start timer if quiz has started AND there's time left
-  if (quizStarted && timeLeft > 0) {
-    console.log("Starting timer with", timeLeft, "seconds remaining");
-    
+    // Clear any previous timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+
     timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        console.log("Timer tick - previous:", prev, "seconds");
-        
+      setTimeLeft((prev) => {
         if (prev <= 1) {
-          console.log("Time's up! Auto-submitting...");
-          // Clear the timer
-          if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-          }
-          // Auto-submit
+          // Stop timer and auto-submit
+          clearInterval(timerRef.current!);
+          timerRef.current = null;
           handleAutoSubmit();
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-  }
 
-  // Cleanup function
-  return () => {
-    console.log("Cleaning up timer");
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-}, [quizStarted]); // Only depend on quizStarted
+    // Cleanup on unmount or when quiz stops
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [quizStarted]); // Only restart timer when quizStarted changes
 
- const handleStartQuiz = () => {
-  console.log("🎬 Starting quiz now");
-  
-  // Reset time to full duration
-  setTimeLeft(quiz.duration * 60);
-  
-  // Start quiz AFTER setting timeLeft
-  setTimeout(() => {
+  const handleStartQuiz = () => {
+    console.log("🎬 Starting quiz now");
+
+    // Reset time to full duration
+    setTimeLeft(quiz.duration * 60);
+
+    // Start quiz immediately after resetting time
     setQuizStarted(true);
-  }, 0);
-};
+  };
+  //anticheat//handleblur
+  useEffect(() => {
+    const handleBlur = () => {
+      console.log("🚨 User switched tab! Timer paused.");
+      setIsPaused(true); // pause the quiz
+    };
+
+    const handleFocus = () => {
+      console.log("✅ User returned to tab. Timer resumes.");
+      setIsPaused(false); // resume the quiz
+    };
+
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
+  //handleIsPaused
+  useEffect(() => {
+    if (!quizStarted || isPaused) return; // stop timer if quiz is paused
+
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!);
+          timerRef.current = null;
+          handleAutoSubmit();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [quizStarted, isPaused]);
 
   const handleEmergencyExit = () => {
     console.log("🚨 Emergency exit requested");
@@ -874,10 +907,10 @@ useEffect(() => {
   };
 
   const handleAutoSubmit = () => {
-     if (timerRef.current) {
-    clearInterval(timerRef.current);
-    timerRef.current = null;
-  }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     calculateResults();
   };
 
