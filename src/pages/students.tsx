@@ -32,6 +32,7 @@ import {
   Lock,
   Eye,
   EyeOff,
+  BarChart3, // Added missing import
 } from "lucide-react";
 import { useFirebaseStore } from "../stores/useFirebaseStore";
 import { useLiveDate, useCalendar } from "../hooks/useDateUtils";
@@ -100,7 +101,198 @@ interface Violation {
   severity: "low" | "medium" | "high";
 }
 
-// Class List Panel Component (keep your existing component)
+// Performance Menu Component (added to fix missing component)
+const PerformanceMenu: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onFeatureSelect: (feature: string) => void;
+}> = ({ isOpen, onClose, onFeatureSelect }) => {
+  if (!isOpen) return null;
+
+  const menuItems = [
+    {
+      id: "analytics",
+      label: "Performance Analytics",
+      description: "View detailed performance reports and insights",
+      icon: "📊",
+      color: "#3B82F6",
+    },
+    {
+      id: "grades",
+      label: "Grade History",
+      description: "Track your grades over time",
+      icon: "📈",
+      color: "#10B981",
+    },
+    {
+      id: "progress",
+      label: "Learning Progress",
+      description: "Monitor your course completion and progress",
+      icon: "🎯",
+      color: "#8B5CF6",
+    },
+    {
+      id: "ranking",
+      label: "Class Ranking",
+      description: "See where you stand in your class",
+      icon: "🏆",
+      color: "#F59E0B",
+    },
+  ];
+
+  return (
+    <div className="performance-menu-overlay" onClick={onClose}>
+      <div
+        className="performance-menu-content"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="performance-menu-header">
+          <h2>Performance Dashboard</h2>
+          <p>Access detailed performance metrics and insights</p>
+          <button className="close-btn" onClick={onClose}>
+            <X size={24} />
+          </button>
+        </div>
+        <div className="performance-menu-grid">
+          {menuItems.map((item) => (
+            <div
+              key={item.id}
+              className="performance-menu-item"
+              onClick={() => onFeatureSelect(item.id)}
+            >
+              <div
+                className="menu-item-icon"
+                style={{ backgroundColor: `${item.color}20` }}
+              >
+                <span style={{ fontSize: "24px" }}>{item.icon}</span>
+              </div>
+              <div className="menu-item-content">
+                <h4>{item.label}</h4>
+                <p>{item.description}</p>
+              </div>
+              <div className="menu-item-arrow">
+                <ChevronRight size={20} color={item.color} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="modal-footer">
+          <button className="action-btn cancel" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+
+      <style>{`
+        .performance-menu-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1001;
+          padding: 20px;
+        }
+        
+        .performance-menu-content {
+          background: white;
+          border-radius: 24px;
+          width: 100%;
+          max-width: 800px;
+          max-height: 80vh;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        
+        .performance-menu-header {
+          padding: 32px 32px 0;
+          margin-bottom: 24px;
+          position: relative;
+        }
+        
+        .performance-menu-header h2 {
+          font-size: 24px;
+          font-weight: 700;
+          color: #111827;
+          margin: 0 0 8px 0;
+        }
+        
+        .performance-menu-header p {
+          font-size: 14px;
+          color: #6b7280;
+          margin: 0;
+        }
+        
+        .performance-menu-grid {
+          padding: 0 24px 24px;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 16px;
+          overflow-y: auto;
+        }
+        
+        .performance-menu-item {
+          display: flex;
+          align-items: center;
+          padding: 20px;
+          border: 2px solid #f3f4f6;
+          border-radius: 16px;
+          cursor: pointer;
+          transition: all 0.2s;
+          gap: 16px;
+        }
+        
+        .performance-menu-item:hover {
+          border-color: #4f46e5;
+          background: #f8fafc;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .menu-item-icon {
+          width: 56px;
+          height: 56px;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .menu-item-content {
+          flex: 1;
+        }
+        
+        .menu-item-content h4 {
+          font-size: 16px;
+          font-weight: 600;
+          color: #111827;
+          margin: 0 0 4px 0;
+        }
+        
+        .menu-item-content p {
+          font-size: 13px;
+          color: #6b7280;
+          margin: 0;
+          line-height: 1.4;
+        }
+        
+        .menu-item-arrow {
+          opacity: 0;
+          transition: opacity 0.2s;
+        }
+        
+        .performance-menu-item:hover .menu-item-arrow {
+          opacity: 1;
+        }
+      `}</style>
+    </div>
+  );
+};
+
+// Class List Panel Component
 const ClassListPanel: React.FC<{
   students: Student[];
   isOpen: boolean;
@@ -179,7 +371,7 @@ const ClassListPanel: React.FC<{
   );
 };
 
-// Quiz Instructions Modal Component (keep your existing component)
+// Quiz Instructions Modal Component
 const QuizInstructionsModal: React.FC<{
   quiz: Quiz;
   onStart: () => void;
@@ -1247,17 +1439,35 @@ const StrictQuizInterface: React.FC<{
           display: flex;
           align-items: center;
           justify-content: center;
-          height: 100%;
-          padding: 20px;
+          height: 100vh;
+          width: 100vw;
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0); 
+          z-index: 2000;
+          overflow: hidden;
+          backdrop-filter: blur(10px);
         }
         
         .start-screen-content {
           max-width: 500px;
+          width: 90%;
+          max-height: 90vh;
           text-align: center;
           background: #1e293b;
           padding: 40px;
           border-radius: 20px;
           border: 2px solid #334155;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          overflow-y: auto; 
+          overflow-x: hidden;
         }
         
         .quiz-details-start {
@@ -1268,6 +1478,9 @@ const StrictQuizInterface: React.FC<{
           background: #0f172a;
           padding: 20px;
           border-radius: 12px;
+          border: 1px solid #334155;
+          max-height: 300px;
+          overflow-y: auto;
         }
         
         .detail-item {
@@ -1276,6 +1489,7 @@ const StrictQuizInterface: React.FC<{
           gap: 12px;
           font-size: 16px;
           color: #cbd5e1;
+          min-width: 0;
         }
         
         .warning-box {
@@ -1288,21 +1502,27 @@ const StrictQuizInterface: React.FC<{
           gap: 12px;
           margin-bottom: 30px;
           color: #92400e;
+          min-width: 0;
         }
         
         .warning-box p {
           margin: 0;
           font-size: 14px;
+          line-height: 1.4;
+          text-align: left;
+          word-wrap: break-word;
+          min-width: 0;
         }
         
         .start-buttons {
           display: flex;
           gap: 16px;
+          margin-top: auto;
         }
         
         .nav-btn {
           flex: 1;
-          padding: 12px 24px;
+          padding: 14px 20px;
           border: none;
           border-radius: 8px;
           font-weight: 600;
@@ -1313,24 +1533,29 @@ const StrictQuizInterface: React.FC<{
           gap: 8px;
           font-size: 16px;
           transition: all 0.3s ease;
+          min-width: 120px;
         }
         
         .nav-btn.cancel {
           background: #374151;
           color: white;
+          border: 1px solid #4b5563;
         }
         
         .nav-btn.cancel:hover {
           background: #4b5563;
+          transform: translateY(-2px);
         }
         
         .nav-btn.start {
           background: #10b981;
           color: white;
+          border: 1px solid #10b981;
         }
         
         .nav-btn.start:hover {
           background: #059669;
+          transform: translateY(-2px);
         }
         
         .timer-display {
@@ -1351,7 +1576,7 @@ const StrictQuizInterface: React.FC<{
         }
         
         /* Keep the rest of your existing CSS styles */
-        .modal-btn confirm{
+        .modal-btn.confirm {
           background-color:#4299e1;
         }
         
@@ -1821,7 +2046,7 @@ const StrictQuizInterface: React.FC<{
   );
 };
 
-// Main Student Dashboard Component - Keep your existing dashboard
+// Main Student Dashboard Component
 const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
 
@@ -1837,6 +2062,10 @@ const StudentDashboard: React.FC = () => {
   const [showQuizInstructions, setShowQuizInstructions] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
   const [quizInProgress, setQuizInProgress] = useState(false);
+
+  // ADDED MISSING STATE VARIABLES
+  const [performanceMenuOpen, setPerformanceMenuOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const {
     user,
@@ -2028,6 +2257,14 @@ const StudentDashboard: React.FC = () => {
     updateTodayMinutes();
     return () => clearInterval(interval);
   }, [onlineStartTime]);
+
+  // ADDED MISSING FUNCTION
+  const handlePerformanceFeatureSelect = (feature: string) => {
+    console.log(`Selected performance feature: ${feature}`);
+    // You can implement different actions based on the selected feature
+    setPerformanceMenuOpen(false);
+    alert(`Performance feature "${feature}" selected. Implementation pending.`);
+  };
 
   // Quiz functions
   const handleStartQuiz = (quiz: Quiz) => {
@@ -2226,6 +2463,10 @@ const StudentDashboard: React.FC = () => {
   const fullName = userInfo.fullName;
   const email = userInfo.email;
 
+  // Get avatar initials for mobile
+  const firstNameAvatar = userInfo.firstName;
+  const lastNameAvatar = userInfo.fullName.split(" ")[1] || "";
+
   // Loading and error states
   if (loading && !authInitialized) {
     return (
@@ -2249,16 +2490,18 @@ const StudentDashboard: React.FC = () => {
       {/* Header */}
       <header className="header">
         <div className="header-content">
+          {/* Logo Section */}
           <div className="logo-section">
             <div className="logo-img"></div>
             <span className="logo-text">SXaint</span>
             <span className="status online-indicator">
               <div className="online-dot"></div>
-              Online - Active Student
+              Online - Available for work
             </span>
-            <button className="follow-btn">Student</button>
+            <button className="follow-btn">Follow</button>
           </div>
 
+          {/* Header Actions */}
           <div className="header-actions">
             <button className="icon-btn">
               <Search size={20} />
@@ -2266,10 +2509,56 @@ const StudentDashboard: React.FC = () => {
             <button className="icon-btn">
               <Bell size={20} />
             </button>
+
+            {/* Performance Menu Button */}
+            <div className="performance-menu-wrapper">
+              <button
+                className="icon-btn performance-btn"
+                onClick={() => setPerformanceMenuOpen(!performanceMenuOpen)}
+              >
+                <BarChart3 size={20} />
+              </button>
+
+              <PerformanceMenu
+                isOpen={performanceMenuOpen}
+                onClose={() => setPerformanceMenuOpen(false)}
+                onFeatureSelect={handlePerformanceFeatureSelect}
+              />
+            </div>
             <button className="get-in-touch" onClick={handleLogout}>
-              <LogOut size={16} />
+              <LogOut size={20} />
               Logout
             </button>
+
+            {/* Mobile Profile Avatar */}
+            {user && (
+              <div className="profile-avatar-container">
+                <div
+                  className="profile-avatar-mobile"
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                >
+                  <span>{firstNameAvatar?.charAt(0)?.toUpperCase() || ""}</span>
+                </div>
+
+                <div
+                  className={`profile-dropdown ${dropdownOpen ? "show" : ""}`}
+                >
+                  <h2>
+                    {firstNameAvatar && lastNameAvatar
+                      ? `${
+                          firstNameAvatar.charAt(0).toUpperCase() +
+                          firstNameAvatar.slice(1)
+                        } ${
+                          lastNameAvatar.charAt(0).toUpperCase() +
+                          lastNameAvatar.slice(1)
+                        }`
+                      : "Unknown User"}
+                  </h2>
+                  <p>{user?.email || "No email available"}</p>
+                  <button onClick={handleLogout}>Logout</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -2641,6 +2930,13 @@ const StudentDashboard: React.FC = () => {
         />
       )}
 
+      {/* Performance Menu */}
+      <PerformanceMenu
+        isOpen={performanceMenuOpen}
+        onClose={() => setPerformanceMenuOpen(false)}
+        onFeatureSelect={handlePerformanceFeatureSelect}
+      />
+
       {/* Include all CSS styles - keep your existing CSS */}
       <style>{`
         /* Your existing CSS styles remain here */
@@ -2648,7 +2944,12 @@ const StudentDashboard: React.FC = () => {
         .app.modal-open {
           overflow: hidden;
         }
-        
+        .profile-avatar-mobile{
+          display:none;
+        }
+        .profile-dropdown{
+          display:none;
+        }
         .main-content.blurred,
         .profile-card.blurred {
           filter: blur(4px);
@@ -5166,7 +5467,7 @@ const StudentDashboard: React.FC = () => {
   padding: 20px;
   border-radius: 12px;
   border: 1px solid #334155;
-  max-height: 300px; /* Limit height */
+  max-height: 300px;
   overflow-y: auto;
 }
 
@@ -5265,7 +5566,7 @@ const StudentDashboard: React.FC = () => {
   color: white;
   font-family: 'Inter', sans-serif;
   z-index: 2000;
-  overflow: hidden; /* Prevent any overflow */
+  overflow: hidden;
 }
 
 /* Responsive styles */
@@ -5306,9 +5607,260 @@ const StudentDashboard: React.FC = () => {
     width: 100%;
     padding: 12px 16px;
   }
+  
+  .header {
+    padding: 0 24px;
+  }
+  
+  .get-in-touch {
+    display: none !important;
+  }
+  
+  .main-content {
+    padding: 24px;
+    margin-left: 0;
+  }
+  
+  .sidebar.open ~ .main-content {
+    margin-left: 300px;
+  }
+  
+  .sidebar:not(.open) ~ .main-content {
+    margin-left: 88px;
+  }
+  
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  
+  .sidebar:not(.open) {
+    width: 88px !important;
+  }
+  
+  .profile-card {
+    display: none !important;
+  }
+  
+  .progress-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 20px;
+  }
+  
+  .monitoring-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .monitoring-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .progress-display {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .grade-controls {
+    grid-template-columns: 1fr;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+  }
+  
+  .modal-footer {
+    flex-direction: column;
+  }
+  
+  .footer-left,
+  .footer-right {
+    justify-content: center;
+    width: 100%;
+  }
+  
+  /* Mobile Profile Styles */
+  .profile-avatar-container {
+    display: block;
+  }
+  
+  .profile-avatar-mobile {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #cce0ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    cursor: pointer;
+    color: #4299e1;
+    user-select: none;
+  }
+  
+  .profile-dropdown {
+    position: absolute;
+    top: 70px;
+    right: 10px;
+    width: 200px;
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 0.75rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    display: none;
+    z-index: 100;
+  }
+  
+  .profile-dropdown.show {
+    display: block;
+  }
+  
+  .profile-dropdown h2 {
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+  }
+  
+  .profile-dropdown p {
+    font-size: 0.8rem;
+    color: #555;
+    margin-bottom: 0.5rem;
+  }
+  
+  .profile-dropdown button {
+    background: #4299e1;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0 24px;
+    height: 30px;
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+    justify-content: center;
+  }
 }
 
 @media (max-width: 480px) {
+  .performance-menu-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .monitoring-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  /* Reduce overall padding for small screens */
+  .header {
+    padding: 0 16px;
+  }
+  
+  .main-content {
+    padding: 16px;
+    margin-left: 0 !important;
+  }
+  
+  /* Sidebar behavior on very small screens */
+  .sidebar.open ~ .main-content {
+    margin-left: 260px;
+  }
+  
+  .sidebar:not(.open) ~ .main-content {
+    margin-left: 70px;
+  }
+  
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  
+  .sidebar:not(.open) {
+    width: 70px !important;
+  }
+  
+  /* Hide non-essential sections */
+  .profile-card {
+    display: none !important;
+  }
+  
+  .get-in-touch {
+    display: none !important;
+  }
+  
+  /* Cards & grids collapse */
+  .progress-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 16px;
+  }
+  
+  .monitoring-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .monitoring-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .progress-display {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .grade-controls {
+    grid-template-columns: 1fr;
+  }
+  
+  .action-buttons,
+  .modal-footer {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .footer-left,
+  .footer-right {
+    justify-content: center;
+    width: 100%;
+  }
+  
+  /* Mobile avatar + dropdown */
+  .profile-avatar-container {
+    display: block;
+  }
+  
+  .profile-avatar-mobile {
+    width: 36px;
+    height: 36px;
+    font-size: 0.85rem;
+  }
+  
+  .profile-dropdown {
+    top: 45px;
+    right: 0;
+    width: 180px;
+    padding: 0.5rem;
+  }
+  
+  .profile-dropdown h2 {
+    font-size: 0.85rem;
+  }
+  
+  .profile-dropdown p {
+    font-size: 0.75rem;
+  }
+  
+  .profile-dropdown button {
+    height: 28px;
+    font-size: 14px;
+    padding: 0 20px;
+  }
+  
+  /* Quiz screen adjustments */
   .start-screen-content {
     padding: 25px 15px;
     border-radius: 16px;
@@ -5340,3 +5892,4 @@ const StudentDashboard: React.FC = () => {
 };
 
 export default StudentDashboard;
+ 
