@@ -1,7 +1,13 @@
 // app/students/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import {
   Search,
   Bell,
@@ -30,7 +36,6 @@ import {
 import { useFirebaseStore } from "../stores/useFirebaseStore";
 import { useLiveDate, useCalendar } from "../hooks/useDateUtils";
 import { useNavigate } from "react-router-dom";
-import { useRef } from "react";
 
 // Types (keep your existing types the same)
 interface Student {
@@ -230,8 +235,8 @@ const QuizInstructionsModal: React.FC<{
               <div className="rule-card">
                 <div className="rule-icon">⚠️</div>
                 <div className="rule-content">
-                  <h4>4 Violation Limit</h4>
-                  <p>Quiz auto-submits after 4 violations</p>
+                  <h4>3 Violation Limit</h4>
+                  <p>Quiz auto-submits after 3 violations</p>
                 </div>
               </div>
               <div className="rule-card">
@@ -447,27 +452,28 @@ const QuizInstructionsModal: React.FC<{
   );
 };
 
-// Score Display Modal Component - FIXED VERSION
+// Score Display Modal Component - UPDATED WITH COUNTDOWN
 const ScoreDisplayModal: React.FC<{
   score: number;
   maxScore: number;
   onClose: () => void;
 }> = ({ score, maxScore, onClose }) => {
+  const [countdown, setCountdown] = useState(3); // 3 second countdown
   const percentage = (score / maxScore) * 100;
 
-  // Auto-close after 2 seconds - FIXED
+  // Auto-close countdown
   useEffect(() => {
-    console.log("🔄 ScoreDisplayModal: Auto-close timer started");
-    const timer = setTimeout(() => {
-      console.log("✅ ScoreDisplayModal: Auto-closing now");
+    if (countdown === 0) {
       onClose();
-    }, 2000);
+      return;
+    }
 
-    return () => {
-      console.log("🧹 ScoreDisplayModal: Cleaning up timer");
-      clearTimeout(timer);
-    };
-  }, [onClose]);
+    const timer = setTimeout(() => {
+      setCountdown((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [countdown, onClose]);
 
   const getGradeColor = () => {
     if (percentage >= 80) return "#10b981";
@@ -512,7 +518,7 @@ const ScoreDisplayModal: React.FC<{
             </div>
           </div>
           <div className="score-message">
-            <p>Redirecting to dashboard in 2 seconds...</p>
+            <p>Redirecting to dashboard in {countdown} seconds...</p>
           </div>
         </div>
       </div>
@@ -562,12 +568,11 @@ const ScoreDisplayModal: React.FC<{
   );
 };
 
-// Strict Quiz Interface Component - FIXED VERSION
+// Strict Quiz Interface Component - FIXED VERSION WITH WORKING TIMER & STRICT MODE
 const StrictQuizInterface: React.FC<{
   quiz: Quiz;
   onClose: () => void;
   onSubmit: (quizId: string, score: number, maxScore: number) => void;
-  existingSubmission?: QuizSubmission;
   strictModeActive: boolean;
   studentName: string;
   studentId: string;
@@ -579,6 +584,7 @@ const StrictQuizInterface: React.FC<{
   studentName,
   studentId,
 }) => {
+  // State declarations
   const [timeLeft, setTimeLeft] = useState(quiz.duration * 60);
   const [quizStarted, setQuizStarted] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -594,8 +600,9 @@ const StrictQuizInterface: React.FC<{
   const [adminCode, setAdminCode] = useState("");
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
+  const [isAutoSubmitting, setIsAutoSubmitting] = useState(false);
 
-  // Enhanced violation detection
+  // ========== FIXED VIOLATION LOGIC ==========
   const reportViolation = useCallback(
     (type: Violation["type"], description: string) => {
       const violation: Violation = {
@@ -607,9 +614,10 @@ const StrictQuizInterface: React.FC<{
       };
 
       setViolations((prev) => [...prev, violation]);
-      setViolationAttempts((prev) => prev + 1);
+      const newAttempts = violationAttempts + 1;
+      setViolationAttempts(newAttempts);
 
-      if (violationAttempts >= 3) {
+      if (newAttempts >= 3) {
         handleAutoSubmit();
         alert("Maximum violations reached! Quiz submitted automatically.");
       } else {
@@ -620,143 +628,26 @@ const StrictQuizInterface: React.FC<{
     [violationAttempts]
   );
 
-  // STRICT MODE: Disable all keyboard inputs
-  const preventAllKeys = useCallback(
-    (e: KeyboardEvent) => {
-      if (!strictModeActive || !quizStarted) return;
-
-      const allowedKeys = [
-        "ArrowUp",
-        "ArrowDown",
-        "ArrowLeft",
-        "ArrowRight",
-        "Tab",
-        "Escape",
-        "Enter",
-        " ",
-      ];
-
-      if (!allowedKeys.includes(e.key)) {
-        e.preventDefault();
-        e.stopPropagation();
-        reportViolation("keyboard", `Key pressed: ${e.key}`);
-      }
-    },
-    [strictModeActive, quizStarted, reportViolation]
-  );
-
-  // STRICT MODE: Prevent right-click
-  const preventContextMenu = useCallback(
-    (e: MouseEvent) => {
-      if (strictModeActive && quizStarted) {
-        e.preventDefault();
-        reportViolation("right-click", "Right-click attempted");
-      }
-    },
-    [strictModeActive, quizStarted, reportViolation]
-  );
-
-  // STRICT MODE: Prevent tab switching
-  const preventTabSwitch = useCallback(
-    (e: BeforeUnloadEvent) => {
-      if (strictModeActive && quizStarted) {
-        e.preventDefault();
-        reportViolation("tab-switch", "Tab/window switch attempted");
-        e.returnValue =
-          "Are you sure you want to leave? Your quiz will be submitted.";
-        return e.returnValue;
-      }
-    },
-    [strictModeActive, quizStarted, reportViolation]
-  );
-
-  // STRICT MODE: Prevent developer tools
-  const preventDevTools = useCallback(
-    (e: KeyboardEvent) => {
-      if (strictModeActive && quizStarted) {
-        if (
-          e.key === "F12" ||
-          (e.ctrlKey &&
-            e.shiftKey &&
-            (e.key === "I" || e.key === "J" || e.key === "C")) ||
-          (e.ctrlKey && e.key === "u")
-        ) {
-          e.preventDefault();
-          reportViolation("dev-tools", "Developer tools access attempted");
-        }
-      }
-    },
-    [strictModeActive, quizStarted, reportViolation]
-  );
-
-  // STRICT MODE: Monitor fullscreen - FIXED
-  const monitorFullscreen = useCallback(() => {
-    if (strictModeActive && quizStarted && !document.fullscreenElement) {
-      reportViolation("fullscreen-exit", "Fullscreen exited");
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch((err) => {
-          console.log("Fullscreen request failed:", err);
-          reportViolation("fullscreen-exit", "Fullscreen re-entry failed");
-        });
-      }
-    }
-  }, [strictModeActive, quizStarted, reportViolation]);
-
-  // Apply strict mode restrictions
+  // ========== FIXED TIMER LOGIC ==========
   useEffect(() => {
-    if (strictModeActive && quizStarted) {
-      console.log("🔒 STRICT MODE ACTIVATED");
-
-      document.addEventListener("keydown", preventAllKeys, true);
-      document.addEventListener("contextmenu", preventContextMenu, true);
-      window.addEventListener("beforeunload", preventTabSwitch);
-      document.addEventListener("keydown", preventDevTools, true);
-      document.addEventListener("fullscreenchange", monitorFullscreen);
-
-      // Request fullscreen
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch((err) => {
-          console.log("Fullscreen not supported:", err);
-        });
+    // Don't run if quiz isn't started, is paused, or already auto-submitting
+    if (!quizStarted || isPaused || timeLeft <= 0 || isAutoSubmitting) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
       }
-
-      return () => {
-        console.log("🔓 STRICT MODE DEACTIVATED");
-        document.removeEventListener("keydown", preventAllKeys, true);
-        document.removeEventListener("contextmenu", preventContextMenu, true);
-        window.removeEventListener("beforeunload", preventTabSwitch);
-        document.removeEventListener("keydown", preventDevTools, true);
-        document.removeEventListener("fullscreenchange", monitorFullscreen);
-      };
-    }
-  }, [
-    strictModeActive,
-    quizStarted,
-    preventAllKeys,
-    preventContextMenu,
-    preventTabSwitch,
-    preventDevTools,
-    monitorFullscreen,
-  ]);
-
-  // Timer
-  // ========== FIXED TIMER ==========
-
-  useEffect(() => {
-    // Only start the timer if quiz has started
-    if (!quizStarted) return;
-
-    // Clear any previous timer
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
+      return;
     }
 
+    // Start the timer
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          // Stop timer and auto-submit
-          clearInterval(timerRef.current!);
-          timerRef.current = null;
+          // Time's up - trigger auto-submit
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
           handleAutoSubmit();
           return 0;
         }
@@ -764,85 +655,122 @@ const StrictQuizInterface: React.FC<{
       });
     }, 1000);
 
-    // Cleanup on unmount or when quiz stops
+    // Cleanup function
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
     };
-  }, [quizStarted]); // Only restart timer when quizStarted changes
+  }, [quizStarted, isPaused, timeLeft, isAutoSubmitting]);
 
-  const handleStartQuiz = () => {
-    console.log("🎬 Starting quiz now");
-
-    // Reset time to full duration
-    setTimeLeft(quiz.duration * 60);
-
-    // Start quiz immediately after resetting time
-    setQuizStarted(true);
-  };
-  //anticheat//handleblur
+  // Initialize quiz timer
   useEffect(() => {
+    if (quizStarted) {
+      setTimeLeft(quiz.duration * 60);
+    }
+  }, [quizStarted, quiz.duration]);
+
+  // ========== FIXED ANTI-CHEAT DETECTION ==========
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (strictModeActive && quizStarted && document.hidden) {
+        setIsPaused(true);
+        reportViolation("tab-switch", "Tab switched away from quiz");
+        alert("⚠️ Quiz paused! Please return to the quiz tab.");
+      } else {
+        setIsPaused(false);
+      }
+    };
+
     const handleBlur = () => {
-      console.log("🚨 User switched tab! Timer paused.");
-      setIsPaused(true); // pause the quiz
+      if (strictModeActive && quizStarted) {
+        setIsPaused(true);
+      }
     };
 
     const handleFocus = () => {
-      console.log("✅ User returned to tab. Timer resumes.");
-      setIsPaused(false); // resume the quiz
+      setIsPaused(false);
     };
 
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
 
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
     };
-  }, []);
-  //handleIsPaused
+  }, [strictModeActive, quizStarted, reportViolation]);
+
+  // ========== FIXED STRICT MODE RESTRICTIONS ==========
   useEffect(() => {
-    if (!quizStarted || isPaused) return; // stop timer if quiz is paused
+    if (strictModeActive && quizStarted) {
+      const preventAllKeys = (e: KeyboardEvent) => {
+        const allowedKeys = [
+          "ArrowUp",
+          "ArrowDown",
+          "ArrowLeft",
+          "ArrowRight",
+          "Tab",
+          "Escape",
+          "Enter",
+          " ",
+        ];
 
-    if (timerRef.current) clearInterval(timerRef.current);
-
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          timerRef.current = null;
-          handleAutoSubmit();
-          return 0;
+        if (!allowedKeys.includes(e.key)) {
+          e.preventDefault();
+          e.stopPropagation();
+          reportViolation("keyboard", `Key pressed: ${e.key}`);
         }
-        return prev - 1;
-      });
-    }, 1000);
+      };
 
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
+      const preventContextMenu = (e: MouseEvent) => {
+        e.preventDefault();
+        reportViolation("right-click", "Right-click attempted");
+      };
+
+      const preventBeforeUnload = (e: BeforeUnloadEvent) => {
+        e.preventDefault();
+        e.returnValue =
+          "Are you sure you want to leave? Your quiz will be submitted.";
+        reportViolation("tab-switch", "Tab/window switch attempted");
+        return e.returnValue;
+      };
+
+      // Request fullscreen
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(console.error);
       }
-    };
-  }, [quizStarted, isPaused]);
+
+      document.addEventListener("keydown", preventAllKeys, true);
+      document.addEventListener("contextmenu", preventContextMenu, true);
+      window.addEventListener("beforeunload", preventBeforeUnload);
+
+      return () => {
+        document.removeEventListener("keydown", preventAllKeys, true);
+        document.removeEventListener("contextmenu", preventContextMenu, true);
+        window.removeEventListener("beforeunload", preventBeforeUnload);
+      };
+    }
+  }, [strictModeActive, quizStarted, reportViolation]);
+
+  // ========== QUIZ FUNCTIONS ==========
+  const handleStartQuiz = () => {
+    setQuizStarted(true);
+  };
 
   const handleEmergencyExit = () => {
-    console.log("🚨 Emergency exit requested");
     setShowAdminInput(true);
   };
 
   const handleAdminCodeSubmit = () => {
     if (adminCode === "mini-fcmb") {
-      console.log("✅ Admin code accepted - Exiting quiz");
       setShowAdminInput(false);
       setQuizStarted(false);
-      // Safely exit fullscreen
       if (document.fullscreenElement && document.exitFullscreen) {
-        document.exitFullscreen().catch((err) => {
-          console.log("Error exiting fullscreen:", err);
-        });
+        document.exitFullscreen().catch(console.error);
       }
       onClose();
     } else {
@@ -866,7 +794,6 @@ const StrictQuizInterface: React.FC<{
     );
   };
 
-  // FIXED: Calculate results without fullscreen errors
   const calculateResults = () => {
     let correctAnswers = 0;
     quiz.questions.forEach((question, index) => {
@@ -877,19 +804,30 @@ const StrictQuizInterface: React.FC<{
 
     const score = (correctAnswers / quiz.questions.length) * quiz.maxScore;
     const finalScore = Math.round(score);
+    return finalScore;
+  };
 
-    setFinalScore(finalScore);
+  // ========== FIXED AUTO-SUBMIT FUNCTION ==========
+  const handleAutoSubmit = () => {
+    // Prevent multiple auto-submissions
+    if (isAutoSubmitting) return;
 
-    // Safely exit fullscreen - FIXED
-    if (document.fullscreenElement && document.exitFullscreen) {
-      document.exitFullscreen().catch((err) => {
-        console.log("Error exiting fullscreen:", err);
-      });
+    setIsAutoSubmitting(true);
+
+    // Clear the timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
 
+    // Calculate score based on answers
+    const finalScore = calculateResults();
+    setFinalScore(finalScore);
+
+    // Show the score modal (which has auto-redirect)
     setShowScoreModal(true);
 
-    // Submit the quiz results immediately
+    // Submit the quiz results
     onSubmit(quiz.id, finalScore, quiz.maxScore);
   };
 
@@ -899,35 +837,26 @@ const StrictQuizInterface: React.FC<{
 
   const handleConfirmSubmit = () => {
     setShowConfirmModal(false);
-    calculateResults();
+    const finalScore = calculateResults();
+    setFinalScore(finalScore);
+    setShowScoreModal(true);
+    onSubmit(quiz.id, finalScore, quiz.maxScore);
   };
 
   const handleCancelSubmit = () => {
     setShowConfirmModal(false);
   };
 
-  const handleAutoSubmit = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    calculateResults();
-  };
-
-  // FIXED: Properly handle score modal close
   const handleScoreModalClose = () => {
-    console.log("🎯 handleScoreModalClose called");
     setShowScoreModal(false);
     setQuizStarted(false);
 
-    // Ensure we're out of fullscreen
+    // Exit fullscreen
     if (document.fullscreenElement && document.exitFullscreen) {
-      document.exitFullscreen().catch((err) => {
-        console.log("Error exiting fullscreen:", err);
-      });
+      document.exitFullscreen().catch(console.error);
     }
 
-    // Close the entire quiz interface
+    // Close quiz interface
     onClose();
   };
 
@@ -943,9 +872,9 @@ const StrictQuizInterface: React.FC<{
   const totalQuestions = quiz.questions.length;
   const currentQuestionData = quiz.questions[currentQuestion];
 
-  // Show score modal if quiz is completed - FIXED
+  // ========== RENDER LOGIC ==========
+  // Show score modal
   if (showScoreModal) {
-    console.log("🎯 Rendering ScoreDisplayModal");
     return (
       <ScoreDisplayModal
         score={finalScore}
@@ -955,7 +884,7 @@ const StrictQuizInterface: React.FC<{
     );
   }
 
-  // Show admin input for emergency exit
+  // Show admin input
   if (showAdminInput) {
     return (
       <div className="modal-overlay">
@@ -1044,7 +973,58 @@ const StrictQuizInterface: React.FC<{
     );
   }
 
-  // Main quiz interface (keep your existing JSX)
+  // Start screen if quiz hasn't started
+  if (!quizStarted) {
+    return (
+      <div className="quiz-interface">
+        <div className="quiz-start-screen">
+          <div className="start-screen-content">
+            <Lock size={64} />
+            <h1>Ready to Start Quiz?</h1>
+            <p className="quiz-title">
+              {quiz.name} - {quiz.subject}
+            </p>
+
+            <div className="quiz-details-start">
+              <div className="detail-item">
+                <Clock size={20} />
+                <span>Duration: {quiz.duration} minutes</span>
+              </div>
+              <div className="detail-item">
+                <FileText size={20} />
+                <span>Questions: {quiz.questions.length}</span>
+              </div>
+              <div className="detail-item">
+                <Award size={20} />
+                <span>Max Score: {quiz.maxScore} points</span>
+              </div>
+            </div>
+
+            <div className="warning-box">
+              <AlertTriangle size={24} />
+              <p>
+                Strict mode will be enabled. All cheating attempts will be
+                logged.
+              </p>
+            </div>
+
+            <div className="start-buttons">
+              <button className="nav-btn cancel" onClick={onClose}>
+                <ChevronLeft size={20} />
+                Cancel
+              </button>
+              <button className="nav-btn start" onClick={handleStartQuiz}>
+                <Play size={20} />
+                Start Quiz
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Main quiz interface
   return (
     <div className="quiz-interface">
       {/* Violation Warning */}
@@ -1052,9 +1032,17 @@ const StrictQuizInterface: React.FC<{
         <div className="violation-warning">
           <AlertTriangle size={20} />
           <span>
-            VIOLATION! {4 - violationAttempts} attempts remaining before
+            VIOLATION! {3 - violationAttempts} attempts remaining before
             auto-submission.
           </span>
+        </div>
+      )}
+
+      {/* Paused Warning */}
+      {isPaused && (
+        <div className="paused-warning">
+          <Clock size={20} />
+          <span>QUIZ PAUSED - Please return to this tab</span>
         </div>
       )}
 
@@ -1073,9 +1061,20 @@ const StrictQuizInterface: React.FC<{
         </div>
 
         <div className="header-right">
-          <div className="timer-display">
+          <div
+            className="timer-display"
+            style={{
+              background:
+                timeLeft < 60
+                  ? "#dc2626"
+                  : timeLeft < 120
+                  ? "#f59e0b"
+                  : "#3b82f6",
+            }}
+          >
             <Clock size={20} />
             <span className="timer">{formatTime(timeLeft)}</span>
+            {isPaused && <span className="paused-badge">PAUSED</span>}
           </div>
           <button className="emergency-exit" onClick={handleEmergencyExit}>
             Emergency Exit
@@ -1190,7 +1189,9 @@ const StrictQuizInterface: React.FC<{
         </div>
       </div>
 
+      {/* Styles - Keep your existing styles but add the new ones */}
       <style>{`
+        /* Keep all your existing CSS styles */
         .quiz-interface {
           position: fixed;
           top: 0;
@@ -1202,9 +1203,8 @@ const StrictQuizInterface: React.FC<{
           font-family: 'Inter', sans-serif;
           z-index: 2000;
         }
-        .modal-btn confirm{
-          background-color:#4299e1;
-        }
+        
+        /* Add these new styles from the working version */
         .violation-warning {
           position: fixed;
           top: 0;
@@ -1221,10 +1221,140 @@ const StrictQuizInterface: React.FC<{
           z-index: 2001;
           animation: flash 1s infinite;
         }
+        
+        .paused-warning {
+          position: fixed;
+          top: 50px;
+          left: 0;
+          right: 0;
+          background: #f59e0b;
+          color: white;
+          padding: 12px 20px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          justify-content: center;
+          font-weight: 600;
+          z-index: 2001;
+        }
+        
         @keyframes flash {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.7; }
         }
+        
+        .quiz-start-screen {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100%;
+          padding: 20px;
+        }
+        
+        .start-screen-content {
+          max-width: 500px;
+          text-align: center;
+          background: #1e293b;
+          padding: 40px;
+          border-radius: 20px;
+          border: 2px solid #334155;
+        }
+        
+        .quiz-details-start {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          margin-bottom: 30px;
+          background: #0f172a;
+          padding: 20px;
+          border-radius: 12px;
+        }
+        
+        .detail-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          font-size: 16px;
+          color: #cbd5e1;
+        }
+        
+        .warning-box {
+          background: #fef3c7;
+          border: 2px solid #f59e0b;
+          border-radius: 12px;
+          padding: 16px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 30px;
+          color: #92400e;
+        }
+        
+        .warning-box p {
+          margin: 0;
+          font-size: 14px;
+        }
+        
+        .start-buttons {
+          display: flex;
+          gap: 16px;
+        }
+        
+        .nav-btn {
+          flex: 1;
+          padding: 12px 24px;
+          border: none;
+          border-radius: 8px;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          font-size: 16px;
+          transition: all 0.3s ease;
+        }
+        
+        .nav-btn.cancel {
+          background: #374151;
+          color: white;
+        }
+        
+        .nav-btn.cancel:hover {
+          background: #4b5563;
+        }
+        
+        .nav-btn.start {
+          background: #10b981;
+          color: white;
+        }
+        
+        .nav-btn.start:hover {
+          background: #059669;
+        }
+        
+        .timer-display {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          border-radius: 20px;
+          font-weight: 600;
+        }
+        
+        .paused-badge {
+          background: #f59e0b;
+          padding: 2px 8px;
+          border-radius: 4px;
+          font-size: 12px;
+          margin-left: 8px;
+        }
+        
+        /* Keep the rest of your existing CSS styles */
+        .modal-btn confirm{
+          background-color:#4299e1;
+        }
+        
         .quiz-header {
           background: #1e293b;
           padding: 16px 32px;
@@ -1233,11 +1363,13 @@ const StrictQuizInterface: React.FC<{
           align-items: center;
           border-bottom: 2px solid #334155;
         }
+        
         .header-left {
           display: flex;
           align-items: center;
           gap: 16px;
         }
+        
         .quiz-logo {
           width: 40px;
           height: 40px;
@@ -1249,30 +1381,25 @@ const StrictQuizInterface: React.FC<{
           font-weight: bold;
           font-size: 1.2rem;
         }
+        
         .quiz-info h1 {
           margin: 0;
           font-size: 1.25rem;
           color: white;
         }
+        
         .quiz-info p {
           margin: 4px 0 0 0;
           color: #94a3b8;
           font-size: 0.9rem;
         }
+        
         .header-right {
           display: flex;
           align-items: center;
           gap: 16px;
         }
-        .timer-display {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          background: #dc2626;
-          padding: 8px 16px;
-          border-radius: 20px;
-          font-weight: 600;
-        }
+        
         .emergency-exit {
           background: #f59e0b;
           color: white;
@@ -1283,19 +1410,23 @@ const StrictQuizInterface: React.FC<{
           cursor: pointer;
           transition: background 0.3s;
         }
+        
         .emergency-exit:hover {
           background: #d97706;
         }
+        
         .progress-nav {
           background: #1e293b;
           padding: 16px 32px;
           border-bottom: 1px solid #334155;
         }
+        
         .question-grid {
           display: flex;
           gap: 8px;
           flex-wrap: wrap;
         }
+        
         .question-indicator {
           width: 40px;
           height: 40px;
@@ -1311,26 +1442,32 @@ const StrictQuizInterface: React.FC<{
           font-weight: 500;
           position: relative;
         }
+        
         .question-indicator:hover {
           border-color: #64748b;
         }
+        
         .question-indicator.current {
           border-color: #3b82f6;
           background: #3b82f6;
         }
+        
         .question-indicator.answered {
           background: #10b981;
           border-color: #10b981;
         }
+        
         .question-indicator.flagged {
           border-color: #f59e0b;
         }
+        
         .flag-indicator {
           position: absolute;
           top: -5px;
           right: -5px;
           font-size: 12px;
         }
+        
         .quiz-content {
           max-width: 1000px;
           margin: 0 auto;
@@ -1339,22 +1476,24 @@ const StrictQuizInterface: React.FC<{
           display: flex;
           flex-direction: column;
         }
+        
         .question-area {
           background: #1e293b;
           border-radius: 16px;
           padding: 32px;
           margin-bottom: 24px;
           flex: 1;
-          overfloww:hidden;
-          overflow:auto;  
+          overflow: auto;  
           border: 2px solid #334155;
         }
+        
         .question-header {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
           margin-bottom: 24px;
         }
+        
         .question-header h2 {
           margin: 0;
           font-size: 1.5rem;
@@ -1362,6 +1501,7 @@ const StrictQuizInterface: React.FC<{
           line-height: 1.4;
           flex: 1;
         }
+        
         .flag-btn {
           background: #374151;
           border: 1px solid #4b5563;
@@ -1372,29 +1512,35 @@ const StrictQuizInterface: React.FC<{
           transition: all 0.3s ease;
           white-space: nowrap;
         }
+        
         .flag-btn:hover {
           background: #4b5563;
         }
+        
         .flag-btn.flagged {
           background: #f59e0b;
           border-color: #f59e0b;
           color: white;
         }
+        
         .diagram-container {
           margin: 24px 0;
           text-align: center;
         }
+        
         .question-image {
           max-width: 100%;
           max-height: 300px;
           border-radius: 8px;
           border: 2px solid #475569;
         }
+        
         .options-grid {
           display: grid;
           gap: 12px;
           margin-top: 24px;
         }
+        
         .option-btn {
           display: flex;
           align-items: center;
@@ -1408,14 +1554,17 @@ const StrictQuizInterface: React.FC<{
           transition: all 0.3s ease;
           text-align: left;
         }
+        
         .option-btn:hover {
           border-color: #64748b;
           background: #374151;
         }
+        
         .option-btn.selected {
           border-color: #3b82f6;
           background: #1e40af;
         }
+        
         .option-letter {
           width: 32px;
           height: 32px;
@@ -1427,15 +1576,18 @@ const StrictQuizInterface: React.FC<{
           font-weight: 600;
           transition: all 0.3s ease;
         }
+        
         .option-btn.selected .option-letter {
           border-color: white;
           background: white;
           color: #1e40af;
         }
+        
         .option-text {
           font-size: 1rem;
           font-weight: 500;
         }
+        
         .navigation-controls {
           display: flex;
           justify-content: space-between;
@@ -1445,6 +1597,7 @@ const StrictQuizInterface: React.FC<{
           border-radius: 16px;
           border: 2px solid #334155;
         }
+        
         .nav-btn {
           display: flex;
           align-items: center;
@@ -1458,31 +1611,38 @@ const StrictQuizInterface: React.FC<{
           transition: all 0.3s ease;
           font-weight: 500;
         }
+        
         .nav-btn:hover:not(:disabled) {
           background: #4b5563;
           border-color: #64748b;
         }
+        
         .nav-btn:disabled {
           opacity: 0.5;
           cursor: not-allowed;
         }
+        
         .nav-btn.submit {
           background: #10b981;
           border-color: #10b981;
         }
+        
         .nav-btn.submit:hover {
           background: #059669;
         }
+        
         .progress-info {
           display: flex;
           align-items: center;
           gap: 16px;
           color: #94a3b8;
         }
+        
         .flagged-count {
           color: #f59e0b;
           font-weight: 600;
         }
+        
         /* Modal Styles */
         .modal-overlay {
           position: fixed;
@@ -1498,6 +1658,7 @@ const StrictQuizInterface: React.FC<{
           z-index: 3000;
           padding: 20px;
         }
+        
         .modal-content {
           background: white;
           border-radius: 16px;
@@ -1508,6 +1669,7 @@ const StrictQuizInterface: React.FC<{
           box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
           animation: modalSlideIn 0.3s ease;
         }
+        
         @keyframes modalSlideIn {
           from {
             opacity: 0;
@@ -1518,19 +1680,23 @@ const StrictQuizInterface: React.FC<{
             transform: scale(1) translateY(0);
           }
         }
+        
         .small-modal {
           max-width: 400px;
         }
+        
         .modal-header {
           display: flex;
           align-items: center;
           gap: 12px;
           margin-bottom: 20px;
         }
+        
         .modal-header h2, .modal-header h3 {
           margin: 0;
           color: #1f2937;
         }
+        
         .close-btn {
           background: none;
           border: none;
@@ -1538,13 +1704,16 @@ const StrictQuizInterface: React.FC<{
           cursor: pointer;
           margin-left: auto;
         }
+        
         .modal-body {
           margin-bottom: 24px;
         }
+        
         .modal-body p {
           margin: 0 0 16px 0;
           color: #6b7280;
         }
+        
         .text-input {
           width: 100%;
           padding: 12px 16px;
@@ -1554,35 +1723,42 @@ const StrictQuizInterface: React.FC<{
           color: #1f2937;
           font-size: 1rem;
         }
+        
         .text-input:focus {
           outline: none;
           border-color: #3b82f6;
         }
+        
         .warning-text {
           color: #ef4444;
           font-size: 0.9rem;
           margin-top: 8px;
         }
+        
         .submission-stats {
           background: #f8fafc;
           border-radius: 8px;
           padding: 16px;
           margin: 16px 0;
         }
+        
         .stat-item {
           display: flex;
           justify-content: space-between;
           align-items: center;
           padding: 8px 0;
         }
+        
         .stat-item:not(:last-child) {
           border-bottom: 1px solid #e5e7eb;
         }
+        
         .modal-footer, .modal-actions {
           display: flex;
           gap: 12px;
           justify-content: flex-end;
         }
+        
         .action-btn, .modal-btn {
           padding: 12px 24px;
           border: none;
@@ -1591,20 +1767,25 @@ const StrictQuizInterface: React.FC<{
           cursor: pointer;
           transition: all 0.3s ease;
         }
+        
         .action-btn.cancel, .modal-btn.cancel {
           background: #6b7280;
           color: white;
         }
+        
         .action-btn.cancel:hover, .modal-btn.cancel:hover {
           background: #4b5563;
         }
+        
         .action-btn.primary, .modal-btn.confirm {
           background: #3b82f6;
           color: white;
         }
+        
         .action-btn.primary:hover, .modal-btn.confirm:hover {
           background: #2563eb;
         }
+        
         @media (max-width: 768px) {
           .quiz-header {
             padding: 16px;
@@ -1640,7 +1821,7 @@ const StrictQuizInterface: React.FC<{
   );
 };
 
-// Main Student Dashboard Component - FIXED
+// Main Student Dashboard Component - Keep your existing dashboard
 const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
 
@@ -1850,7 +2031,10 @@ const StudentDashboard: React.FC = () => {
 
   // Quiz functions
   const handleStartQuiz = (quiz: Quiz) => {
-    if (quiz.status !== "active") return;
+    if (quiz.status !== "active") {
+      alert(`This quiz is ${quiz.status}. You can only start active quizzes.`);
+      return;
+    }
 
     const submission = quizSubmissions[quiz.id];
     if (submission?.status === "submitted") {
@@ -1898,7 +2082,7 @@ const StudentDashboard: React.FC = () => {
 
     if (submission?.status === "submitted") {
       return {
-        label: "Submitted",
+        label: `Submitted (${submission.score}/${submission.maxScore})`,
         color: "#10b981",
         borderColor: "#10b981",
         disabled: true,
@@ -1975,11 +2159,11 @@ const StudentDashboard: React.FC = () => {
 
     const averageScore =
       submittedQuizzes.reduce(
-        (sum, sub) => sum + (sub.score || 0) / sub.maxScore,
+        (sum, sub) => sum + ((sub.score || 0) / sub.maxScore) * 100,
         0
       ) / submittedQuizzes.length;
 
-    return Math.round(averageScore * 100);
+    return Math.round(averageScore);
   }, [quizSubmissions]);
 
   const dashArray = `${progressPercent} ${100 - progressPercent}`;
@@ -2061,11 +2245,7 @@ const StudentDashboard: React.FC = () => {
   }
 
   return (
-    <div
-      className={`app ${
-        showQuizInstructions || quizInProgress ? "modal-open" : ""
-      }`}
-    >
+    <div className={`app ${quizInProgress ? "modal-open" : ""}`}>
       {/* Header */}
       <header className="header">
         <div className="header-content">
@@ -2133,7 +2313,7 @@ const StudentDashboard: React.FC = () => {
           {sidebarOpen && (
             <div className="sidebar-footer">
               <div className="create-card">
-                <div className="avatar-placeholder"></div>
+                <div className="avatar-placeholder">{userInfo.userInitial}</div>
                 <div className="student-info">
                   <strong>{firstName}</strong>
                   <span>Student</span>
@@ -2145,11 +2325,7 @@ const StudentDashboard: React.FC = () => {
         </aside>
 
         {/* Main Content */}
-        <main
-          className={`main-content ${
-            showQuizInstructions || quizInProgress ? "blurred" : ""
-          }`}
-        >
+        <main className={`main-content ${quizInProgress ? "blurred" : ""}`}>
           <div className="welcome">
             <h1>Welcome back, {firstName}!</h1>
             <p>
@@ -2422,11 +2598,7 @@ const StudentDashboard: React.FC = () => {
         </main>
 
         {/* Profile Card */}
-        <div
-          className={`profile-card ${
-            showQuizInstructions || quizInProgress ? "blurred" : ""
-          }`}
-        >
+        <div className={`profile-card ${quizInProgress ? "blurred" : ""}`}>
           <div className="profile-avatar">
             {firstName.charAt(0).toUpperCase()}
           </div>
@@ -2463,7 +2635,6 @@ const StudentDashboard: React.FC = () => {
           quiz={selectedQuiz}
           onClose={handleQuizClose}
           onSubmit={handleQuizSubmitted}
-          existingSubmission={quizSubmissions[selectedQuiz.id]}
           strictModeActive={quizInProgress}
           studentName={userInfo.fullName}
           studentId={user?.uid || "unknown"}
@@ -2472,7 +2643,18 @@ const StudentDashboard: React.FC = () => {
 
       {/* Include all CSS styles - keep your existing CSS */}
       <style>{`
-        /* Your existing CSS styles here - they are correct */
+        /* Your existing CSS styles remain here */
+        /* Add the modal-open and blurred styles */
+        .app.modal-open {
+          overflow: hidden;
+        }
+        
+        .main-content.blurred,
+        .profile-card.blurred {
+          filter: blur(4px);
+          pointer-events: none;
+          user-select: none;
+        }
         .quizzes-grid {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -2592,7 +2774,7 @@ const StudentDashboard: React.FC = () => {
           gap: 20px;
           margin-top: 20px;
         }
-
+      
         .quiz-card {
           background: white;
           border: 3px solid;
@@ -2601,19 +2783,19 @@ const StudentDashboard: React.FC = () => {
           transition: all 0.3s ease;
           box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-
+      
         .quiz-card:hover {
           transform: translateY(-4px);
           box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
         }
-
+      
         .quiz-card-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
           margin-bottom: 15px;
         }
-
+      
         .quiz-subject {
           background: #3b82f6;
           color: white;
@@ -2622,7 +2804,7 @@ const StudentDashboard: React.FC = () => {
           font-size: 12px;
           font-weight: 600;
         }
-
+      
         .quiz-status {
           padding: 6px 12px;
           border-radius: 20px;
@@ -2630,27 +2812,27 @@ const StudentDashboard: React.FC = () => {
           font-weight: 600;
           color: white;
         }
-
+      
         .quiz-title {
           font-size: 18px;
           font-weight: 700;
           margin-bottom: 8px;
           color: #1f2937;
         }
-
+      
         .quiz-teacher {
           color: #6b7280;
           margin-bottom: 15px;
           font-size: 14px;
         }
-
+      
         .quiz-details {
           display: flex;
           flex-direction: column;
           gap: 8px;
           margin-bottom: 20px;
         }
-
+      
         .detail {
           display: flex;
           align-items: center;
@@ -2658,16 +2840,16 @@ const StudentDashboard: React.FC = () => {
           font-size: 14px;
           color: #6b7280;
         }
-
+      
         .detail.score {
           color: #10b981;
           font-weight: 600;
         }
-
+      
         .quiz-actions {
           margin-top: auto;
         }
-
+      
         .quiz-action-btn {
           width: 100%;
           background: #10b981;
@@ -2679,54 +2861,54 @@ const StudentDashboard: React.FC = () => {
           cursor: pointer;
           transition: all 0.3s ease;
         }
-
+      
         .quiz-action-btn:hover:not(:disabled) {
           transform: translateY(-2px);
           box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
         }
-
+      
         .quiz-action-btn:disabled {
           cursor: not-allowed;
           transform: none;
           box-shadow: none;
         }
-
+      
         /* Modal overlay styles */
         .modal-open {
           overflow: hidden;
         }
-
+      
         .main-content.blurred,
         .profile-card.blurred {
           filter: blur(4px);
           pointer-events: none;
           user-select: none;
         }
-
+      
         /* Add all other teacher dashboard CSS styles here */
         .app {
           position: relative;
           min-height: 100vh;
         }
-
+      
         .app.modal-open {
           overflow: hidden;
         }
-
+      
         .main-content.blurred,
         .profile-card.blurred {
           filter: blur(4px);
           pointer-events: none;
           user-select: none;
         }
-
+      
         /* Enhanced Live Monitoring Styles */
         .monitoring-controls {
           display: flex;
           align-items: center;
           gap: 12px;
         }
-
+      
         .refresh-btn {
           display: flex;
           align-items: center;
@@ -2739,13 +2921,13 @@ const StudentDashboard: React.FC = () => {
           font-size: 12px;
           transition: all 0.2s;
         }
-
+      
         .refresh-btn.active {
           background: #3b82f6;
           color: white;
           border-color: #3b82f6;
         }
-
+      
         .quiz-selector {
           padding: 8px 12px;
           border: 1px solid #e5e7eb;
@@ -2753,7 +2935,7 @@ const StudentDashboard: React.FC = () => {
           background: white;
           font-size: 12px;
         }
-
+      
         .status-badge {
           display: flex;
           align-items: center;
@@ -2763,38 +2945,38 @@ const StudentDashboard: React.FC = () => {
           font-size: 11px;
           font-weight: 600;
         }
-
+      
         .status-in-progress {
           background: #dbeafe;
           color: #1e40af;
         }
-
+      
         .status-submitted {
           background: #d1fae5;
           color: #065f46;
         }
-
+      
         .status-violation {
           background: #fef2f2;
           color: #dc2626;
         }
-
+      
         .status-expired {
           background: #f3f4f6;
           color: #6b7280;
         }
-
+      
         .student-details {
           flex: 1;
         }
-
+      
         .student-name-section {
           display: flex;
           justify-content: space-between;
           align-items: center;
           margin-bottom: 4px;
         }
-
+      
         .violations-list {
           margin-top: 8px;
           padding: 8px;
@@ -2803,7 +2985,7 @@ const StudentDashboard: React.FC = () => {
           border-radius: 6px;
           border-left: 3px solid #ef4444;
         }
-
+      
         .violation-item {
           display: flex;
           align-items: center;
@@ -2811,45 +2993,45 @@ const StudentDashboard: React.FC = () => {
           padding: 4px 0;
           font-size: 11px;
         }
-
+      
         .violation-icon {
           font-size: 12px;
         }
-
+      
         .violation-desc {
           flex: 1;
           color: #374151;
         }
-
+      
         .violation-time {
           color: #6b7280;
           font-size: 10px;
         }
-
+      
         .more-violations {
           font-size: 10px;
           color: #ef4444;
           font-weight: 600;
           margin-top: 4px;
         }
-
+      
         /* Enhanced Grade Management Styles */
         .obj-score-cell {
           background: #f0f9ff;
         }
-
+      
         .auto-score-display {
           display: flex;
           align-items: center;
           justify-content: space-between;
           padding: 4px 8px;
         }
-
+      
         .score-value {
           font-weight: 600;
           color: #1e40af;
         }
-
+      
         .auto-badge {
           background: #dbeafe;
           color: #1e40af;
@@ -2858,7 +3040,7 @@ const StudentDashboard: React.FC = () => {
           font-size: 10px;
           font-weight: 600;
         }
-
+      
         .quiz-results-notice {
           display: flex;
           align-items: center;
@@ -2871,10 +3053,10 @@ const StudentDashboard: React.FC = () => {
           font-size: 14px;
           color: #0369a1;
         }
-
+      
         /* Add all previous CSS styles here */
         /* ... (include all previous CSS from the original code) */
-
+      
         /* Modal Styles */
         .modal-overlay {
           position: fixed;
@@ -2887,7 +3069,7 @@ const StudentDashboard: React.FC = () => {
           z-index: 1000;
           padding: 20px;
         }
-
+      
         .modal-content {
           background: white;
           border-radius: 24px;
@@ -2898,20 +3080,20 @@ const StudentDashboard: React.FC = () => {
           flex-direction: column;
           box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
         }
-
+      
         .xl-modal {
           max-width: 95vw;
           max-height: 90vh;
         }
-
+      
         .medium-modal {
           max-width: 600px;
         }
-
+      
         .small-modal {
           max-width: 500px;
         }
-
+      
         .modal-header {
           display: flex;
           justify-content: space-between;
@@ -2923,7 +3105,7 @@ const StudentDashboard: React.FC = () => {
           background: white;
           z-index: 10;
         }
-
+      
         .modal-body {
           padding: 0 32px;
           overflow-y: auto;
@@ -2931,24 +3113,24 @@ const StudentDashboard: React.FC = () => {
           scrollbar-width: thin;
           scrollbar-color: #c7d2fe transparent;
         }
-
+      
         .modal-body::-webkit-scrollbar {
           width: 6px;
         }
-
+      
         .modal-body::-webkit-scrollbar-track {
           background: transparent;
         }
-
+      
         .modal-body::-webkit-scrollbar-thumb {
           background: #c7d2fe;
           border-radius: 3px;
         }
-
+      
         .modal-body::-webkit-scrollbar-thumb:hover {
           background: #a5b4fc;
         }
-
+      
         .modal-footer {
           display: flex;
           justify-content: flex-end;
@@ -2961,7 +3143,7 @@ const StudentDashboard: React.FC = () => {
           z-index: 10;
           gap: 12px;
         }
-
+      
         .close-btn {
           background: none;
           border: none;
@@ -2974,11 +3156,11 @@ const StudentDashboard: React.FC = () => {
           justify-content: center;
           transition: background-color 0.2s;
         }
-
+      
         .close-btn:hover {
           background: #f3f4f6;
         }
-
+      
         .action-btn {
           padding: 10px 20px;
           border-radius: 8px;
@@ -2988,16 +3170,16 @@ const StudentDashboard: React.FC = () => {
           border: none;
           transition: all 0.2s;
         }
-
+      
         .action-btn.primary {
           background: #4f46e5;
           color: white;
         }
-
+      
         .action-btn.primary:hover {
           background: #4338ca;
         }
-
+      
         .action-btn.export-btn {
           background: #f59e0b;
           color: white;
@@ -3005,11 +3187,11 @@ const StudentDashboard: React.FC = () => {
           align-items: center;
           gap: 8px;
         }
-
+      
         .action-btn.export-btn:hover {
           background: #d97706;
         }
-
+      
         /* Performance Menu Styles */
         .performance-menu-overlay {
           position: fixed;
@@ -3022,7 +3204,7 @@ const StudentDashboard: React.FC = () => {
           z-index: 1001;
           padding: 20px;
         }
-
+      
         .performance-menu-content {
           background: white;
           border-radius: 24px;
@@ -3033,26 +3215,26 @@ const StudentDashboard: React.FC = () => {
           flex-direction: column;
           box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
         }
-
+      
         .performance-menu-header {
           padding: 32px 32px 0;
           margin-bottom: 24px;
           position: relative;
         }
-
+      
         .performance-menu-header h2 {
           font-size: 24px;
           font-weight: 700;
           color: #111827;
           margin: 0 0 8px 0;
         }
-
+      
         .performance-menu-header p {
           font-size: 14px;
           color: #6b7280;
           margin: 0;
         }
-
+      
         .performance-menu-grid {
           padding: 0 24px 24px;
           display: grid;
@@ -3060,7 +3242,7 @@ const StudentDashboard: React.FC = () => {
           gap: 16px;
           overflow-y: auto;
         }
-
+      
         .performance-menu-item {
           display: flex;
           align-items: center;
@@ -3071,14 +3253,14 @@ const StudentDashboard: React.FC = () => {
           transition: all 0.2s;
           gap: 16px;
         }
-
+      
         .performance-menu-item:hover {
           border-color: #4f46e5;
           background: #f8fafc;
           transform: translateY(-2px);
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
-
+      
         .menu-item-icon {
           width: 56px;
           height: 56px;
@@ -3087,37 +3269,37 @@ const StudentDashboard: React.FC = () => {
           align-items: center;
           justify-content: center;
         }
-
+      
         .menu-item-content {
           flex: 1;
         }
-
+      
         .menu-item-content h4 {
           font-size: 16px;
           font-weight: 600;
           color: #111827;
           margin: 0 0 4px 0;
         }
-
+      
         .menu-item-content p {
           font-size: 13px;
           color: #6b7280;
           margin: 0;
           line-height: 1.4;
         }
-
+      
         .menu-item-arrow {
           opacity: 0;
           transition: opacity 0.2s;
         }
-
+      
         .performance-menu-item:hover .menu-item-arrow {
           opacity: 1;
         }
-
+      
         /* Add all remaining CSS styles from the original code */
         /* ... (include all the CSS from the previous implementation) */
-
+      
         * {
           box-sizing: border-box;
           margin: 0;
@@ -3475,7 +3657,7 @@ const StudentDashboard: React.FC = () => {
           text-decoration: none;
           font-weight: 600;
         }
-
+      
         /* Working Hours Bar Chart Styles */
         .bar-chart {
           display: flex;
@@ -3550,7 +3732,7 @@ const StudentDashboard: React.FC = () => {
           font-weight: 700;
           color: #111827;
         }
-
+      
         .total {
           font-size: 14px;
           color: #6b7280;
@@ -3880,7 +4062,7 @@ const StudentDashboard: React.FC = () => {
           color: #9ca3af;
           padding: 20px 0;
         }
-
+      
         /* Grade Management Specific Styles */
         .grade-controls {
           display: grid;
@@ -3892,25 +4074,25 @@ const StudentDashboard: React.FC = () => {
           border-radius: 12px;
           border: 1px solid #e5e7eb;
         }
-
+      
         .control-group {
           display: flex;
           flex-direction: column;
           gap: 8px;
         }
-
+      
         .control-group label {
           font-size: 14px;
           font-weight: 600;
           color: #374151;
         }
-
+      
         .action-buttons {
           display: flex;
           gap: 8px;
           flex-wrap: wrap;
         }
-
+      
         .action-buttons .action-btn {
           padding: 8px 16px;
           border-radius: 8px;
@@ -3923,62 +4105,62 @@ const StudentDashboard: React.FC = () => {
           align-items: center;
           gap: 6px;
         }
-
+      
         .action-btn.edit {
           background: #3b82f6;
           color: white;
         }
-
+      
         .action-btn.edit:hover {
           background: #2563eb;
         }
-
+      
         .action-btn.cancel {
           background: #6b7280;
           color: white;
         }
-
+      
         .action-btn.cancel:hover {
           background: #4b5563;
         }
-
+      
         .action-btn.save {
           background: #10b981;
           color: white;
         }
-
+      
         .action-btn.save:hover:not(:disabled) {
           background: #059669;
         }
-
+      
         .action-btn.save:disabled {
           background: #9ca3af;
           cursor: not-allowed;
         }
-
+      
         .action-btn.export {
           background: #f59e0b;
           color: white;
         }
-
+      
         .action-btn.export:hover {
           background: #d97706;
         }
-
+      
         .grades-table-container {
           overflow-x: auto;
           border: 1px solid #e5e7eb;
           border-radius: 12px;
           margin-bottom: 24px;
         }
-
+      
         .grades-table {
           width: 100%;
           border-collapse: collapse;
           font-size: 12px;
           background: white;
         }
-
+      
         .grades-table th {
           background: #f8fafc;
           padding: 12px 8px;
@@ -3988,40 +4170,40 @@ const StudentDashboard: React.FC = () => {
           border: 1px solid #e5e7eb;
           white-space: nowrap;
         }
-
+      
         .grades-table td {
           padding: 8px;
           text-align: center;
           border: 1px solid #e5e7eb;
           vertical-align: middle;
         }
-
+      
         .max-scores-row th {
           background: #e5e7eb;
           font-size: 11px;
           color: #6b7280;
         }
-
+      
         .grade-row:hover {
           background: #f9fafb;
         }
-
+      
         .serial-number {
           font-weight: 600;
           color: #374151;
           background: #f8fafc;
         }
-
+      
         .student-name {
           text-align: left;
           font-weight: 600;
           min-width: 150px;
         }
-
+      
         .class-name {
           min-width: 100px;
         }
-
+      
         .score-input {
           width: 60px;
           padding: 4px 8px;
@@ -4030,31 +4212,31 @@ const StudentDashboard: React.FC = () => {
           text-align: center;
           font-size: 12px;
         }
-
+      
         .score-input:disabled {
           background: #f9fafb;
           color: #6b7280;
           cursor: not-allowed;
         }
-
+      
         .score-input:focus {
           outline: none;
           border-color: #3b82f6;
           box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
         }
-
+      
         .total-score,
         .percentage {
           font-weight: 700;
           background: #f0f9ff;
         }
-
+      
         .grade {
           font-weight: 700;
           border-radius: 4px;
           padding: 4px 8px;
         }
-
+      
         .grade-a1 {
           background: #dcfce7;
           color: #166534;
@@ -4091,19 +4273,19 @@ const StudentDashboard: React.FC = () => {
           background: #fecaca;
           color: #991b1b;
         }
-
+      
         .position {
           font-weight: 700;
           color: #1e40af;
         }
-
+      
         .remark {
           font-weight: 600;
           border-radius: 4px;
           padding: 4px 8px;
           min-width: 80px;
         }
-
+      
         .remark.excellent {
           background: #dcfce7;
           color: #166534;
@@ -4128,26 +4310,26 @@ const StudentDashboard: React.FC = () => {
           background: #fecaca;
           color: #991b1b;
         }
-
+      
         .grade-legend {
           background: #f8fafc;
           border: 1px solid #e5e7eb;
           border-radius: 12px;
           padding: 20px;
         }
-
+      
         .grade-legend h4 {
           margin: 0 0 16px 0;
           font-size: 16px;
           color: #374151;
         }
-
+      
         .legend-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
           gap: 12px;
         }
-
+      
         .legend-item {
           display: flex;
           align-items: center;
@@ -4157,7 +4339,7 @@ const StudentDashboard: React.FC = () => {
           border-radius: 8px;
           border: 1px solid #e5e7eb;
         }
-
+      
         .grade-badge {
           padding: 4px 8px;
           border-radius: 4px;
@@ -4166,42 +4348,42 @@ const StudentDashboard: React.FC = () => {
           min-width: 30px;
           text-align: center;
         }
-
+      
         .grade-range {
           font-size: 12px;
           color: #6b7280;
           flex: 1;
         }
-
+      
         .grade-remark {
           font-size: 12px;
           font-weight: 600;
           color: #374151;
         }
-
+      
         .footer-stats {
           display: flex;
           gap: 24px;
           align-items: center;
         }
-
+      
         .footer-stats .stat {
           display: flex;
           flex-direction: column;
           align-items: center;
         }
-
+      
         .footer-stats .stat-label {
           font-size: 12px;
           color: #6b7280;
         }
-
+      
         .footer-stats .stat-value {
           font-size: 18px;
           font-weight: 700;
           color: #1e40af;
         }
-
+      
         /* Live Monitoring Enhanced Styles */
         .live-indicator {
           display: flex;
@@ -4211,7 +4393,7 @@ const StudentDashboard: React.FC = () => {
           font-weight: 600;
           font-size: 14px;
         }
-
+      
         .live-dot {
           width: 8px;
           height: 8px;
@@ -4219,14 +4401,14 @@ const StudentDashboard: React.FC = () => {
           background: #ef4444;
           animation: pulse 1s infinite;
         }
-
+      
         .monitoring-stats {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
           gap: 16px;
           margin-bottom: 24px;
         }
-
+      
         .stat-card {
           background: #f8fafc;
           border-radius: 12px;
@@ -4238,31 +4420,31 @@ const StudentDashboard: React.FC = () => {
           align-items: center;
           gap: 8px;
         }
-
+      
         .stat-number {
           display: block;
           font-size: 32px;
           font-weight: 700;
           color: #4299e1;
         }
-
+      
         .stat-label {
           font-size: 14px;
           color: #6b7280;
           font-weight: 500;
         }
-
+      
         .students-monitoring {
           margin-top: 24px;
         }
-
+      
         .students-monitoring h4 {
           font-size: 18px;
           font-weight: 600;
           margin-bottom: 16px;
           color: #111827;
         }
-
+      
         .monitoring-list {
           display: flex;
           flex-direction: column;
@@ -4270,7 +4452,7 @@ const StudentDashboard: React.FC = () => {
           max-height: 400px;
           overflow-y: auto;
         }
-
+      
         .monitoring-item {
           display: flex;
           justify-content: space-between;
@@ -4280,14 +4462,14 @@ const StudentDashboard: React.FC = () => {
           border-radius: 12px;
           background: white;
         }
-
+      
         .student-info {
           display: flex;
           align-items: flex-start;
           gap: 12px;
           flex: 1;
         }
-
+      
         .student-avatar-small {
           width: 40px;
           height: 40px;
@@ -4301,7 +4483,7 @@ const StudentDashboard: React.FC = () => {
           font-size: 14px;
           flex-shrink: 0;
         }
-
+      
         .student-meta {
           display: flex;
           gap: 12px;
@@ -4310,14 +4492,14 @@ const StudentDashboard: React.FC = () => {
           margin-top: 4px;
           flex-wrap: wrap;
         }
-
+      
         .progress-display {
           display: flex;
           align-items: center;
           gap: 12px;
           min-width: 140px;
         }
-
+      
         .progress-bar {
           width: 120px;
           height: 8px;
@@ -4325,26 +4507,26 @@ const StudentDashboard: React.FC = () => {
           border-radius: 4px;
           overflow: hidden;
         }
-
+      
         .progress-fill {
           height: 100%;
           transition: width 0.3s ease;
         }
-
+      
         .progress-text {
           font-size: 14px;
           font-weight: 600;
           color: #374151;
           min-width: 40px;
         }
-
+      
         /* Upload CA Modal Styles */
         .upload-method-selector {
           display: flex;
           gap: 12px;
           margin-bottom: 24px;
         }
-
+      
         .method-btn {
           flex: 1;
           padding: 16px;
@@ -4359,23 +4541,23 @@ const StudentDashboard: React.FC = () => {
           font-weight: 600;
           transition: all 0.2s;
         }
-
+      
         .method-btn.active {
           border-color: #4f46e5;
           background: #eef2ff;
           color: #4f46e5;
         }
-
+      
         .method-btn:hover:not(.active) {
           border-color: #d1d5db;
         }
-
+      
         .scores-table {
           border: 1px solid #e5e7eb;
           border-radius: 12px;
           overflow: hidden;
         }
-
+      
         .table-header {
           display: flex;
           justify-content: space-between;
@@ -4385,7 +4567,7 @@ const StudentDashboard: React.FC = () => {
           color: #374151;
           border-bottom: 1px solid #e5e7eb;
         }
-
+      
         .score-row {
           display: flex;
           justify-content: space-between;
@@ -4393,16 +4575,16 @@ const StudentDashboard: React.FC = () => {
           border-bottom: 1px solid #e5e7eb;
           align-items: center;
         }
-
+      
         .score-row:last-child {
           border-bottom: none;
         }
-
+      
         .csv-upload-section {
           text-align: center;
           padding: 40px 20px;
         }
-
+      
         .upload-area {
           border: 2px dashed #d1d5db;
           border-radius: 12px;
@@ -4410,11 +4592,11 @@ const StudentDashboard: React.FC = () => {
           cursor: pointer;
           transition: border-color 0.2s;
         }
-
+      
         .upload-area:hover {
           border-color: #9ca3af;
         }
-
+      
         .upload-csv-btn {
           background: #4f46e5;
           color: white;
@@ -4428,7 +4610,7 @@ const StudentDashboard: React.FC = () => {
           gap: 8px;
           font-weight: 600;
         }
-
+      
         /* Create Quiz Modal Styles */
         .modal-title-section h2 {
           font-size: 24px;
@@ -4436,17 +4618,17 @@ const StudentDashboard: React.FC = () => {
           color: #111827;
           margin: 0 0 8px 0;
         }
-
+      
         .question-counter {
           font-size: 14px;
           color: #6b7280;
           font-weight: 500;
         }
-
+      
         .form-group {
           margin-bottom: 32px;
         }
-
+      
         .form-group label {
           display: block;
           font-size: 14px;
@@ -4454,7 +4636,7 @@ const StudentDashboard: React.FC = () => {
           color: #374151;
           margin-bottom: 8px;
         }
-
+      
         .question-textarea {
           width: 100%;
           padding: 16px;
@@ -4467,13 +4649,13 @@ const StudentDashboard: React.FC = () => {
           transition: border-color 0.2s;
           line-height: 1.5;
         }
-
+      
         .question-textarea:focus {
           outline: none;
           border-color: #4f46e5;
           box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
         }
-
+      
         .image-upload-section {
           border: 2px dashed #d1d5db;
           border-radius: 12px;
@@ -4481,17 +4663,17 @@ const StudentDashboard: React.FC = () => {
           overflow: hidden;
           transition: border-color 0.2s;
         }
-
+      
         .image-upload-section:hover {
           border-color: #9ca3af;
         }
-
+      
         .image-preview {
           position: relative;
           padding: 20px;
           text-align: center;
         }
-
+      
         .preview-image {
           max-width: 100%;
           max-height: 200px;
@@ -4499,7 +4681,7 @@ const StudentDashboard: React.FC = () => {
           margin-bottom: 12px;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
-
+      
         .remove-image-btn {
           background: #ef4444;
           color: white;
@@ -4514,26 +4696,26 @@ const StudentDashboard: React.FC = () => {
           margin: 0 auto;
           transition: background-color 0.2s;
         }
-
+      
         .remove-image-btn:hover {
           background: #dc2626;
         }
-
+      
         .image-upload-area {
           padding: 40px 20px;
           text-align: center;
           cursor: pointer;
           transition: background-color 0.2s;
         }
-
+      
         .image-upload-area:hover {
           background: #f9fafb;
         }
-
+      
         .image-input {
           display: none;
         }
-
+      
         .upload-label {
           cursor: pointer;
           display: flex;
@@ -4541,25 +4723,25 @@ const StudentDashboard: React.FC = () => {
           align-items: center;
           gap: 12px;
         }
-
+      
         .upload-label p {
           font-size: 16px;
           color: #374151;
           margin: 0;
           font-weight: 500;
         }
-
+      
         .upload-label span {
           font-size: 14px;
           color: #6b7280;
         }
-
+      
         .options-list {
           display: flex;
           flex-direction: column;
           gap: 16px;
         }
-
+      
         .option-item {
           border: 2px solid #e5e7eb;
           border-radius: 12px;
@@ -4568,25 +4750,25 @@ const StudentDashboard: React.FC = () => {
           transition: all 0.2s;
           position: relative;
         }
-
+      
         .option-item:hover {
           border-color: #d1d5db;
           background: #f3f4f6;
         }
-
+      
         .option-item:focus-within {
           border-color: #4f46e5;
           background: #f8fafc;
           box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
         }
-
+      
         .option-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
           margin-bottom: 16px;
         }
-
+      
         .option-label {
           font-size: 14px;
           font-weight: 700;
@@ -4594,7 +4776,7 @@ const StudentDashboard: React.FC = () => {
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
-
+      
         .correct-answer-selector {
           display: flex;
           align-items: center;
@@ -4605,23 +4787,23 @@ const StudentDashboard: React.FC = () => {
           border: 1px solid #d1d5db;
           transition: all 0.2s;
         }
-
+      
         .correct-answer-selector:hover {
           border-color: #9ca3af;
         }
-
+      
         .correct-answer-selector:has(.correct-radio:checked) {
           background: #d1fae5;
           border-color: #10b981;
         }
-
+      
         .correct-radio {
           margin: 0;
           width: 16px;
           height: 16px;
           cursor: pointer;
         }
-
+      
         .correct-answer-selector label {
           font-size: 12px;
           color: #059669;
@@ -4630,11 +4812,11 @@ const StudentDashboard: React.FC = () => {
           cursor: pointer;
           user-select: none;
         }
-
+      
         .correct-answer-selector:has(.correct-radio:checked) label {
           color: #065f46;
         }
-
+      
         .option-input {
           width: 100%;
           padding: 14px 16px;
@@ -4645,19 +4827,19 @@ const StudentDashboard: React.FC = () => {
           background: white;
           font-weight: 500;
         }
-
+      
         .option-input:focus {
           outline: none;
           border-color: #4f46e5;
           background: white;
           box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
         }
-
+      
         .option-input::placeholder {
           color: #9ca3af;
           font-weight: normal;
         }
-
+      
         .modal-footer {
           display: flex;
           justify-content: space-between;
@@ -4671,14 +4853,14 @@ const StudentDashboard: React.FC = () => {
           border-radius:40px;
           gap: 16px;
         }
-
+      
         .footer-left,
         .footer-right {
           display: flex;
           align-items: center;
           gap: 12px;
         }
-
+      
         .nav-btn {
           background: white;
           border: 2px solid #d1d5db;
@@ -4693,17 +4875,17 @@ const StudentDashboard: React.FC = () => {
           font-weight: 600;
           transition: all 0.2s;
         }
-
+      
         .nav-btn:hover:not(:disabled) {
           background: #f9fafb;
           border-color: #9ca3af;
         }
-
+      
         .nav-btn:disabled {
           opacity: 0.5;
           cursor: not-allowed;
         }
-
+      
         .remove-question-btn {
           background: white;
           border: 2px solid #ef4444;
@@ -4718,12 +4900,12 @@ const StudentDashboard: React.FC = () => {
           font-weight: 600;
           transition: all 0.2s;
         }
-
+      
         .remove-question-btn:hover {
           background: #fef2f2;
           border-color: #dc2626;
         }
-
+      
         .add-question-btn {
           background: #10b981;
           color: white;
@@ -4738,25 +4920,25 @@ const StudentDashboard: React.FC = () => {
           font-weight: 600;
           transition: background-color 0.2s;
         }
-
+      
         .add-question-btn:hover {
           background: #059669;
         }
-
+      
         .action-btn.save {
           background: #4f46e5;
           color: white;
         }
-
+      
         .action-btn.save:hover:not(:disabled) {
           background: #4338ca;
         }
-
+      
         .action-btn.save:disabled {
           opacity: 0.5;
           cursor: not-allowed;
         }
-
+      
         /* Quiz Name Modal Styles */
         .text-input {
           width: 100%;
@@ -4768,19 +4950,19 @@ const StudentDashboard: React.FC = () => {
           background: white;
           font-weight: 500;
         }
-
+      
         .text-input:focus {
           outline: none;
           border-color: #4f46e5;
           background: white;
           box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
         }
-
+      
         .text-input::placeholder {
           color: #9ca3af;
           font-weight: normal;
         }
-
+      
         .quiz-summary {
           background: #f8fafc;
           border-radius: 16px;
@@ -4788,7 +4970,7 @@ const StudentDashboard: React.FC = () => {
           border: 2px solid #e2e8f0;
           margin-top: 8px;
         }
-
+      
         .quiz-summary h4 {
           font-size: 16px;
           font-weight: 700;
@@ -4797,7 +4979,7 @@ const StudentDashboard: React.FC = () => {
           padding-bottom: 12px;
           border-bottom: 2px solid #e2e8f0;
         }
-
+      
         .quiz-summary p {
           font-size: 14px;
           color: #475569;
@@ -4806,24 +4988,24 @@ const StudentDashboard: React.FC = () => {
           justify-content: space-between;
           align-items: center;
         }
-
+      
         .quiz-summary p strong {
           color: #334155;
           font-weight: 600;
           min-width: 120px;
         }
-
+      
         .action-btn.cancel {
           background: white;
           color: #374151;
           border: 2px solid #d1d5db;
         }
-
+      
         .action-btn.cancel:hover {
           background: #f9fafb;
           border-color: #9ca3af;
         }
-
+      
         /* Responsive Design */
         @media (max-width: 1200px) {
           .top-grid {
@@ -4838,7 +5020,7 @@ const StudentDashboard: React.FC = () => {
             padding: 32px;
           }
         }
-
+      
         @media (max-width: 768px) {
           .header {
             padding: 0 24px;
@@ -4893,7 +5075,7 @@ const StudentDashboard: React.FC = () => {
             width: 100%;
           }
         }
-
+      
         @media (max-width: 480px) {
           .performance-menu-grid {
             grid-template-columns: 1fr;
@@ -4902,7 +5084,7 @@ const StudentDashboard: React.FC = () => {
             grid-template-columns: 1fr;
           }
         }
-
+      
         .loading,
         .error {
           display: flex;
@@ -4916,7 +5098,6 @@ const StudentDashboard: React.FC = () => {
           flex-direction: column;
           gap: 16px;
         }
-
       `}</style>
     </div>
   );
