@@ -980,7 +980,7 @@ const StrictQuizInterface: React.FC<{
         <div className="quiz-start-screen">
           <div className="start-screen-content">
             <Lock size={64} />
-            <h1>Ready to Start Quiz?</h1>
+            <h1>Confirm Start?</h1>
             <p className="quiz-title">
               {quiz.name} - {quiz.subject}
             </p>
@@ -5098,6 +5098,242 @@ const StudentDashboard: React.FC = () => {
           flex-direction: column;
           gap: 16px;
         }
+        /* Add these styles to your existing CSS */
+
+/* Quiz Start Screen Styles */
+.quiz-start-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0); 
+  z-index: 2000;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+}
+
+.start-screen-content {
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  text-align: center;
+  background: #1e293b;
+  padding: 40px;
+  border-radius: 20px;
+  border: 2px solid #334155;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  overflow-y: auto; 
+  overflow-x: hidden;
+}
+
+.start-screen-content h1 {
+  margin: 20px 0 10px 0;
+  color: white;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.3;
+  word-wrap: break-word;
+}
+.start-screen-content * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.quiz-title {
+  margin: 0 0 30px 0;
+  color: #94a3b8;
+  font-size: 16px;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+.quiz-details-start {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 30px;
+  background: #0f172a;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid #334155;
+  max-height: 300px; /* Limit height */
+  overflow-y: auto;
+}
+
+.detail-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  color: #cbd5e1;
+  min-width: 0;
+}
+
+.detail-item svg {
+  color: #60a5fa;
+  flex-shrink: 0;}
+
+.warning-box {
+  background: #fef3c7;
+  border: 2px solid #f59e0b;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 30px;
+  color: #92400e;
+  min-width: 0;
+}
+
+.warning-box svg {
+  color: #d97706;
+  flex-shrink: 0;
+}
+
+.warning-box p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: left;
+  word-wrap: break-word;
+  min-width: 0;
+}
+
+.start-buttons {
+  display: flex;
+  gap: 16px;
+  margin-top: auto;
+}
+
+.start-buttons .nav-btn {
+  flex: 1;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  min-width: 120px;
+}
+
+.start-buttons .nav-btn.cancel {
+  background: #374151;
+  color: white;
+  border: 1px solid #4b5563;
+}
+
+.start-buttons .nav-btn.cancel:hover {
+  background: #4b5563;
+  transform: translateY(-2px);
+}
+
+.start-buttons .nav-btn.start {
+  background: #10b981;
+  color: white;
+  border: 1px solid #10b981;
+}
+
+.start-buttons .nav-btn.start:hover {
+  background: #059669;
+  transform: translateY(-2px);
+}
+
+/* Ensure no overflow in quiz interface */
+.quiz-interface {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #0f172a;
+  color: white;
+  font-family: 'Inter', sans-serif;
+  z-index: 2000;
+  overflow: hidden; /* Prevent any overflow */
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .start-screen-content {
+    padding: 30px 20px;
+    width: 95%;
+    max-height: 85vh;
+  }
+  
+  .start-screen-content h1 {
+    font-size: 24px;
+  }
+  
+  .quiz-details-start {
+    padding: 15px;
+    max-height: 250px;
+  }
+  
+  .detail-item {
+    font-size: 14px;
+  }
+  
+  .warning-box {
+    padding: 12px;
+  }
+  
+  .warning-box p {
+    font-size: 13px;
+  }
+  
+  .start-buttons {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .start-buttons .nav-btn {
+    width: 100%;
+    padding: 12px 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .start-screen-content {
+    padding: 25px 15px;
+    border-radius: 16px;
+  }
+  
+  .start-screen-content h1 {
+    font-size: 22px;
+    margin: 15px 0 8px 0;
+  }
+  
+  .quiz-title {
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+  
+  .detail-item {
+    font-size: 13px;
+    gap: 8px;
+  }
+  
+  .quiz-details-start {
+    padding: 12px;
+    gap: 8px;
+  }
+}
       `}</style>
     </div>
   );
