@@ -8,9 +8,10 @@ import Signup from "./pages/signup";
 import Login from "./pages/login";
 import TeacherDashboard from "./pages/teachers";
 import StudentDashboard from "./pages/students";
+import AdminDashboard from "./pages/admin"; // <-- import admin dashboard
 import QuizDashboard from "./pages/quiz";
 import QuizSubjects from "./pages/QuizSubject";
-import QuizResults from "./pages/QuizResults"; // Add this import
+import QuizResults from "./pages/QuizResults";
 import LoadingOverlay from "./components/LoadingOverlay";
 import { useLoading } from "./hooks/useLoading";
 import { useFirebaseStore } from "./stores/useFirebaseStore";
@@ -26,8 +27,9 @@ function useRouteLoading() {
   }, [location.pathname, setLoading]);
 }
 
+// General private route for teachers/students
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { user, userData, loading } = useFirebaseStore();
+  const { user, loading } = useFirebaseStore();
 
   if (loading) return <LoadingOverlay />;
 
@@ -35,6 +37,29 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
   if (!user.emailVerified) {
     alert("Please verify your email first.");
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+// Admin-specific route
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading, userData } = useFirebaseStore();
+
+  if (loading) return <LoadingOverlay />;
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  // Allow admin to skip email verification
+  const isAdmin = user.email === "minibossfcmb@proton.me";
+  if (!user.emailVerified && !isAdmin) {
+    alert("Please verify your email first.");
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!isAdmin) {
+    alert("Access denied. Admins only.");
     return <Navigate to="/login" replace />;
   }
 
@@ -69,6 +94,7 @@ function SmartRedirect() {
   if (userData?.role === "teacher") return <Navigate to="/teachers" replace />;
   if (userData?.role === "student") return <Navigate to="/students" replace />;
 
+  // Fallback
   return <Navigate to="/login" replace />;
 }
 
@@ -89,6 +115,8 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
+
+        {/* Dashboards */}
         <Route
           path="/teachers"
           element={
@@ -105,6 +133,15 @@ export default function App() {
             </PrivateRoute>
           }
         />
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminDashboard />
+            </AdminRoute>
+          }
+        />
+
         {/* Quiz Routes */}
         <Route
           path="/quiz-subjects"
@@ -122,7 +159,6 @@ export default function App() {
             </StudentRoute>
           }
         />
-        {/* Quiz Results Route */}
         <Route
           path="/quiz/:subjectId/results"
           element={
@@ -131,7 +167,6 @@ export default function App() {
             </StudentRoute>
           }
         />
-        {/* Legacy quiz route for backward compatibility */}
         <Route
           path="/quiz"
           element={<Navigate to="/quiz-subjects" replace />}
