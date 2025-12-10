@@ -1,4 +1,4 @@
-// stores/useFirebaseStore.ts - FIXED VERSION
+// stores/useFirebaseStore.ts - UPGRADED VERSION
 "use client";
 
 import { create } from "zustand";
@@ -15,6 +15,10 @@ import {
   query,
   where,
   onSnapshot,
+  updateDoc,
+  getDocs,
+  writeBatch,
+  DocumentData,
 } from "firebase/firestore";
 import { auth, db } from "../firebase/config";
 
@@ -61,6 +65,12 @@ interface FirebaseStore {
   refreshStudents: () => void;
   clearError: () => void;
   signOutUser: () => Promise<void>;
+
+  // NEW API
+  updateTeacherProfile: (teacherId: string, data: Partial<Record<string, any>>) => Promise<{ success: boolean; error?: string }>;
+  switchTeacherClass: (teacherId: string, newClass: string) => Promise<{ success: boolean; error?: string }>;
+  promoteStudents: (oldClass: string, newClass: string) => Promise<{ success: boolean; error?: string }>;
+  updateStudentClass: (studentId: string, newClass: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -181,7 +191,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
       q,
       (snap) => {
         const students: Student[] = snap.docs.map((d) => {
-          const data = d.data();
+          const data = d.data() as DocumentData;
           const { first, last } = splitName(data.fullName);
           return {
             id: d.id,
@@ -363,6 +373,126 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
       } catch (err: any) {
         log(`Sign-out error: ${err.message}`);
         throw err;
+      }
+    },
+
+    // -------------------------------
+    // NEW: Update Teacher Profile
+    // -------------------------------
+    updateTeacherProfile: async (teacherId: string, data: Partial<Record<string, any>>) => {
+      try {
+        const teacherRef = doc(db, "teachers", teacherId);
+        await updateDoc(teacherRef, data);
+
+        // Update local Zustand userData immediately if present
+        set((state) => ({
+          userData: state.userData
+            ? {
+                ...state.userData,
+                ...data,
+              }
+            : null,
+        }));
+
+        // If className changed → refresh student listener and teacherClasses
+        if (data.className) {
+          const newClass = data.className.toString().trim();
+          set({ teacherClasses: [{ id: newClass, name: newClass }] });
+
+          // restart student listener for new class
+          const { refreshStudents } = get();
+          refreshStudents();
+        }
+
+        // If teaching array changed, reload teacherClasses
+        if (Array.isArray(data.teaching) && data.teaching.length > 0) {
+          const classes = (data.teaching as any[]).map((t) => {
+            const id = (t.classLevel ?? t.className ?? "").toString().trim();
+            return id ? { id, name: id } : null;
+          }).filter(Boolean) as TeacherClass[];
+          if (classes.length) set({ teacherClasses: classes });
+          // restart listener with updated classes
+          const { refreshStudents } = get();
+          refreshStudents();
+        }
+
+        return { success: true };
+      } catch (err: any) {
+        const message = err?.message ?? "Failed to update teacher";
+        log(`updateTeacherProfile error: ${message}`);
+        return { success: false, error: message };
+      }
+    },
+
+    // -------------------------------
+    // NEW: Switch Teacher Class (convenience wrapper)
+    // -------------------------------
+    switchTeacherClass: async (teacherId: string, newClass: string) => {
+      try {
+        const payload = { className: newClass };
+        const res = await get().updateTeacherProfile(teacherId, payload);
+        return res;
+      } catch (err: any) {
+        const message = err?.message ?? "Error switching teacher class";
+        log(`switchTeacherClass error: ${message}`);
+        return { success: false, error: message };
+      }
+    },
+
+    // -------------------------------
+    // NEW: Promote Students (bulk update oldClass -> newClass)
+    // -------------------------------
+    promoteStudents: async (oldClass: string, newClass: string) => {
+      try {
+        log(`Promoting students from ${oldClass} → ${newClass}`);
+        const q = query(collection(db, "students"), where("className", "==", oldClass));
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) {
+          log("No students found to promote");
+          return { success: true };
+        }
+
+        // Use batch to update - respects Firestore batch semantics
+        const batch = writeBatch(db);
+        snapshot.docs.forEach((d) => {
+          const ref = doc(db, "students", d.id);
+          batch.update(ref, { className: newClass });
+        });
+
+        await batch.commit();
+        log(`Promoted ${snapshot.docs.length} students to ${newClass}`);
+
+        // If current user is a teacher whose class was promoted, refresh students
+        const { refreshStudents } = get();
+        refreshStudents();
+
+        return { success: true };
+      } catch (err: any) {
+        const message = err?.message ?? "Failed to promote students";
+        log(`promoteStudents error: ${message}`);
+        return { success: false, error: message };
+      }
+    },
+
+    // -------------------------------
+    // NEW: Update a single student's class
+    // -------------------------------
+    updateStudentClass: async (studentId: string, newClass: string) => {
+      try {
+        const studentRef = doc(db, "students", studentId);
+        await updateDoc(studentRef, { className: newClass });
+
+        // If the current teacher is watching that class, refresh students
+        const { refreshStudents } = get();
+        refreshStudents();
+
+        log(`Student ${studentId} moved to ${newClass}`);
+        return { success: true };
+      } catch (err: any) {
+        const message = err?.message ?? "Failed to update student class";
+        log(`updateStudentClass error: ${message}`);
+        return { success: false, error: message };
       }
     },
   };
