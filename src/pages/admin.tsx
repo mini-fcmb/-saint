@@ -55,7 +55,6 @@ const AdminDashboard = () => {
     updateTeacherProfile,
     promoteStudents,
     refreshStudents,
-    currentUser,
   } = useFirebaseStore();
 
   const [teachers, setTeachers] = useState<Teacher[]>([]);
