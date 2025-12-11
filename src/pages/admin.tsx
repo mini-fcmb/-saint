@@ -8,7 +8,7 @@ interface Teacher {
   fullName: string;
   email?: string;
   className?: string;
-  subjects?: string[]; // Option A chosen
+  subjects?: string[]; 
   [k: string]: any;
 }
 
