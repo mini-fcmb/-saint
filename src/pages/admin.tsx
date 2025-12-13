@@ -1,12 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useFirebaseStore } from "../stores/useFirebaseStore";
-import {
-  collection,
-  getDocs,
-  doc,
-  updateDoc,
-  getDoc,
-} from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, getDoc } from "firebase/firestore";
 import { db } from "../firebase/config";
 
 interface Teacher {
@@ -35,63 +29,23 @@ const CLASS_ORDER = ["P5", "P6", "JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"];
 // Subjects by class level
 const SUBJECTS_BY_LEVEL = {
   "P5-P6": [
-    "Mathematics",
-    "English Language",
-    "Basic Science",
-    "Igbo Language",
-    "Basic Digital Literacy",
-    "History",
-    "CCA",
-    "Social and Citizenship Education",
-    "CRS",
-    "Prevocational Studies",
-    "French",
-    "Music",
-    "PHE",
+    "Mathematics", "English Language", "Basic Science", "Igbo Language",
+    "Basic Digital Literacy", "History", "CCA", "Social and Citizenship Education",
+    "CRS", "Prevocational Studies", "French", "Music", "PHE"
   ],
   "JSS1-JSS3": [
-    "Mathematics",
-    "English Language",
-    "Basic Science",
-    "Basic Technology",
-    "French",
-    "Igbo Language",
-    "Music",
-    "CCA",
-    "PHE",
-    "Social Studies",
-    "Business Studies",
-    "CRS",
-    "Computer Studies",
-    "History",
-    "Agricultural Science",
-    "Civic Education",
-    "Home Economics",
-    "Livestock Farming",
-    "Literature",
-    "Test of Orals",
+    "Mathematics", "English Language", "Basic Science", "Basic Technology",
+    "French", "Igbo Language", "Music", "CCA", "PHE", "Social Studies",
+    "Business Studies", "CRS", "Computer Studies", "History",
+    "Agricultural Science", "Civic Education", "Home Economics",
+    "Livestock Farming", "Literature", "Test of Orals"
   ],
   "SS1-SS3": [
-    "Mathematics",
-    "English Language",
-    "Physics",
-    "Chemistry",
-    "Biology",
-    "Further Mathematics",
-    "Literature",
-    "Igbo Language",
-    "French",
-    "Geography",
-    "CRS",
-    "Economics",
-    "Marketing",
-    "Government",
-    "Computer Science",
-    "Civic Education",
-    "Accounting",
-    "Agricultural Science",
-    "Test of Orals",
-  ],
+    "Mathematics", "English Language", "Physics", "Chemistry", "Biology",
+    "Further Mathematics", "Literature", "Igbo Language", "French", "Geography",
+    "CRS", "Economics", "Marketing", "Government", "Computer Science",
+    "Civic Education", "Accounting", "Agricultural Science", "Test of Orals"
+  ]
 };
 
 // Helper to normalize class names from the DB
@@ -100,12 +54,9 @@ const normalizeClass = (c?: string) => {
   const s = c.toString().trim().toUpperCase().replace(/\s+/g, "");
   if (s.startsWith("P5") || s.startsWith("PRIMARY5")) return "P5";
   if (s.startsWith("P6") || s.startsWith("PRIMARY6")) return "P6";
-  if (s.startsWith("JSS1") || s.startsWith("JSS-1") || s === "JSSI")
-    return "JSS1";
-  if (s.startsWith("JSS2") || s.startsWith("JSS-2") || s === "JSSII")
-    return "JSS2";
-  if (s.startsWith("JSS3") || s.startsWith("JSS-3") || s === "JSSIII")
-    return "JSS3";
+  if (s.startsWith("JSS1") || s.startsWith("JSS-1") || s === "JSSI") return "JSS1";
+  if (s.startsWith("JSS2") || s.startsWith("JSS-2") || s === "JSSII") return "JSS2";
+  if (s.startsWith("JSS3") || s.startsWith("JSS-3") || s === "JSSIII") return "JSS3";
   if (s.includes("SS3") || s.includes("SSS3")) return "SS3";
   if (s.includes("SS2") || s.includes("SSS2")) return "SS2";
   if (s.includes("SS1") || s.includes("SSS1")) return "SS1";
@@ -123,14 +74,11 @@ const getClassLevel = (className: string): keyof typeof SUBJECTS_BY_LEVEL => {
 };
 
 const AdminDashboard = () => {
-  const { updateTeacherProfile, promoteStudents, refreshStudents } =
-    useFirebaseStore();
+  const { updateTeacherProfile, promoteStudents, refreshStudents } = useFirebaseStore();
 
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
-  const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(
-    null
-  );
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
   // Teacher management state
@@ -145,21 +93,22 @@ const AdminDashboard = () => {
   const [promoteSubjects, setPromoteSubjects] = useState<string[]>([]);
 
   // UI state
-  const [expandedStudentRows, setExpandedStudentRows] = useState<
-    Record<string, boolean>
-  >({});
-  const [expandedTeacherRows, setExpandedTeacherRows] = useState<
-    Record<string, boolean>
-  >({});
+  const [expandedStudentRows, setExpandedStudentRows] = useState<Record<string, boolean>>({});
+  const [expandedTeacherRows, setExpandedTeacherRows] = useState<Record<string, boolean>>({});
   const [showSubjectModal, setShowSubjectModal] = useState(false);
+  
+  // New state for save confirmation popup
+  const [showSavePopup, setShowSavePopup] = useState(false);
+  const [savePopupMessage, setSavePopupMessage] = useState("");
+  const [savePopupType, setSavePopupType] = useState<"success" | "error">("success");
 
   // Fetch teachers & students
   useEffect(() => {
-    const fetchTeachers = async () => {
-      const snap = await getDocs(collection(db, "teachers"));
-      const data = snap.docs.map((d) => {
+    const fetchData = async () => {
+      const teachersSnap = await getDocs(collection(db, "teachers"));
+      const teachersData = teachersSnap.docs.map((d) => {
         const raw = d.data() as any;
-
+        
         // Normalize classes
         let classes: string[] = [];
         if (Array.isArray(raw.classes)) {
@@ -167,10 +116,10 @@ const AdminDashboard = () => {
         } else if (raw.className) {
           classes = [normalizeClass(String(raw.className))];
         }
-
+        
         // Normalize subjects (could be array or object)
         let subjects: { [className: string]: string[] } = {};
-        if (raw.subjects && typeof raw.subjects === "object") {
+        if (raw.subjects && typeof raw.subjects === 'object') {
           if (Array.isArray(raw.subjects)) {
             // Old format: subjects array
             classes.forEach((cls: string) => {
@@ -186,7 +135,7 @@ const AdminDashboard = () => {
             });
           }
         }
-
+        
         return {
           id: d.id,
           ...raw,
@@ -194,19 +143,15 @@ const AdminDashboard = () => {
           subjects,
         } as Teacher;
       });
-      setTeachers(data);
-    };
+      setTeachers(teachersData);
 
-    const fetchStudents = async () => {
-      const snap = await getDocs(collection(db, "students"));
-      const data = snap.docs.map((d) => {
+      const studentsSnap = await getDocs(collection(db, "students"));
+      const studentsData = studentsSnap.docs.map((d) => {
         const raw = d.data() as any;
         const subjects = Array.isArray(raw.subjects)
           ? raw.subjects.map((s: any) => String(s))
           : [];
-        const normalizedClass = normalizeClass(
-          raw.className || raw.class || ""
-        );
+        const normalizedClass = normalizeClass(raw.className || raw.class || "");
         return {
           id: d.id,
           ...raw,
@@ -214,11 +159,10 @@ const AdminDashboard = () => {
           subjects,
         } as Student;
       });
-      setStudents(data);
+      setStudents(studentsData);
     };
 
-    fetchTeachers();
-    fetchStudents();
+    fetchData();
   }, []);
 
   // Sort by class order, then by name
@@ -259,7 +203,7 @@ const AdminDashboard = () => {
       setTeacherSubjectsByClass({});
       return;
     }
-
+    
     setSelectedTeacherId(teacherId);
     setTeacherClasses(teacher.classes || []);
     setTeacherSubjectsByClass(teacher.subjects || {});
@@ -290,10 +234,10 @@ const AdminDashboard = () => {
       const newSubjects = currentSubjects.includes(subject)
         ? currentSubjects.filter((s) => s !== subject)
         : [...currentSubjects, subject];
-
+      
       return {
         ...prev,
-        [className]: newSubjects.sort((a, b) => a.localeCompare(b)),
+        [className]: newSubjects.sort((a, b) => a.localeCompare(b))
       };
     });
   };
@@ -302,35 +246,50 @@ const AdminDashboard = () => {
     const classLevel = getClassLevel(className);
     const availableSubjects = SUBJECTS_BY_LEVEL[classLevel];
     const currentSubjects = teacherSubjectsByClass[className] || [];
-
+    
     setTeacherSubjectsByClass((prev) => ({
       ...prev,
       [className]:
         currentSubjects.length === availableSubjects.length
           ? []
-          : [...availableSubjects],
+          : [...availableSubjects]
     }));
+  };
+
+  // Show save confirmation popup
+  const showSaveConfirmation = (message: string, type: "success" | "error" = "success") => {
+    setSavePopupMessage(message);
+    setSavePopupType(type);
+    setShowSavePopup(true);
+    
+    // Auto close after 3 seconds
+    setTimeout(() => {
+      setShowSavePopup(false);
+      // If success, reset teacher selection
+      if (type === "success") {
+        setSelectedTeacherId(null);
+        setTeacherClasses([]);
+        setTeacherSubjectsByClass({});
+      }
+    }, 3000);
   };
 
   // Save teacher updates
   const handleSaveTeacher = async () => {
     if (!selectedTeacherId) {
-      setMessage("Please select a teacher.");
+      showSaveConfirmation("Please select a teacher.", "error");
       return;
     }
 
     if (teacherClasses.length === 0) {
-      setMessage("Teacher must have at least one class.");
+      showSaveConfirmation("Teacher must have at least one class.", "error");
       return;
     }
 
     // Validate each class has at least one subject
     for (const className of teacherClasses) {
-      if (
-        !teacherSubjectsByClass[className] ||
-        teacherSubjectsByClass[className].length === 0
-      ) {
-        setMessage(`Please select at least one subject for ${className}`);
+      if (!teacherSubjectsByClass[className] || teacherSubjectsByClass[className].length === 0) {
+        showSaveConfirmation(`Please select at least one subject for ${className}`, "error");
         return;
       }
     }
@@ -340,34 +299,28 @@ const AdminDashboard = () => {
       await updateDoc(teacherRef, {
         classes: teacherClasses,
         subjects: teacherSubjectsByClass,
-        updatedAt: new Date(),
+        updatedAt: new Date()
       });
 
       // Update local state
-      setTeachers((prev) =>
-        prev.map((t) =>
-          t.id === selectedTeacherId
-            ? {
-                ...t,
-                classes: teacherClasses,
-                subjects: teacherSubjectsByClass,
-              }
-            : t
-        )
-      );
+      setTeachers(prev => prev.map(t => 
+        t.id === selectedTeacherId 
+          ? { ...t, classes: teacherClasses, subjects: teacherSubjectsByClass }
+          : t
+      ));
 
-      setMessage("Teacher profile updated successfully! ✅");
+      showSaveConfirmation("✅ Teacher profile updated successfully!");
       refreshStudents();
     } catch (error: any) {
       console.error("Error updating teacher:", error);
-      setMessage(`Error: ${error.message}`);
+      showSaveConfirmation(`❌ Error: ${error.message}`, "error");
     }
   };
 
   // Handle promotion with subject updates
   const handlePromoteStudents = async () => {
     if (!oldClass || !newClass || oldClass === newClass) {
-      setMessage("Select valid classes for promotion.");
+      showSaveConfirmation("Select valid classes for promotion.", "error");
       return;
     }
 
@@ -381,19 +334,13 @@ const AdminDashboard = () => {
     await performPromotion(oldClass, newClass);
   };
 
-  const performPromotion = async (
-    fromClass: string,
-    toClass: string,
-    selectedSubjects?: string[]
-  ) => {
+  const performPromotion = async (fromClass: string, toClass: string, selectedSubjects?: string[]) => {
     try {
-      const studentsToPromote = students.filter(
-        (s) => s.className === fromClass
-      );
-
+      const studentsToPromote = students.filter(s => s.className === fromClass);
+      
       for (const student of studentsToPromote) {
         const studentRef = doc(db, "students", student.id);
-
+        
         // Determine new subjects based on class
         let newSubjects: string[] = [];
         if (selectedSubjects && selectedSubjects.length > 0) {
@@ -404,18 +351,17 @@ const AdminDashboard = () => {
           const classLevel = getClassLevel(toClass);
           newSubjects = [...SUBJECTS_BY_LEVEL[classLevel]];
         }
-
+        
         await updateDoc(studentRef, {
           className: toClass,
           subjects: newSubjects,
-          promotedAt: new Date(),
+          promotedAt: new Date()
         });
       }
 
-      setMessage(
-        `Successfully promoted ${studentsToPromote.length} students from ${fromClass} to ${toClass} ✅`
-      );
-
+      // Show success message in popup
+      showSaveConfirmation(`✅ Successfully promoted ${studentsToPromote.length} students from ${fromClass} to ${toClass}`);
+      
       // Refresh data
       const snap = await getDocs(collection(db, "students"));
       const data = snap.docs.map((d) => {
@@ -423,9 +369,7 @@ const AdminDashboard = () => {
         const subjects = Array.isArray(raw.subjects)
           ? raw.subjects.map((s: any) => String(s))
           : [];
-        const normalizedClass = normalizeClass(
-          raw.className || raw.class || ""
-        );
+        const normalizedClass = normalizeClass(raw.className || raw.class || "");
         return {
           id: d.id,
           ...raw,
@@ -434,19 +378,20 @@ const AdminDashboard = () => {
         } as Student;
       });
       setStudents(data);
-
+      
+      // Reset promotion form
       setOldClass("");
       setNewClass("");
       setPromoteSubjects([]);
     } catch (error: any) {
       console.error("Error promoting students:", error);
-      setMessage(`Error: ${error.message}`);
+      showSaveConfirmation(`❌ Error: ${error.message}`, "error");
     }
   };
 
   const handleConfirmPromotionWithSubjects = () => {
     if (promoteSubjects.length === 0) {
-      setMessage("Please select at least one subject for SS2/SS3 students.");
+      showSaveConfirmation("Please select at least one subject for SS2/SS3 students.", "error");
       return;
     }
     setShowSubjectModal(false);
@@ -458,24 +403,17 @@ const AdminDashboard = () => {
     const classes = teacher.classes || [];
     const subjects = teacher.subjects || {};
     const expanded = !!expandedTeacherRows[teacher.id];
-
+    
     return (
       <div className="teacher-classes-cell">
-        <button
-          className="mini-toggle"
-          onClick={() =>
-            setExpandedTeacherRows((prev) => ({
-              ...prev,
-              [teacher.id]: !prev[teacher.id],
-            }))
-          }
-        >
-          <span>
-            {classes.length} class{classes.length !== 1 ? "es" : ""}
-          </span>
+        <button className="mini-toggle" onClick={() => setExpandedTeacherRows(prev => ({
+          ...prev,
+          [teacher.id]: !prev[teacher.id]
+        }))}>
+          <span>{classes.length} class{classes.length !== 1 ? 'es' : ''}</span>
           <span className="chev">{expanded ? "▾" : "▸"}</span>
         </button>
-
+        
         {expanded && (
           <div className="teacher-details">
             {classes.map((className) => (
@@ -483,12 +421,9 @@ const AdminDashboard = () => {
                 <strong>{className}:</strong>
                 <div className="subject-chips">
                   {(subjects[className] || []).map((subject) => (
-                    <span key={subject} className="chip">
-                      {subject}
-                    </span>
+                    <span key={subject} className="chip">{subject}</span>
                   ))}
-                  {(!subjects[className] ||
-                    subjects[className].length === 0) && (
+                  {(!subjects[className] || subjects[className].length === 0) && (
                     <span className="muted">No subjects</span>
                   )}
                 </div>
@@ -503,24 +438,17 @@ const AdminDashboard = () => {
   const renderStudentSubjects = (student: Student) => {
     const subjects = student.subjects || [];
     const expanded = !!expandedStudentRows[student.id];
-
+    
     return (
       <div className="subjects-cell">
-        <button
-          className="mini-toggle"
-          onClick={() =>
-            setExpandedStudentRows((prev) => ({
-              ...prev,
-              [student.id]: !prev[student.id],
-            }))
-          }
-        >
-          <span>
-            {subjects.length} subject{subjects.length !== 1 ? "s" : ""}
-          </span>
+        <button className="mini-toggle" onClick={() => setExpandedStudentRows(prev => ({
+          ...prev,
+          [student.id]: !prev[student.id]
+        }))}>
+          <span>{subjects.length} subject{subjects.length !== 1 ? 's' : ''}</span>
           <span className="chev">{expanded ? "▾" : "▸"}</span>
         </button>
-
+        
         {expanded && (
           <ul className="subjects-list">
             {subjects.map((subject) => (
@@ -534,16 +462,7 @@ const AdminDashboard = () => {
   };
 
   // Available classes
-  const availableClasses = [
-    "P5",
-    "P6",
-    "JSS1",
-    "JSS2",
-    "JSS3",
-    "SS1",
-    "SS2",
-    "SS3",
-  ];
+  const availableClasses = ["P5", "P6", "JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"];
 
   return (
     <div className="dashboard-container">
@@ -571,7 +490,7 @@ const AdminDashboard = () => {
         {/* Teacher Management */}
         <section className="management">
           <h2>Teacher Management</h2>
-
+          
           <div className="row">
             <select
               value={selectedTeacherId || ""}
@@ -584,16 +503,16 @@ const AdminDashboard = () => {
                 </option>
               ))}
             </select>
-
+            
             <button onClick={handleSaveTeacher}>Save Teacher Profile</button>
           </div>
 
-          {/* Teacher Classes Selection */}
+          {/* Teacher Classes Selection - Only show when teacher is selected */}
           {selectedTeacherId && (
             <div className="teacher-management-section">
               <div className="section-header">
                 <h3>Select Classes</h3>
-                <button
+                <button 
                   className="select-all-btn"
                   onClick={() => {
                     if (teacherClasses.length === availableClasses.length) {
@@ -602,27 +521,20 @@ const AdminDashboard = () => {
                     } else {
                       setTeacherClasses([...availableClasses]);
                       const newSubjects: { [key: string]: string[] } = {};
-                      availableClasses.forEach((cls) => {
+                      availableClasses.forEach(cls => {
                         newSubjects[cls] = [];
                       });
                       setTeacherSubjectsByClass(newSubjects);
                     }
                   }}
                 >
-                  {teacherClasses.length === availableClasses.length
-                    ? "Deselect All"
-                    : "Select All"}
+                  {teacherClasses.length === availableClasses.length ? "Deselect All" : "Select All"}
                 </button>
               </div>
-
+              
               <div className="classes-grid">
                 {availableClasses.map((className) => (
-                  <label
-                    key={className}
-                    className={`class-checkbox ${
-                      teacherClasses.includes(className) ? "selected" : ""
-                    }`}
-                  >
+                  <label key={className} className={`class-checkbox ${teacherClasses.includes(className) ? 'selected' : ''}`}>
                     <input
                       type="checkbox"
                       checked={teacherClasses.includes(className)}
@@ -641,45 +553,30 @@ const AdminDashboard = () => {
                     <div key={className} className="class-subjects-panel">
                       <div className="panel-header">
                         <h4>Subjects for {className}</h4>
-                        <button
+                        <button 
                           className="select-all-subjects-btn"
                           onClick={() => handleSelectAllSubjects(className)}
                         >
-                          {teacherSubjectsByClass[className]?.length ===
-                          SUBJECTS_BY_LEVEL[getClassLevel(className)].length
+                          {teacherSubjectsByClass[className]?.length === SUBJECTS_BY_LEVEL[getClassLevel(className)].length
                             ? "Deselect All"
                             : "Select All"}
                         </button>
                       </div>
-
+                      
                       <div className="subjects-grid">
-                        {SUBJECTS_BY_LEVEL[getClassLevel(className)].map(
-                          (subject) => (
-                            <label
-                              key={subject}
-                              className={`subject-checkbox ${
-                                teacherSubjectsByClass[className]?.includes(
-                                  subject
-                                )
-                                  ? "selected"
-                                  : ""
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={
-                                  teacherSubjectsByClass[className]?.includes(
-                                    subject
-                                  ) || false
-                                }
-                                onChange={() =>
-                                  handleTeacherSubjectToggle(className, subject)
-                                }
-                              />
-                              {subject}
-                            </label>
-                          )
-                        )}
+                        {SUBJECTS_BY_LEVEL[getClassLevel(className)].map((subject) => (
+                          <label 
+                            key={subject} 
+                            className={`subject-checkbox ${teacherSubjectsByClass[className]?.includes(subject) ? 'selected' : ''}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={teacherSubjectsByClass[className]?.includes(subject) || false}
+                              onChange={() => handleTeacherSubjectToggle(className, subject)}
+                            />
+                            {subject}
+                          </label>
+                        ))}
                       </div>
                     </div>
                   ))}
@@ -699,9 +596,7 @@ const AdminDashboard = () => {
             >
               <option value="">From Class</option>
               {availableClasses.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
 
@@ -711,22 +606,17 @@ const AdminDashboard = () => {
             >
               <option value="">To Class</option>
               {availableClasses.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
 
             <button onClick={handlePromoteStudents}>Promote</button>
           </div>
-
+          
           {oldClass && (
             <div className="promotion-info">
               <p>
-                <strong>
-                  {students.filter((s) => s.className === oldClass).length}
-                </strong>{" "}
-                students in {oldClass}
+                <strong>{students.filter(s => s.className === oldClass).length}</strong> students in {oldClass}
               </p>
             </div>
           )}
@@ -784,43 +674,31 @@ const AdminDashboard = () => {
           </div>
         </section>
 
-        {message && <p className="message">{message}</p>}
-
         {/* Subject Selection Modal for SS2/SS3 Promotion */}
         {showSubjectModal && (
           <div className="modal-overlay">
             <div className="modal">
               <div className="modal-header">
                 <h3>Select Subjects for {newClass}</h3>
-                <button
-                  className="modal-close"
-                  onClick={() => setShowSubjectModal(false)}
-                >
-                  ×
-                </button>
+                <button className="modal-close" onClick={() => setShowSubjectModal(false)}>×</button>
               </div>
-
+              
               <div className="modal-body">
-                <p>
-                  Please select the subjects for students being promoted to{" "}
-                  {newClass}:
-                </p>
-
+                <p>Please select the subjects for students being promoted to {newClass}:</p>
+                
                 <div className="subjects-grid-modal">
                   {SUBJECTS_BY_LEVEL["SS1-SS3"].map((subject) => (
-                    <label
-                      key={subject}
-                      className={`subject-checkbox ${
-                        promoteSubjects.includes(subject) ? "selected" : ""
-                      }`}
+                    <label 
+                      key={subject} 
+                      className={`subject-checkbox ${promoteSubjects.includes(subject) ? 'selected' : ''}`}
                     >
                       <input
                         type="checkbox"
                         checked={promoteSubjects.includes(subject)}
                         onChange={() => {
-                          setPromoteSubjects((prev) =>
+                          setPromoteSubjects(prev =>
                             prev.includes(subject)
-                              ? prev.filter((s) => s !== subject)
+                              ? prev.filter(s => s !== subject)
                               : [...prev, subject]
                           );
                         }}
@@ -830,21 +708,36 @@ const AdminDashboard = () => {
                   ))}
                 </div>
               </div>
-
+              
               <div className="modal-footer">
-                <button
-                  className="btn-secondary"
-                  onClick={() => setShowSubjectModal(false)}
-                >
+                <button className="btn-secondary" onClick={() => setShowSubjectModal(false)}>
                   Cancel
                 </button>
-                <button
-                  className="btn-primary"
+                <button 
+                  className="btn-primary" 
                   onClick={handleConfirmPromotionWithSubjects}
                   disabled={promoteSubjects.length === 0}
                 >
                   Confirm Promotion ({promoteSubjects.length} subjects)
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Save Confirmation Popup */}
+        {showSavePopup && (
+          <div className="modal-overlay">
+            <div className="save-popup">
+              <div className={`popup-content ${savePopupType}`}>
+                <div className="popup-icon">
+                  {savePopupType === "success" ? "✅" : "❌"}
+                </div>
+                <h3>{savePopupType === "success" ? "Success!" : "Error!"}</h3>
+                <p>{savePopupMessage}</p>
+                <div className="popup-progress">
+                  <div className="progress-bar"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -1287,16 +1180,6 @@ const AdminDashboard = () => {
           font-style: italic;
         }
         
-        .message { 
-          color: var(--success); 
-          font-weight: 600;
-          padding: 16px;
-          background: #f0fff4;
-          border: 1px solid #c6f6d5;
-          border-radius: 8px;
-          margin: 16px 0;
-        }
-        
         /* Modal Styles */
         .modal-overlay {
           position: fixed;
@@ -1390,6 +1273,86 @@ const AdminDashboard = () => {
           gap: 12px;
         }
         
+        /* Save Confirmation Popup */
+        .save-popup {
+          width: 100%;
+          max-width: 400px;
+          animation: popupSlideIn 0.3s ease;
+        }
+        
+        @keyframes popupSlideIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px) scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+        
+        .popup-content {
+          background: var(--card-bg);
+          border-radius: 12px;
+          padding: 24px;
+          text-align: center;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .popup-content.success {
+          border-top: 4px solid var(--success);
+        }
+        
+        .popup-content.error {
+          border-top: 4px solid var(--danger);
+        }
+        
+        .popup-icon {
+          font-size: 48px;
+          margin-bottom: 16px;
+        }
+        
+        .popup-content h3 {
+          margin: 0 0 12px 0;
+          font-size: 18px;
+          color: #2d3748;
+        }
+        
+        .popup-content p {
+          margin: 0 0 20px 0;
+          color: #4a5568;
+          font-size: 14px;
+          line-height: 1.5;
+        }
+        
+        .popup-progress {
+          height: 4px;
+          background: #e2e8f0;
+          border-radius: 2px;
+          overflow: hidden;
+        }
+        
+        .progress-bar {
+          height: 100%;
+          width: 100%;
+          background: var(--success);
+          animation: progressShrink 3s linear forwards;
+          transform-origin: left;
+        }
+        
+        .popup-content.error .progress-bar {
+          background: var(--danger);
+        }
+        
+        @keyframes progressShrink {
+          from {
+            transform: scaleX(1);
+          }
+          to {
+            transform: scaleX(0);
+          }
+        }
+        
         /* Responsive Design */
         @media (max-width: 768px) {
           .dashboard-container {
@@ -1419,7 +1382,7 @@ const AdminDashboard = () => {
             grid-template-columns: 1fr;
           }
           
-          .modal {
+          .modal, .save-popup {
             max-width: 100%;
           }
         }
