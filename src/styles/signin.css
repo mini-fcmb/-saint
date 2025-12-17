@@ -22,6 +22,34 @@
   opacity: 0.96;
   backdrop-filter: blur(6px);
 }
+.password-input-container {
+  position: relative;
+  width: 100%;
+}
+
+.password-input-container .text-input {
+  width: 100%;
+  padding-right: 45px; /* Space for the toggle button */
+}
+
+.password-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.password-toggle:hover {
+  background: #f3f4f6;
+}
 
 /* Card */
 .login-page .login-card {
