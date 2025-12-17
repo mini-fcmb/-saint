@@ -1,6 +1,7 @@
 // src/pages/signup.tsx
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import {
   createUserWithEmailAndPassword,
   signInWithPopup,
@@ -93,6 +94,7 @@ const ALL_CLASSES = [
   "SSS 2",
   "SSS 3",
 ];
+const [showPassword, setShowPassword] = useState(false);
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -705,14 +707,30 @@ export default function Signup() {
                 />
               </div>
 
+             <div className="password-input-container">
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={isLoading}
+                className="text-input"
               />
+
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  <EyeOff size={18} color="#6b7280" />
+                ) : (
+                  <Eye size={18} color="#6b7280" />
+                )}
+              </button>
+            </div>
 
               <select
                 value={className}
