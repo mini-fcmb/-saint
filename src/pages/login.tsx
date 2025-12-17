@@ -1,6 +1,7 @@
 // src/pages/Login.tsx
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -28,6 +29,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [adminCode, setAdminCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -172,14 +174,30 @@ export default function Login() {
               required
               disabled={isLoading}
             />
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={isLoading}
-            />
+            <div className="password-input-container">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={isLoading}
+                className="text-input"
+              />
+
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  <EyeOff size={18} color="#6b7280" />
+                ) : (
+                  <Eye size={18} color="#6b7280" />
+                )}
+              </button>
+            </div>
             {userType === "teacher" && (
               <input
                 type="password"
