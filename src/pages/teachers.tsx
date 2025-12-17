@@ -42,20 +42,38 @@ import {
   RefreshCw,
   UserCheck,
   UserX,
+  ChevronDown,
+  Book,
+  Building,
 } from "lucide-react";
-import { useFirebaseStore } from "../stores/useFirebaseStore";
+import {
+  useFirebaseStore,
+  Student as FirebaseStudent,
+} from "../stores/useFirebaseStore";
 import { useLiveDate, useCalendar } from "../hooks/useDateUtils";
 import { useNavigate } from "react-router-dom";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  updateDoc,
+  getDoc,
+  setDoc,
+} from "firebase/firestore";
+import { db } from "../firebase/config";
 
 // Enhanced Types
-interface Student {
-  id: string;
-  first: string;
-  last: string;
-  email: string;
-  progress: number;
-  classId: string;
+interface TeacherClassInfo {
   className: string;
+  subjects: string[];
+}
+
+// Use FirebaseStudent as base and extend it
+interface Student extends FirebaseStudent {
+  fullName: string;
+  subjects: string[];
 }
 
 interface Question {
@@ -78,6 +96,8 @@ interface Quiz {
   totalDuration: number;
   subject: string;
   maxScore: number;
+  targetClass: string;
+  createdAt: Date;
 }
 
 interface WorkingHoursData {
@@ -386,29 +406,6 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
   ).length;
 
   if (!isOpen) return null;
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-
-  const handleLogout = () => {
-    console.log("Logging out...");
-  };
-
-  // Optional: close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const avatar = document.querySelector(".profile-avatar");
-      const dropdown = document.querySelector(".profile-dropdown");
-      if (
-        avatar &&
-        dropdown &&
-        !avatar.contains(e.target as Node) &&
-        !dropdown.contains(e.target as Node)
-      ) {
-        setDropdownOpen(false);
-      }
-    };
-    document.addEventListener("click", handleClickOutside);
-    return () => document.removeEventListener("click", handleClickOutside);
-  }, []);
 
   return (
     <div className="modal-overlay">
@@ -441,7 +438,7 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
               <option value="all">All Quizzes</option>
               {activeQuizzes.map((quiz) => (
                 <option key={quiz.id} value={quiz.id}>
-                  {quiz.name}
+                  {quiz.name} ({quiz.targetClass})
                 </option>
               ))}
             </select>
@@ -586,19 +583,22 @@ interface GradeManagementModalProps {
   isOpen: boolean;
   onClose: () => void;
   students: Student[];
-  currentSubject: string;
+  teacherClasses: TeacherClassInfo[];
 }
 
 const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
   isOpen,
   onClose,
   students,
-  currentSubject,
+  teacherClasses,
 }) => {
   const [gradeRecords, setGradeRecords] = useState<GradeRecord[]>([]);
   const [activeTerm, setActiveTerm] = useState("First Term");
   const [activeSession, setActiveSession] = useState("2024/2025");
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedClass, setSelectedClass] = useState<string>("");
+  const [selectedSubject, setSelectedSubject] = useState<string>("");
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
 
   // Initialize grade system
   const gradeSystem: GradeSystem = {
@@ -625,8 +625,31 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     },
   };
 
-  // Load quiz results from student submissions
+  // Update available subjects when class changes
+  useEffect(() => {
+    if (selectedClass) {
+      const classInfo = teacherClasses.find(
+        (c) => c.className === selectedClass
+      );
+      if (classInfo) {
+        setAvailableSubjects(classInfo.subjects);
+        if (classInfo.subjects.length > 0 && !selectedSubject) {
+          setSelectedSubject(classInfo.subjects[0]);
+        }
+      }
+    }
+  }, [selectedClass, teacherClasses]);
+
+  // Filter students by selected class
+  const filteredStudents = useMemo(() => {
+    if (!selectedClass) return [];
+    return students.filter((s) => s.className === selectedClass);
+  }, [students, selectedClass]);
+
+  // Load quiz results from student submissions for selected subject
   const loadQuizResults = useCallback(() => {
+    if (!selectedClass || !selectedSubject) return;
+
     try {
       const savedSubmissions = localStorage.getItem("student-quiz-submissions");
       if (savedSubmissions) {
@@ -637,7 +660,8 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
             const studentSubmission = Object.values(submissions).find(
               (sub: any) =>
                 sub.studentId === record.studentId &&
-                sub.subject === currentSubject
+                sub.subject === selectedSubject &&
+                sub.className === selectedClass
             ) as any;
 
             if (studentSubmission) {
@@ -653,7 +677,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     } catch (error) {
       console.error("Error loading quiz results:", error);
     }
-  }, [currentSubject]);
+  }, [selectedClass, selectedSubject]);
 
   // Calculate grade based on percentage
   const calculateGrade = (percentage: number): string => {
@@ -683,13 +707,18 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
 
   // Initialize grade records from students
   useEffect(() => {
-    if (isOpen && students.length > 0) {
-      const initialRecords: GradeRecord[] = students.map((student) => ({
-        id: `grade-${student.id}-${currentSubject}-${activeTerm}`,
+    if (
+      isOpen &&
+      selectedClass &&
+      selectedSubject &&
+      filteredStudents.length > 0
+    ) {
+      const initialRecords: GradeRecord[] = filteredStudents.map((student) => ({
+        id: `grade-${student.id}-${selectedSubject}-${selectedClass}-${activeTerm}`,
         studentId: student.id,
-        studentName: `${student.first} ${student.last}`,
-        className: student.className,
-        subject: currentSubject,
+        studentName: student.fullName,
+        className: selectedClass,
+        subject: selectedSubject,
         term: activeTerm,
         session: activeSession,
         objScore: 0, // Will be populated from quiz results
@@ -712,8 +741,9 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     }
   }, [
     isOpen,
-    students,
-    currentSubject,
+    filteredStudents,
+    selectedClass,
+    selectedSubject,
     activeTerm,
     activeSession,
     loadQuizResults,
@@ -721,14 +751,16 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
 
   // Auto-refresh quiz results
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && selectedClass && selectedSubject) {
       const interval = setInterval(loadQuizResults, 5000);
       return () => clearInterval(interval);
     }
-  }, [isOpen, loadQuizResults]);
+  }, [isOpen, selectedClass, selectedSubject, loadQuizResults]);
 
   // Calculate totals when scores change
   useEffect(() => {
+    if (gradeRecords.length === 0) return;
+
     const updatedRecords = gradeRecords.map((record) => {
       const caTotal = Object.values(record.caScores).reduce(
         (sum, score) => sum + score,
@@ -825,14 +857,41 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     );
   };
 
-  const handleSaveGrades = () => {
-    const key = `grades-${currentSubject}-${activeTerm}-${activeSession}`;
+  const handleSaveGrades = async () => {
+    if (!selectedClass || !selectedSubject) {
+      alert("Please select a class and subject");
+      return;
+    }
+
+    const key = `grades-${selectedClass}-${selectedSubject}-${activeTerm}-${activeSession}`;
     localStorage.setItem(key, JSON.stringify(gradeRecords));
+
+    // Also save to Firestore for admin access
+    try {
+      const gradesRef = collection(db, "grades");
+      await updateDoc(doc(gradesRef, key), {
+        class: selectedClass,
+        subject: selectedSubject,
+        term: activeTerm,
+        session: activeSession,
+        grades: gradeRecords,
+        teacher: localStorage.getItem("teacherName"),
+        updatedAt: new Date(),
+      });
+    } catch (error) {
+      console.error("Error saving grades to Firestore:", error);
+    }
+
     setIsEditing(false);
     alert("Grades saved successfully!");
   };
 
   const handleExportCSV = () => {
+    if (!selectedClass || !selectedSubject) {
+      alert("Please select a class and subject");
+      return;
+    }
+
     const headers = [
       "S/N",
       "Student Name",
@@ -880,7 +939,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `grades-${currentSubject}-${activeTerm}-${activeSession}.csv`;
+    a.download = `grades-${selectedClass}-${selectedSubject}-${activeTerm}-${activeSession}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -896,10 +955,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
         <div className="modal-header">
           <div>
             <h2>Grade Management System</h2>
-            <p>
-              Manage student grades for {currentSubject} - Auto-sync with quiz
-              results
-            </p>
+            <p>Manage student grades - Auto-sync with quiz results</p>
           </div>
           <button className="close-btn" onClick={onClose}>
             <X size={24} />
@@ -910,11 +966,38 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
           {/* Controls */}
           <div className="grade-controls">
             <div className="control-group">
-              <label>Subject</label>
-              <select className="text-input" value={currentSubject} disabled>
-                <option value={currentSubject}>{currentSubject}</option>
+              <label>Class *</label>
+              <select
+                className="text-input"
+                value={selectedClass}
+                onChange={(e) => setSelectedClass(e.target.value)}
+              >
+                <option value="">Select Class</option>
+                {teacherClasses.map((cls) => (
+                  <option key={cls.className} value={cls.className}>
+                    {cls.className}
+                  </option>
+                ))}
               </select>
             </div>
+
+            <div className="control-group">
+              <label>Subject *</label>
+              <select
+                className="text-input"
+                value={selectedSubject || ""}
+                onChange={(e) => setSelectedSubject(e.target.value)}
+                disabled={!selectedClass}
+              >
+                <option value="">Select Subject</option>
+                {availableSubjects.map((subject) => (
+                  <option key={subject} value={subject}>
+                    {subject}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="control-group">
               <label>Term</label>
               <select
@@ -927,6 +1010,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
                 <option value="Third Term">Third Term</option>
               </select>
             </div>
+
             <div className="control-group">
               <label>Session</label>
               <select
@@ -939,24 +1023,30 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
                 <option value="2025/2026">2025/2026</option>
               </select>
             </div>
+
             <div className="control-group">
               <label>Actions</label>
               <div className="action-buttons">
                 <button
                   className={`action-btn ${isEditing ? "cancel" : "edit"}`}
                   onClick={() => setIsEditing(!isEditing)}
+                  disabled={!selectedClass || !selectedSubject}
                 >
                   {isEditing ? "Cancel Editing" : "Edit Grades"}
                 </button>
                 <button
                   className="action-btn save"
                   onClick={handleSaveGrades}
-                  disabled={!isEditing}
+                  disabled={!isEditing || !selectedClass || !selectedSubject}
                 >
                   <Save size={16} />
                   Save Grades
                 </button>
-                <button className="action-btn export" onClick={handleExportCSV}>
+                <button
+                  className="action-btn export"
+                  onClick={handleExportCSV}
+                  disabled={!selectedClass || !selectedSubject}
+                >
                   <Download size={16} />
                   Export CSV
                 </button>
@@ -968,224 +1058,250 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
           <div className="quiz-results-notice">
             <Info size={16} />
             <span>
-              OBJ scores are automatically synced from student quiz submissions.
-              Manual edits are disabled for OBJ scores.
+              OBJ scores are automatically synced from student quiz submissions
+              for {selectedSubject} in {selectedClass}. Manual edits are
+              disabled for OBJ scores.
             </span>
           </div>
 
           {/* Grades Table */}
-          <div className="grades-table-container">
-            <table className="grades-table">
-              <thead>
-                <tr>
-                  <th rowSpan={2}>S/N</th>
-                  <th rowSpan={2}>Student Name</th>
-                  <th rowSpan={2}>Class</th>
-                  <th colSpan={7}>Continuous Assessment</th>
-                  <th colSpan={5}>Examination</th>
-                  <th colSpan={4}>Results</th>
-                </tr>
-                <tr>
-                  {/* CA Headers */}
-                  <th>OBJ (Auto)</th>
-                  <th>CA1</th>
-                  <th>CA2</th>
-                  <th>CA3</th>
-                  <th>Assignment</th>
-                  <th>Project</th>
-                  <th>Practical</th>
-
-                  {/* Exam Headers */}
-                  <th>Theory</th>
-                  <th>Total</th>
-                  <th>%</th>
-                  <th>Grade</th>
-                  <th>Position</th>
-
-                  {/* Result Headers */}
-                  <th>Remark</th>
-                </tr>
-                <tr className="max-scores-row">
-                  <th colSpan={3}>Max Scores</th>
-                  <th>{gradeSystem.maxScores.obj}</th>
-                  <th>{gradeSystem.maxScores.ca1}</th>
-                  <th>{gradeSystem.maxScores.ca2}</th>
-                  <th>{gradeSystem.maxScores.ca3}</th>
-                  <th>{gradeSystem.maxScores.assignment}</th>
-                  <th>{gradeSystem.maxScores.project}</th>
-                  <th>{gradeSystem.maxScores.practical}</th>
-                  <th>{gradeSystem.maxScores.theory}</th>
-                  <th>
-                    {gradeSystem.maxScores.obj +
-                      gradeSystem.maxScores.ca1 +
-                      gradeSystem.maxScores.ca2 +
-                      gradeSystem.maxScores.ca3 +
-                      gradeSystem.maxScores.assignment +
-                      gradeSystem.maxScores.project +
-                      gradeSystem.maxScores.practical +
-                      gradeSystem.maxScores.theory}
-                  </th>
-                  <th>100%</th>
-                  <th>-</th>
-                  <th>-</th>
-                  <th>-</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gradeRecords.map((record, index) => (
-                  <tr key={record.id} className="grade-row">
-                    <td className="serial-number">{index + 1}</td>
-                    <td className="student-name">{record.studentName}</td>
-                    <td className="class-name">{record.className}</td>
-
-                    {/* CA Scores */}
-                    <td className="obj-score-cell">
-                      <div className="auto-score-display">
-                        <span className="score-value">{record.objScore}</span>
-                        <span className="auto-badge">Auto</span>
-                      </div>
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        min="0"
-                        max={gradeSystem.maxScores.ca1}
-                        value={record.caScores.ca1}
-                        onChange={(e) =>
-                          handleScoreChange(
-                            record.studentId,
-                            "caScores.ca1",
-                            parseInt(e.target.value) || 0
-                          )
-                        }
-                        disabled={!isEditing}
-                        className="score-input"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        min="0"
-                        max={gradeSystem.maxScores.ca2}
-                        value={record.caScores.ca2}
-                        onChange={(e) =>
-                          handleScoreChange(
-                            record.studentId,
-                            "caScores.ca2",
-                            parseInt(e.target.value) || 0
-                          )
-                        }
-                        disabled={!isEditing}
-                        className="score-input"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        min="0"
-                        max={gradeSystem.maxScores.ca3}
-                        value={record.caScores.ca3}
-                        onChange={(e) =>
-                          handleScoreChange(
-                            record.studentId,
-                            "caScores.ca3",
-                            parseInt(e.target.value) || 0
-                          )
-                        }
-                        disabled={!isEditing}
-                        className="score-input"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        min="0"
-                        max={gradeSystem.maxScores.assignment}
-                        value={record.caScores.assignment}
-                        onChange={(e) =>
-                          handleScoreChange(
-                            record.studentId,
-                            "caScores.assignment",
-                            parseInt(e.target.value) || 0
-                          )
-                        }
-                        disabled={!isEditing}
-                        className="score-input"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        min="0"
-                        max={gradeSystem.maxScores.project}
-                        value={record.caScores.project}
-                        onChange={(e) =>
-                          handleScoreChange(
-                            record.studentId,
-                            "caScores.project",
-                            parseInt(e.target.value) || 0
-                          )
-                        }
-                        disabled={!isEditing}
-                        className="score-input"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        min="0"
-                        max={gradeSystem.maxScores.practical}
-                        value={record.caScores.practical}
-                        onChange={(e) =>
-                          handleScoreChange(
-                            record.studentId,
-                            "caScores.practical",
-                            parseInt(e.target.value) || 0
-                          )
-                        }
-                        disabled={!isEditing}
-                        className="score-input"
-                      />
-                    </td>
-
-                    {/* Exam Scores */}
-                    <td>
-                      <input
-                        type="number"
-                        min="0"
-                        max={gradeSystem.maxScores.theory}
-                        value={record.theoryScore}
-                        onChange={(e) =>
-                          handleScoreChange(
-                            record.studentId,
-                            "theoryScore",
-                            parseInt(e.target.value) || 0
-                          )
-                        }
-                        disabled={!isEditing}
-                        className="score-input"
-                      />
-                    </td>
-
-                    {/* Results - Auto-calculated */}
-                    <td className="total-score">{record.totalScore}</td>
-                    <td className="percentage">{record.percentage}%</td>
-                    <td className={`grade grade-${record.grade.toLowerCase()}`}>
-                      {record.grade}
-                    </td>
-                    <td className="position">{record.positionInClass}</td>
-                    <td
-                      className={`remark ${record.remark
-                        .toLowerCase()
-                        .replace(" ", "-")}`}
-                    >
-                      {record.remark}
-                    </td>
+          {selectedClass && selectedSubject && gradeRecords.length > 0 ? (
+            <div className="grades-table-container">
+              <table className="grades-table">
+                <thead>
+                  <tr>
+                    <th rowSpan={2}>S/N</th>
+                    <th rowSpan={2}>Student Name</th>
+                    <th rowSpan={2}>Class</th>
+                    <th colSpan={7}>Continuous Assessment</th>
+                    <th colSpan={5}>Examination</th>
+                    <th colSpan={4}>Results</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  <tr>
+                    {/* CA Headers */}
+                    <th>OBJ (Auto)</th>
+                    <th>CA1</th>
+                    <th>CA2</th>
+                    <th>CA3</th>
+                    <th>Assignment</th>
+                    <th>Project</th>
+                    <th>Practical</th>
+
+                    {/* Exam Headers */}
+                    <th>Theory</th>
+                    <th>Total</th>
+                    <th>%</th>
+                    <th>Grade</th>
+                    <th>Position</th>
+
+                    {/* Result Headers */}
+                    <th>Remark</th>
+                  </tr>
+                  <tr className="max-scores-row">
+                    <th colSpan={3}>Max Scores</th>
+                    <th>{gradeSystem.maxScores.obj}</th>
+                    <th>{gradeSystem.maxScores.ca1}</th>
+                    <th>{gradeSystem.maxScores.ca2}</th>
+                    <th>{gradeSystem.maxScores.ca3}</th>
+                    <th>{gradeSystem.maxScores.assignment}</th>
+                    <th>{gradeSystem.maxScores.project}</th>
+                    <th>{gradeSystem.maxScores.practical}</th>
+                    <th>{gradeSystem.maxScores.theory}</th>
+                    <th>
+                      {gradeSystem.maxScores.obj +
+                        gradeSystem.maxScores.ca1 +
+                        gradeSystem.maxScores.ca2 +
+                        gradeSystem.maxScores.ca3 +
+                        gradeSystem.maxScores.assignment +
+                        gradeSystem.maxScores.project +
+                        gradeSystem.maxScores.practical +
+                        gradeSystem.maxScores.theory}
+                    </th>
+                    <th>100%</th>
+                    <th>-</th>
+                    <th>-</th>
+                    <th>-</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gradeRecords.map((record, index) => (
+                    <tr key={record.id} className="grade-row">
+                      <td className="serial-number">{index + 1}</td>
+                      <td className="student-name">{record.studentName}</td>
+                      <td className="class-name">{record.className}</td>
+
+                      {/* CA Scores */}
+                      <td className="obj-score-cell">
+                        <div className="auto-score-display">
+                          <span className="score-value">{record.objScore}</span>
+                          <span className="auto-badge">Auto</span>
+                        </div>
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          max={gradeSystem.maxScores.ca1}
+                          value={record.caScores.ca1}
+                          onChange={(e) =>
+                            handleScoreChange(
+                              record.studentId,
+                              "caScores.ca1",
+                              parseInt(e.target.value) || 0
+                            )
+                          }
+                          disabled={!isEditing}
+                          className="score-input"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          max={gradeSystem.maxScores.ca2}
+                          value={record.caScores.ca2}
+                          onChange={(e) =>
+                            handleScoreChange(
+                              record.studentId,
+                              "caScores.ca2",
+                              parseInt(e.target.value) || 0
+                            )
+                          }
+                          disabled={!isEditing}
+                          className="score-input"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          max={gradeSystem.maxScores.ca3}
+                          value={record.caScores.ca3}
+                          onChange={(e) =>
+                            handleScoreChange(
+                              record.studentId,
+                              "caScores.ca3",
+                              parseInt(e.target.value) || 0
+                            )
+                          }
+                          disabled={!isEditing}
+                          className="score-input"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          max={gradeSystem.maxScores.assignment}
+                          value={record.caScores.assignment}
+                          onChange={(e) =>
+                            handleScoreChange(
+                              record.studentId,
+                              "caScores.assignment",
+                              parseInt(e.target.value) || 0
+                            )
+                          }
+                          disabled={!isEditing}
+                          className="score-input"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          max={gradeSystem.maxScores.project}
+                          value={record.caScores.project}
+                          onChange={(e) =>
+                            handleScoreChange(
+                              record.studentId,
+                              "caScores.project",
+                              parseInt(e.target.value) || 0
+                            )
+                          }
+                          disabled={!isEditing}
+                          className="score-input"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          max={gradeSystem.maxScores.practical}
+                          value={record.caScores.practical}
+                          onChange={(e) =>
+                            handleScoreChange(
+                              record.studentId,
+                              "caScores.practical",
+                              parseInt(e.target.value) || 0
+                            )
+                          }
+                          disabled={!isEditing}
+                          className="score-input"
+                        />
+                      </td>
+
+                      {/* Exam Scores */}
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          max={gradeSystem.maxScores.theory}
+                          value={record.theoryScore}
+                          onChange={(e) =>
+                            handleScoreChange(
+                              record.studentId,
+                              "theoryScore",
+                              parseInt(e.target.value) || 0
+                            )
+                          }
+                          disabled={!isEditing}
+                          className="score-input"
+                        />
+                      </td>
+
+                      {/* Results - Auto-calculated */}
+                      <td className="total-score">{record.totalScore}</td>
+                      <td className="percentage">{record.percentage}%</td>
+                      <td
+                        className={`grade grade-${record.grade.toLowerCase()}`}
+                      >
+                        {record.grade}
+                      </td>
+                      <td className="position">{record.positionInClass}</td>
+                      <td
+                        className={`remark ${record.remark
+                          .toLowerCase()
+                          .replace(" ", "-")}`}
+                      >
+                        {record.remark}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="empty-state">
+              {!selectedClass ? (
+                <>
+                  <Book size={48} color="#9ca3af" />
+                  <p>Select a class to view grades</p>
+                </>
+              ) : !selectedSubject ? (
+                <>
+                  <BookOpen size={48} color="#9ca3af" />
+                  <p>Select a subject to view grades</p>
+                </>
+              ) : (
+                <>
+                  <Users size={48} color="#9ca3af" />
+                  <p>
+                    No students found for {selectedClass} - {selectedSubject}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Grade Legend */}
           <div className="grade-legend">
@@ -1254,18 +1370,22 @@ const Info: React.FC<{ size: number }> = ({ size }) => (
   </svg>
 );
 
-// Upload CA Modal Component (keep existing implementation)
+// Upload CA Modal Component
 interface UploadCAModalProps {
   isOpen: boolean;
   onClose: () => void;
   students: Student[];
+  teacherClasses: TeacherClassInfo[];
 }
 
 const UploadCAModal: React.FC<UploadCAModalProps> = ({
   isOpen,
   onClose,
   students,
+  teacherClasses,
 }) => {
+  const [selectedClass, setSelectedClass] = useState<string>("");
+  const [selectedSubject, setSelectedSubject] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [scores, setScores] = useState<{ [key: string]: number }>({});
   const [uploadMethod, setUploadMethod] = useState<"manual" | "csv">("manual");
@@ -1278,6 +1398,17 @@ const UploadCAModal: React.FC<UploadCAModalProps> = ({
     { id: "project", name: "Project", maxScore: 10 },
     { id: "practical", name: "Practical", maxScore: 10 },
   ];
+
+  const availableSubjects = useMemo(() => {
+    if (!selectedClass) return [];
+    const classInfo = teacherClasses.find((c) => c.className === selectedClass);
+    return classInfo?.subjects || [];
+  }, [selectedClass, teacherClasses]);
+
+  const filteredStudents = useMemo(() => {
+    if (!selectedClass) return [];
+    return students.filter((s) => s.className === selectedClass);
+  }, [students, selectedClass]);
 
   const handleScoreChange = (studentId: string, score: number) => {
     setScores((prev) => ({
@@ -1294,10 +1425,41 @@ const UploadCAModal: React.FC<UploadCAModalProps> = ({
     console.log("Bulk upload scores");
   };
 
-  const handleSaveScores = () => {
-    // Implement save logic
-    console.log("Saving scores:", scores);
-    onClose();
+  const handleSaveScores = async () => {
+    if (!selectedClass || !selectedSubject || !selectedCategory) {
+      alert("Please select class, subject, and CA category");
+      return;
+    }
+
+    try {
+      const caData = {
+        class: selectedClass,
+        subject: selectedSubject,
+        category: selectedCategory,
+        scores: scores,
+        date: new Date().toISOString(),
+      };
+
+      // Save to localStorage
+      const existingData = JSON.parse(
+        localStorage.getItem("teacher-ca-scores") || "[]"
+      );
+      existingData.push(caData);
+      localStorage.setItem("teacher-ca-scores", JSON.stringify(existingData));
+
+      // Save to Firestore for admin access
+      const caRef = collection(db, "continuousAssessment");
+      await updateDoc(
+        doc(caRef, `${selectedClass}-${selectedSubject}-${selectedCategory}`),
+        caData
+      );
+
+      alert("CA scores saved successfully!");
+      onClose();
+    } catch (error) {
+      console.error("Error saving CA scores:", error);
+      alert("Failed to save CA scores");
+    }
   };
 
   if (!isOpen) return null;
@@ -1316,6 +1478,40 @@ const UploadCAModal: React.FC<UploadCAModalProps> = ({
         </div>
 
         <div className="modal-body">
+          <div className="form-group">
+            <label>Select Class *</label>
+            <select
+              className="text-input"
+              value={selectedClass}
+              onChange={(e) => setSelectedClass(e.target.value)}
+            >
+              <option value="">Choose class...</option>
+              {teacherClasses.map((cls) => (
+                <option key={cls.className} value={cls.className}>
+                  {cls.className}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {selectedClass && (
+            <div className="form-group">
+              <label>Select Subject *</label>
+              <select
+                className="text-input"
+                value={selectedSubject}
+                onChange={(e) => setSelectedSubject(e.target.value)}
+              >
+                <option value="">Choose subject...</option>
+                {availableSubjects.map((subject) => (
+                  <option key={subject} value={subject}>
+                    {subject}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="upload-method-selector">
             <button
               className={`method-btn ${
@@ -1338,11 +1534,12 @@ const UploadCAModal: React.FC<UploadCAModalProps> = ({
           {uploadMethod === "manual" ? (
             <>
               <div className="form-group">
-                <label>Select CA Category</label>
+                <label>Select CA Category *</label>
                 <select
                   className="text-input"
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
+                  disabled={!selectedClass || !selectedSubject}
                 >
                   <option value="">Choose category...</option>
                   {caCategories.map((cat) => (
@@ -1353,7 +1550,7 @@ const UploadCAModal: React.FC<UploadCAModalProps> = ({
                 </select>
               </div>
 
-              {selectedCategory && (
+              {selectedClass && selectedSubject && selectedCategory && (
                 <div className="scores-table">
                   <div className="table-header">
                     <span>Student</span>
@@ -1366,11 +1563,9 @@ const UploadCAModal: React.FC<UploadCAModalProps> = ({
                       )
                     </span>
                   </div>
-                  {students.map((student) => (
+                  {filteredStudents.map((student) => (
                     <div key={student.id} className="score-row">
-                      <span>
-                        {student.first} {student.last}
-                      </span>
+                      <span>{student.fullName}</span>
                       <input
                         type="number"
                         min="0"
@@ -1416,7 +1611,7 @@ const UploadCAModal: React.FC<UploadCAModalProps> = ({
           <button
             className="action-btn save"
             onClick={handleSaveScores}
-            disabled={!selectedCategory && uploadMethod === "manual"}
+            disabled={!selectedClass || !selectedSubject || !selectedCategory}
           >
             Save Scores
           </button>
@@ -1426,54 +1621,34 @@ const UploadCAModal: React.FC<UploadCAModalProps> = ({
   );
 };
 
-// Quiz Name Modal Component (keep existing implementation)
-interface QuizNameModalProps {
+// Class Selection Modal Component
+interface ClassSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (
-    name: string,
-    duration: number,
-    scheduledDate: string,
-    scheduledTime: string,
-    subject: string,
-    maxScore: number
-  ) => void;
-  questions: Question[];
+  teacherClasses: TeacherClassInfo[];
+  selectedSubject: string;
+  onSelectClass: (className: string) => void;
 }
 
-const QuizNameModal: React.FC<QuizNameModalProps> = ({
+const ClassSelectionModal: React.FC<ClassSelectionModalProps> = ({
   isOpen,
   onClose,
-  onSave,
-  questions,
+  teacherClasses,
+  selectedSubject,
+  onSelectClass,
 }) => {
-  const [quizName, setQuizName] = useState("");
-  const [duration, setDuration] = useState(30);
-  const [scheduledDate, setScheduledDate] = useState("");
-  const [scheduledTime, setScheduledTime] = useState("");
-  const [subject, setSubject] = useState("Mathematics");
-  const [maxScore, setMaxScore] = useState(40);
+  const [selectedClass, setSelectedClass] = useState<string>("");
 
-  useEffect(() => {
-    if (isOpen) {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const newDate = tomorrow.toISOString().split("T")[0];
-      if (scheduledDate !== newDate) setScheduledDate(newDate);
-      if (scheduledTime !== "09:00") setScheduledTime("09:00");
-    }
-  }, [isOpen]);
+  const classesWithSubject = useMemo(() => {
+    return teacherClasses.filter((cls) =>
+      cls.subjects.includes(selectedSubject)
+    );
+  }, [teacherClasses, selectedSubject]);
 
-  const handleSave = () => {
-    if (quizName.trim() && scheduledDate && scheduledTime) {
-      onSave(
-        quizName.trim(),
-        duration,
-        scheduledDate,
-        scheduledTime,
-        subject,
-        maxScore
-      );
+  const handleSubmit = () => {
+    if (selectedClass) {
+      onSelectClass(selectedClass);
+      onClose();
     }
   };
 
@@ -1486,7 +1661,7 @@ const QuizNameModal: React.FC<QuizNameModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
-          <h2>Save Quiz</h2>
+          <h2>Select Class</h2>
           <button className="close-btn" onClick={onClose}>
             <X size={24} />
           </button>
@@ -1494,100 +1669,27 @@ const QuizNameModal: React.FC<QuizNameModalProps> = ({
 
         <div className="modal-body">
           <div className="form-group">
-            <label>Quiz Name *</label>
-            <input
-              type="text"
-              placeholder="Enter quiz name..."
-              className="text-input"
-              value={quizName}
-              onChange={(e) => setQuizName(e.target.value)}
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Subject *</label>
-            <select
-              className="text-input"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-            >
-              <option value="Mathematics">Mathematics</option>
-              <option value="English">English</option>
-              <option value="Science">Science</option>
-              <option value="Social Studies">Social Studies</option>
-              <option value="ICT">ICT</option>
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Maximum Score *</label>
-            <input
-              type="number"
-              min="10"
-              max="100"
-              className="text-input"
-              value={maxScore}
-              onChange={(e) => setMaxScore(parseInt(e.target.value) || 40)}
-            />
-            <small>Total points for this quiz</small>
-          </div>
-
-          <div className="form-group">
-            <label>Test Duration (minutes) *</label>
-            <input
-              type="number"
-              min="5"
-              max="180"
-              className="text-input"
-              value={duration}
-              onChange={(e) => setDuration(parseInt(e.target.value) || 30)}
-            />
-            <small>Time students have to complete the test</small>
-          </div>
-
-          <div className="form-group">
-            <label>Scheduled Date *</label>
-            <input
-              type="date"
-              className="text-input"
-              value={scheduledDate}
-              onChange={(e) => setScheduledDate(e.target.value)}
-              min={new Date().toISOString().split("T")[0]}
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Scheduled Time *</label>
-            <input
-              type="time"
-              className="text-input"
-              value={scheduledTime}
-              onChange={(e) => setScheduledTime(e.target.value)}
-            />
-          </div>
-
-          <div className="quiz-summary">
-            <h4>Quiz Summary</h4>
             <p>
-              <strong>Questions:</strong> {questions.length}
+              You teach <strong>{selectedSubject}</strong> in multiple classes.
             </p>
-            <p>
-              <strong>Subject:</strong> {subject}
-            </p>
-            <p>
-              <strong>Max Score:</strong> {maxScore}
-            </p>
-            <p>
-              <strong>Total Duration:</strong> {duration + 10} minutes
-              (including 10min buffer)
-            </p>
-            {scheduledDate && (
-              <p>
-                <strong>Scheduled:</strong>{" "}
-                {new Date(scheduledDate).toLocaleDateString()} at{" "}
-                {scheduledTime}
-              </p>
-            )}
+            <p>Please select which class this quiz is for:</p>
+            <div className="class-options">
+              {classesWithSubject.map((cls) => (
+                <button
+                  key={cls.className}
+                  className={`class-option-btn ${
+                    selectedClass === cls.className ? "selected" : ""
+                  }`}
+                  onClick={() => setSelectedClass(cls.className)}
+                >
+                  <Building size={20} />
+                  <span>{cls.className}</span>
+                  <span className="student-count">
+                    {cls.className} Students
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -1597,10 +1699,10 @@ const QuizNameModal: React.FC<QuizNameModalProps> = ({
           </button>
           <button
             className="action-btn save"
-            onClick={handleSave}
-            disabled={!quizName.trim() || !scheduledDate || !scheduledTime}
+            onClick={handleSubmit}
+            disabled={!selectedClass}
           >
-            Save Quiz
+            Select Class
           </button>
         </div>
       </div>
@@ -1608,7 +1710,322 @@ const QuizNameModal: React.FC<QuizNameModalProps> = ({
   );
 };
 
-// Create Quiz Modal Component (keep existing implementation)
+// Quiz Name Modal Component
+interface QuizNameModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (
+    name: string,
+    duration: number,
+    scheduledDate: string,
+    scheduledTime: string,
+    subject: string,
+    maxScore: number,
+    targetClass: string
+  ) => void;
+  questions: Question[];
+  teacherClasses: TeacherClassInfo[];
+}
+
+const QuizNameModal: React.FC<QuizNameModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  questions,
+  teacherClasses,
+}) => {
+  const [quizName, setQuizName] = useState("");
+  const [duration, setDuration] = useState(30);
+  const [scheduledDate, setScheduledDate] = useState("");
+  const [scheduledTime, setScheduledTime] = useState("");
+  const [subject, setSubject] = useState("");
+  const [maxScore, setMaxScore] = useState(40);
+  const [showClassModal, setShowClassModal] = useState(false);
+  const [selectedClass, setSelectedClass] = useState("");
+
+  const allSubjects = useMemo(() => {
+    const subjects = new Set<string>();
+    teacherClasses.forEach((cls) => {
+      cls.subjects.forEach((sub) => subjects.add(sub));
+    });
+    return Array.from(subjects).sort();
+  }, [teacherClasses]);
+
+  const classesForSubject = useMemo(() => {
+    if (!subject) return [];
+    return teacherClasses.filter((cls) => cls.subjects.includes(subject));
+  }, [subject, teacherClasses]);
+
+  useEffect(() => {
+    if (isOpen) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setScheduledDate(tomorrow.toISOString().split("T")[0]);
+      setScheduledTime("09:00");
+
+      if (allSubjects.length > 0 && !subject) {
+        setSubject(allSubjects[0]);
+      }
+    }
+  }, [isOpen, allSubjects]);
+
+  const handleSave = () => {
+    if (!quizName.trim()) {
+      alert("Please enter quiz name");
+      return;
+    }
+
+    if (!subject) {
+      alert("Please select a subject");
+      return;
+    }
+
+    if (!scheduledDate || !scheduledTime) {
+      alert("Please select date and time");
+      return;
+    }
+
+    if (classesForSubject.length === 1) {
+      // Only one class, auto-select
+      onSave(
+        quizName.trim(),
+        duration,
+        scheduledDate,
+        scheduledTime,
+        subject,
+        maxScore,
+        classesForSubject[0].className
+      );
+    } else if (classesForSubject.length > 1) {
+      // Multiple classes, show selection modal
+      setShowClassModal(true);
+    } else {
+      alert("No classes found for selected subject");
+    }
+  };
+
+  const handleClassSelect = (className: string) => {
+    setSelectedClass(className);
+    onSave(
+      quizName.trim(),
+      duration,
+      scheduledDate,
+      scheduledTime,
+      subject,
+      maxScore,
+      className
+    );
+  };
+
+  const handleTimeAdjustment = (minutes: number) => {
+    if (scheduledTime) {
+      const [hours, mins] = scheduledTime.split(":").map(Number);
+      const date = new Date();
+      date.setHours(hours);
+      date.setMinutes(mins + minutes);
+      setScheduledTime(
+        `${date.getHours().toString().padStart(2, "0")}:${date
+          .getMinutes()
+          .toString()
+          .padStart(2, "0")}`
+      );
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <>
+      <div className="modal-overlay">
+        <div
+          className="modal-content small-modal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="modal-header">
+            <h2>Save Quiz</h2>
+            <button className="close-btn" onClick={onClose}>
+              <X size={24} />
+            </button>
+          </div>
+
+          <div className="modal-body">
+            <div className="form-group">
+              <label>Quiz Name *</label>
+              <input
+                type="text"
+                placeholder="Enter quiz name..."
+                className="text-input"
+                value={quizName}
+                onChange={(e) => setQuizName(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Subject *</label>
+              <select
+                className="text-input"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+              >
+                <option value="">Select Subject</option>
+                {allSubjects.map((subj) => (
+                  <option key={subj} value={subj}>
+                    {subj}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Maximum Score *</label>
+              <input
+                type="number"
+                min="10"
+                max="100"
+                className="text-input"
+                value={maxScore}
+                onChange={(e) => setMaxScore(parseInt(e.target.value) || 40)}
+              />
+              <small>Total points for this quiz</small>
+            </div>
+
+            <div className="form-group">
+              <label>Test Duration (minutes) *</label>
+              <input
+                type="number"
+                min="5"
+                max="180"
+                className="text-input"
+                value={duration}
+                onChange={(e) => setDuration(parseInt(e.target.value) || 30)}
+              />
+              <small>Time students have to complete the test</small>
+            </div>
+
+            <div className="form-group">
+              <label>Scheduled Date *</label>
+              <input
+                type="date"
+                className="text-input"
+                value={scheduledDate}
+                onChange={(e) => setScheduledDate(e.target.value)}
+                min={new Date().toISOString().split("T")[0]}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Scheduled Time *</label>
+              <div className="time-control">
+                <input
+                  type="time"
+                  className="text-input"
+                  value={scheduledTime}
+                  onChange={(e) => setScheduledTime(e.target.value)}
+                />
+                <div className="time-adjustments">
+                  <button
+                    type="button"
+                    className="time-adjust-btn"
+                    onClick={() => handleTimeAdjustment(5)}
+                  >
+                    +5 min
+                  </button>
+                  <button
+                    type="button"
+                    className="time-adjust-btn"
+                    onClick={() => handleTimeAdjustment(-5)}
+                  >
+                    -5 min
+                  </button>
+                  <button
+                    type="button"
+                    className="time-adjust-btn"
+                    onClick={() => handleTimeAdjustment(15)}
+                  >
+                    +15 min
+                  </button>
+                  <button
+                    type="button"
+                    className="time-adjust-btn"
+                    onClick={() => handleTimeAdjustment(-15)}
+                  >
+                    -15 min
+                  </button>
+                </div>
+              </div>
+              <small>Click buttons to adjust time quickly</small>
+            </div>
+
+            {subject && (
+              <div className="form-group">
+                <label>Available Classes for {subject}</label>
+                <div className="class-tags">
+                  {classesForSubject.map((cls) => (
+                    <span key={cls.className} className="class-tag">
+                      {cls.className}
+                    </span>
+                  ))}
+                  {classesForSubject.length === 0 && (
+                    <span className="class-tag warning">No classes</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="quiz-summary">
+              <h4>Quiz Summary</h4>
+              <p>
+                <strong>Questions:</strong> {questions.length}
+              </p>
+              <p>
+                <strong>Subject:</strong> {subject || "Not selected"}
+              </p>
+              <p>
+                <strong>Max Score:</strong> {maxScore}
+              </p>
+              <p>
+                <strong>Total Duration:</strong> {duration + 10} minutes
+                (including 10min buffer)
+              </p>
+              {scheduledDate && (
+                <p>
+                  <strong>Scheduled:</strong>{" "}
+                  {new Date(scheduledDate).toLocaleDateString()} at{" "}
+                  {scheduledTime}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="modal-footer">
+            <button className="action-btn cancel" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              className="action-btn save"
+              onClick={handleSave}
+              disabled={
+                !quizName.trim() || !subject || !scheduledDate || !scheduledTime
+              }
+            >
+              Save Quiz
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <ClassSelectionModal
+        isOpen={showClassModal}
+        onClose={() => setShowClassModal(false)}
+        teacherClasses={teacherClasses}
+        selectedSubject={subject}
+        onSelectClass={handleClassSelect}
+      />
+    </>
+  );
+};
+
+// Create Quiz Modal Component
 interface CreateQuizModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -1875,7 +2292,7 @@ const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
   );
 };
 
-// Class List Panel Component (keep existing implementation)
+// Class List Panel Component
 interface ClassListPanelProps {
   students: Student[];
   isOpen: boolean;
@@ -1904,8 +2321,12 @@ const ClassListPanel: React.FC<ClassListPanelProps> = ({
         <div className="class-list-collapsed" onClick={toggle}>
           {students.slice(0, 12).map((s) => (
             <div key={s.id} className="initial-circle">
-              {s.first[0].toUpperCase()}
-              {s.last[0].toUpperCase()}
+              {s.fullName
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .toUpperCase()
+                .slice(0, 2)}
             </div>
           ))}
           {students.length > 12 && (
@@ -1935,17 +2356,19 @@ const ClassListPanel: React.FC<ClassListPanelProps> = ({
                 {students.map((s) => (
                   <div key={s.id} className="student-row">
                     <div className="student-avatar">
-                      {s.first[0].toUpperCase()}
-                      {s.last[0].toUpperCase()}
+                      {s.fullName
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .toUpperCase()
+                        .slice(0, 2)}
                     </div>
                     <div style={{ flex: 1 }}>
                       <div>
-                        <strong>
-                          {s.first} {s.last}
-                        </strong>
+                        <strong>{s.fullName}</strong>
                       </div>
                       <div style={{ fontSize: "13px", color: "#6b7280" }}>
-                        {s.email}
+                        {s.email} • {s.className}
                       </div>
                     </div>
                     <div style={{ fontWeight: 600, color: "#4f46e5" }}>
@@ -1968,7 +2391,7 @@ const TeacherDashboard: React.FC = () => {
   const {
     user,
     userData,
-    teacherClasses,
+    teacherClasses: rawTeacherClasses,
     students,
     loading,
     error,
@@ -1977,9 +2400,8 @@ const TeacherDashboard: React.FC = () => {
     signOutUser,
   } = useFirebaseStore();
 
-  const fullNameAvatar = userData?.fullName || "";
-  const [firstNameAvatar = " ", ...rest] = fullNameAvatar.split(" ");
-  const lastNameAvatar = rest.join(" ");
+  const [teacherClasses, setTeacherClasses] = useState<TeacherClassInfo[]>([]);
+  const [classStudents, setClassStudents] = useState<Student[]>([]);
 
   const navigate = useNavigate();
 
@@ -1999,16 +2421,101 @@ const TeacherDashboard: React.FC = () => {
   const [gradeManagementModalOpen, setGradeManagementModalOpen] =
     useState(false);
   const [selectedFeature, setSelectedFeature] = useState<string>("");
-  const [currentSubject, setCurrentSubject] = useState("Mathematics");
+
+  // Fetch teacher's classes and subjects from Firestore
+  useEffect(() => {
+    const fetchTeacherData = async () => {
+      if (user?.email) {
+        try {
+          const teachersRef = collection(db, "teachers");
+          const q = query(teachersRef, where("email", "==", user.email));
+          const querySnapshot = await getDocs(q);
+
+          if (!querySnapshot.empty) {
+            const teacherData = querySnapshot.docs[0].data();
+            const classesData: TeacherClassInfo[] = [];
+
+            if (teacherData.classes && Array.isArray(teacherData.classes)) {
+              for (const className of teacherData.classes) {
+                const subjects = teacherData.subjects?.[className] || [];
+                classesData.push({
+                  className: String(className),
+                  subjects: Array.isArray(subjects) ? subjects.map(String) : [],
+                });
+              }
+            }
+
+            setTeacherClasses(classesData);
+            localStorage.setItem("teacherClasses", JSON.stringify(classesData));
+            localStorage.setItem(
+              "teacherName",
+              teacherData.fullName || user.displayName || "Teacher"
+            );
+          }
+        } catch (error) {
+          console.error("Error fetching teacher data:", error);
+        }
+      }
+    };
+
+    if (user?.email) {
+      fetchTeacherData();
+    }
+  }, [user]);
+
+  // Load teacher classes from localStorage if available
+  useEffect(() => {
+    const savedClasses = localStorage.getItem("teacherClasses");
+    if (savedClasses) {
+      try {
+        setTeacherClasses(JSON.parse(savedClasses));
+      } catch (error) {
+        console.error("Error loading teacher classes:", error);
+      }
+    }
+  }, []);
+
+  // Filter students based on teacher's classes and enhance with fullName and subjects
+  useEffect(() => {
+    if (students.length > 0 && teacherClasses.length > 0) {
+      const teacherClassNames = teacherClasses.map((c) => c.className);
+      const filtered = students.filter((student) =>
+        teacherClassNames.includes(student.className || "")
+      );
+
+      // Enhance students with fullName and subjects
+      const enhanced = filtered.map(
+        (student): Student => ({
+          ...student,
+          fullName: `${student.first} ${student.last}`,
+          subjects: [], // Default empty array for subjects
+        })
+      );
+
+      setClassStudents(enhanced);
+    } else if (students.length > 0) {
+      // Enhance all students if no teacher classes filter
+      const enhanced = students.map(
+        (student): Student => ({
+          ...student,
+          fullName: `${student.first} ${student.last}`,
+          subjects: [],
+        })
+      );
+      setClassStudents(enhanced);
+    } else {
+      setClassStudents([]);
+    }
+  }, [students, teacherClasses]);
 
   // Enhanced students with class information
   const enhancedStudents = useMemo(() => {
-    return students.map((student) => ({
+    return classStudents.map((student) => ({
       ...student,
-      classId: teacherClasses[0]?.id || "default-class",
-      className: teacherClasses[0]?.name || "Default Class",
+      classId: student.className || "default-class",
+      className: student.className || "Default Class",
     }));
-  }, [students, teacherClasses]);
+  }, [classStudents]);
 
   useEffect(() => {
     console.log("🔄 TeacherDashboard - Setting up auth");
@@ -2041,6 +2548,7 @@ const TeacherDashboard: React.FC = () => {
 
     initializeWorkingHours();
   }, []);
+
   //handle scroll
   useEffect(() => {
     let lastScroll = window.scrollY;
@@ -2246,7 +2754,8 @@ const TeacherDashboard: React.FC = () => {
       scheduledDate: string,
       scheduledTime: string,
       subject: string,
-      maxScore: number
+      maxScore: number,
+      targetClass: string
     ) => {
       const totalDuration = duration + 10;
       const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
@@ -2273,15 +2782,34 @@ const TeacherDashboard: React.FC = () => {
         status,
         subject,
         maxScore,
+        targetClass,
+        createdAt: new Date(),
       };
 
       setQuizzes((prev) => [newQuiz, ...prev]);
       setQuizNameModalOpen(false);
       setQuizModalOpen(false);
       setTempQuestions([]);
+
+      // Save to Firestore for student access
+      saveQuizToFirestore(newQuiz);
     },
     [tempQuestions]
   );
+
+  const saveQuizToFirestore = async (quiz: Quiz) => {
+    try {
+      const quizzesRef = collection(db, "quizzes");
+      await setDoc(doc(quizzesRef, quiz.id), {
+        ...quiz,
+        createdAt: new Date(),
+        teacherId: user?.uid,
+        teacherName: localStorage.getItem("teacherName") || user?.displayName,
+      });
+    } catch (error) {
+      console.error("Error saving quiz to Firestore:", error);
+    }
+  };
 
   const handleEditQuiz = useCallback((quiz: Quiz) => {
     setEditingQuiz(quiz);
@@ -2369,7 +2897,7 @@ const TeacherDashboard: React.FC = () => {
     const classItems = teacherClasses.map((c, i) => ({
       id: `class-${i + 1}`,
       time: i % 2 === 0 ? "10:30" : "14:30",
-      name: c.name,
+      name: c.className,
       location: "Classroom",
       type: "class" as const,
       status: "active" as const,
@@ -2462,7 +2990,7 @@ const TeacherDashboard: React.FC = () => {
                 onFeatureSelect={handlePerformanceFeatureSelect}
               />
             </div>
-            <button className="get-in-touch">
+            <button className="get-in-touch" onClick={handleLogout}>
               <i className="bx bx-log-out">Logout</i>
             </button>
 
@@ -2473,24 +3001,14 @@ const TeacherDashboard: React.FC = () => {
                   className="profile-avatar-mobile"
                   onClick={() => setDropdownOpen(!dropdownOpen)}
                 >
-                  <span>{firstNameAvatar?.charAt(0)?.toUpperCase() || ""}</span>
+                  <span>{fullName.charAt(0).toUpperCase()}</span>
                 </div>
 
                 <div
                   className={`profile-dropdown ${dropdownOpen ? "show" : ""}`}
                 >
-                  <h2>
-                    {firstNameAvatar && lastNameAvatar
-                      ? `${
-                          firstNameAvatar.charAt(0).toUpperCase() +
-                          firstNameAvatar.slice(1)
-                        } ${
-                          lastNameAvatar.charAt(0).toUpperCase() +
-                          lastNameAvatar.slice(1)
-                        }`
-                      : "Unknown User"}
-                  </h2>
-                  <p>{user?.email || "No email available"}</p>
+                  <h2>{fullName}</h2>
+                  <p>{email}</p>
                   <button onClick={handleLogout}>Logout</button>
                 </div>
               </div>
@@ -2581,6 +3099,14 @@ const TeacherDashboard: React.FC = () => {
             <p>
               {dayStr} • {todayStr} • {timeStr}
             </p>
+            {teacherClasses.length > 0 && (
+              <div className="teacher-classes-info">
+                <span className="classes-tag">
+                  <Building size={16} />
+                  Classes: {teacherClasses.map((c) => c.className).join(", ")}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="progress-card">
@@ -2737,7 +3263,9 @@ const TeacherDashboard: React.FC = () => {
                       </div>
                       <div className="test-info">
                         <div className="test-title-section">
-                          <h4>{quiz.name}</h4>
+                          <h4>
+                            {quiz.name} ({quiz.targetClass})
+                          </h4>
                           <div className="test-actions">
                             <button
                               className="edit-btn"
@@ -2857,6 +3385,9 @@ const TeacherDashboard: React.FC = () => {
               <div>
                 <strong>Classes: {teacherClasses.length}</strong>
               </div>
+              <div>
+                <strong>Students: {enhancedStudents.length}</strong>
+              </div>
             </div>
           </div>
         </div>
@@ -2878,12 +3409,14 @@ const TeacherDashboard: React.FC = () => {
         onClose={() => setQuizNameModalOpen(false)}
         onSave={handleSaveQuizWithName}
         questions={tempQuestions}
+        teacherClasses={teacherClasses}
       />
 
       <UploadCAModal
         isOpen={uploadCAModalOpen}
         onClose={() => setUploadCAModalOpen(false)}
         students={enhancedStudents}
+        teacherClasses={teacherClasses}
       />
 
       <LiveMonitoringModal
@@ -2897,7 +3430,7 @@ const TeacherDashboard: React.FC = () => {
         isOpen={gradeManagementModalOpen}
         onClose={() => setGradeManagementModalOpen(false)}
         students={enhancedStudents}
-        currentSubject={currentSubject}
+        teacherClasses={teacherClasses}
       />
 
       <style>{`
@@ -2916,6 +3449,23 @@ const TeacherDashboard: React.FC = () => {
           filter: blur(4px);
           pointer-events: none;
           user-select: none;
+        }
+
+        /* Teacher Classes Info */
+        .teacher-classes-info {
+          margin-top: 8px;
+        }
+
+        .classes-tag {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          background: #e0e7ff;
+          color: #4f46e5;
+          padding: 6px 12px;
+          border-radius: 20px;
+          font-size: 14px;
+          font-weight: 500;
         }
 
         /* Enhanced Live Monitoring Styles */
@@ -3068,6 +3618,98 @@ const TeacherDashboard: React.FC = () => {
           margin-bottom: 16px;
           font-size: 14px;
           color: #0369a1;
+        }
+
+        /* Class Options Styling */
+        .class-options {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          margin: 16px 0;
+        }
+
+        .class-option-btn {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          padding: 16px;
+          border: 2px solid #e5e7eb;
+          border-radius: 12px;
+          background: white;
+          cursor: pointer;
+          transition: all 0.2s;
+          text-align: left;
+          gap: 8px;
+        }
+
+        .class-option-btn:hover {
+          border-color: #c7d2fe;
+          background: #f8fafc;
+        }
+
+        .class-option-btn.selected {
+          border-color: #4f46e5;
+          background: #eef2ff;
+        }
+
+        .class-option-btn span:first-of-type {
+          font-weight: 600;
+          color: #111827;
+          font-size: 16px;
+        }
+
+        .student-count {
+          font-size: 14px;
+          color: #6b7280;
+        }
+
+        .class-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 8px;
+        }
+
+        .class-tag {
+          background: #e0e7ff;
+          color: #4f46e5;
+          padding: 4px 12px;
+          border-radius: 16px;
+          font-size: 14px;
+          font-weight: 500;
+        }
+
+        .class-tag.warning {
+          background: #fef3c7;
+          color: #92400e;
+        }
+
+        /* Time Adjustment Controls */
+        .time-control {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .time-adjustments {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .time-adjust-btn {
+          padding: 6px 12px;
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          background: white;
+          font-size: 12px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .time-adjust-btn:hover {
+          background: #f3f4f6;
+          border-color: #9ca3af;
         }
 
         /* Add all previous CSS styles here */
