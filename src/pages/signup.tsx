@@ -94,7 +94,6 @@ const ALL_CLASSES = [
   "SSS 2",
   "SSS 3",
 ];
-const [showPassword, setShowPassword] = useState(false);
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -109,6 +108,7 @@ export default function Signup() {
   const [className, setClassName] = useState("");
   const [adminCodeInput, setAdminCodeInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // ───── Google/Apple Info Modal ─────
   const [showInfoModal, setShowInfoModal] = useState(false);
