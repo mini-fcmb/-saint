@@ -1,4 +1,4 @@
-// stores/useFirebaseStore.ts - FIXED VERSION
+// stores/useFirebaseStore.ts - MERGED VERSION (BEST OF BOTH)
 "use client";
 
 import { create } from "zustand";
@@ -15,6 +15,10 @@ import {
   query,
   where,
   onSnapshot,
+  updateDoc,
+  getDocs,
+  writeBatch,
+  DocumentData,
 } from "firebase/firestore";
 import { auth, db } from "../firebase/config";
 
@@ -57,12 +61,20 @@ interface FirebaseStore {
   error: string | null;
   debug: string[];
   authInitialized: boolean;
+  
+  // Auth functions (from FIXED version)
   initializeAuth: () => void;
   cleanupAuth: () => void;
   refreshStudents: () => void;
   clearError: () => void;
   signOutUser: () => Promise<void>;
-  forceReset: () => void; // ✅ ADDED: Emergency reset function
+  forceReset: () => void;
+  
+  // Admin functions (from OLD version)
+  updateTeacherProfile: (teacherId: string, data: Partial<Record<string, any>>) => Promise<{ success: boolean; error?: string }>;
+  switchTeacherClass: (teacherId: string, newClass: string) => Promise<{ success: boolean; error?: string }>;
+  promoteStudents: (oldClass: string, newClass: string) => Promise<{ success: boolean; error?: string }>;
+  updateStudentClass: (studentId: string, newClass: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -180,7 +192,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
       q,
       (snap) => {
         const students: Student[] = snap.docs.map((d) => {
-          const data = d.data();
+          const data = d.data() as DocumentData;
           const { first, last } = splitName(data.fullName);
           return {
             id: d.id,
@@ -222,6 +234,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     debug: [],
     authInitialized: false,
 
+    // ✅ Auth functions from FIXED version
     initializeAuth: () => {
       if (authUnsubscribe) {
         log("Auth already initialized, returning without new listener");
@@ -319,11 +332,9 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
       set({ authInitialized: false });
     },
 
-    // ✅ ADDED: Emergency reset function
     forceReset: () => {
       log("🔄 FORCE RESET: Manually resetting entire store");
       
-      // Clean up all listeners
       if (authUnsubscribe) {
         authUnsubscribe();
         authUnsubscribe = null;
@@ -334,13 +345,12 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
       }
       currentUserId = null;
       
-      // Reset all state
       set({
         user: null,
         userData: null,
         teacherClasses: [],
         students: [],
-        loading: false, // ⚠️ CRITICAL: Ensure loading is false
+        loading: false,
         error: null,
         authInitialized: false,
         debug: [],
@@ -355,37 +365,32 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
 
     clearError: () => set({ error: null }),
 
-    // ✅ FIXED: signOutUser function
     signOutUser: async () => {
       try {
         log("🚪 Signing out user...");
         
-        // Clean up student listener first
         if (studentUnsub) {
           studentUnsub();
           studentUnsub = null;
         }
         
-        // Sign out from Firebase
         await signOut(auth);
         log("✅ Sign-out successful");
         
-        // Clean up auth listener
         if (authUnsubscribe) {
           authUnsubscribe();
           authUnsubscribe = null;
         }
         currentUserId = null;
         
-        // ⚠️ CRITICAL: Reset ALL store state with loading: false
         set({
           user: null,
           userData: null,
           teacherClasses: [],
           students: [],
-          loading: false, // ⚠️ THIS PREVENTS BLANK PAGES
+          loading: false,
           error: null,
-          authInitialized: false, // ⚠️ Reset this flag
+          authInitialized: false,
         });
         
         log("🔄 Store fully reset after sign out");
@@ -393,18 +398,126 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
       } catch (err: any) {
         log(`❌ Sign-out error: ${err.message}`);
         
-        // Even on error, reset the store to prevent stuck state
         set({
           user: null,
           userData: null,
           teacherClasses: [],
           students: [],
-          loading: false, // ⚠️ Always set loading to false
+          loading: false,
           error: err.message,
           authInitialized: false,
         });
         
         throw err;
+      }
+    },
+
+    // ✅ Admin functions from OLD version
+    updateTeacherProfile: async (teacherId: string, data: Partial<Record<string, any>>) => {
+      try {
+        const teacherRef = doc(db, "teachers", teacherId);
+        await updateDoc(teacherRef, data);
+
+        // Update local Zustand userData immediately if present
+        set((state) => ({
+          userData: state.userData
+            ? {
+                ...state.userData,
+                ...data,
+              }
+            : null,
+        }));
+
+        // If className changed → refresh student listener and teacherClasses
+        if (data.className) {
+          const newClass = data.className.toString().trim();
+          set({ teacherClasses: [{ id: newClass, name: newClass }] });
+
+          // restart student listener for new class
+          const { refreshStudents } = get();
+          refreshStudents();
+        }
+
+        // If teaching array changed, reload teacherClasses
+        if (Array.isArray(data.teaching) && data.teaching.length > 0) {
+          const classes = (data.teaching as any[]).map((t) => {
+            const id = (t.classLevel ?? t.className ?? "").toString().trim();
+            return id ? { id, name: id } : null;
+          }).filter(Boolean) as TeacherClass[];
+          if (classes.length) set({ teacherClasses: classes });
+          // restart listener with updated classes
+          const { refreshStudents } = get();
+          refreshStudents();
+        }
+
+        return { success: true };
+      } catch (err: any) {
+        const message = err?.message ?? "Failed to update teacher";
+        log(`updateTeacherProfile error: ${message}`);
+        return { success: false, error: message };
+      }
+    },
+
+    switchTeacherClass: async (teacherId: string, newClass: string) => {
+      try {
+        const payload = { className: newClass };
+        const res = await get().updateTeacherProfile(teacherId, payload);
+        return res;
+      } catch (err: any) {
+        const message = err?.message ?? "Error switching teacher class";
+        log(`switchTeacherClass error: ${message}`);
+        return { success: false, error: message };
+      }
+    },
+
+    promoteStudents: async (oldClass: string, newClass: string) => {
+      try {
+        log(`Promoting students from ${oldClass} → ${newClass}`);
+        const q = query(collection(db, "students"), where("className", "==", oldClass));
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) {
+          log("No students found to promote");
+          return { success: true };
+        }
+
+        // Use batch to update - respects Firestore batch semantics
+        const batch = writeBatch(db);
+        snapshot.docs.forEach((d) => {
+          const ref = doc(db, "students", d.id);
+          batch.update(ref, { className: newClass });
+        });
+
+        await batch.commit();
+        log(`Promoted ${snapshot.docs.length} students to ${newClass}`);
+
+        // If current user is a teacher whose class was promoted, refresh students
+        const { refreshStudents } = get();
+        refreshStudents();
+
+        return { success: true };
+      } catch (err: any) {
+        const message = err?.message ?? "Failed to promote students";
+        log(`promoteStudents error: ${message}`);
+        return { success: false, error: message };
+      }
+    },
+
+    updateStudentClass: async (studentId: string, newClass: string) => {
+      try {
+        const studentRef = doc(db, "students", studentId);
+        await updateDoc(studentRef, { className: newClass });
+
+        // If the current teacher is watching that class, refresh students
+        const { refreshStudents } = get();
+        refreshStudents();
+
+        log(`Student ${studentId} moved to ${newClass}`);
+        return { success: true };
+      } catch (err: any) {
+        const message = err?.message ?? "Failed to update student class";
+        log(`updateStudentClass error: ${message}`);
+        return { success: false, error: message };
       }
     },
   };
