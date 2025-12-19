@@ -56,11 +56,13 @@ interface FirebaseStore {
   loading: boolean;
   error: string | null;
   debug: string[];
-  authInitialized: boolean; // NEW: Track if auth is initialized
-  initializeAuth: () => Unsubscribe;
+  authInitialized: boolean;
+  initializeAuth: () => void;
+  cleanupAuth: () => void;
   refreshStudents: () => void;
   clearError: () => void;
   signOutUser: () => Promise<void>;
+  forceReset: () => void; // ✅ ADDED: Emergency reset function
 }
 
 /* ------------------------------------------------------------------ */
@@ -75,16 +77,15 @@ const splitName = (fullName = "") => {
 export const useFirebaseStore = create<FirebaseStore>((set, get) => {
   let studentUnsub: Unsubscribe | null = null;
   let authUnsubscribe: Unsubscribe | null = null;
-  let currentUserId: string | null = null; // NEW: Track current user to prevent reloads
+  let currentUserId: string | null = null;
 
   const log = (msg: string) => {
     const time = new Date().toISOString().slice(11, 19);
     console.log("[FB-Store]", msg);
-    set((s) => ({ debug: [...s.debug.slice(-50), `[${time}] ${msg}`] })); // Limit debug array size
+    set((s) => ({ debug: [...s.debug.slice(-50), `[${time}] ${msg}`] }));
   };
 
   const loadUserData = async (uid: string): Promise<{ userData: UserData; role: "teacher" | "student" }> => {
-    // FIXED: Prevent reloading same user data
     if (currentUserId === uid && get().userData) {
       log(`User data already loaded for UID: ${uid}`);
       return { userData: get().userData!, role: get().userData!.role };
@@ -92,7 +93,6 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
 
     log(`Loading user data for UID: ${uid}`);
     
-    // Try teacher collection first
     const teacherRef = doc(db, "teachers", uid);
     const teacherSnap = await getDoc(teacherRef);
 
@@ -108,11 +108,10 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         className: data.className || "",
       };
       
-      currentUserId = uid; // Track current user
+      currentUserId = uid;
       return { userData, role: "teacher" };
     }
 
-    // Try student collection
     const studentRef = doc(db, "students", uid);
     const studentSnap = await getDoc(studentRef);
 
@@ -131,7 +130,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         semester: data.semester || "IV",
       };
       
-      currentUserId = uid; // Track current user
+      currentUserId = uid;
       return { userData, role: "student" };
     }
 
@@ -221,13 +220,12 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     loading: true,
     error: null,
     debug: [],
-    authInitialized: false, // NEW
+    authInitialized: false,
 
     initializeAuth: () => {
-      // FIXED: Only initialize once
       if (authUnsubscribe) {
-        log("Auth already initialized, returning existing unsubscribe");
-        return authUnsubscribe;
+        log("Auth already initialized, returning without new listener");
+        return;
       }
 
       log("Initializing auth listener...");
@@ -235,7 +233,6 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
       const unsub = onAuthStateChanged(auth, async (user) => {
         log(`Auth state changed: ${user ? `User ${user.uid}` : 'No user'}`);
         
-        // FIXED: Prevent unnecessary state updates for same user
         const currentUser = get().user;
         if (user?.uid === currentUser?.uid && !get().loading) {
           log("Same user, skipping state update");
@@ -268,7 +265,6 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         try {
           const { userData, role } = await loadUserData(user.uid);
          
-          // FIXED: Only update if we're still dealing with the same user
           const currentState = get();
           if (currentState.user?.uid !== user.uid) {
             log("User changed during data load, skipping update");
@@ -282,7 +278,6 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
             set({ teacherClasses: classes });
             startStudentListener(classes.map((c) => c.id));
           } else {
-            // For students, we don't need to load other students
             set({ 
               teacherClasses: [],
               students: [],
@@ -293,7 +288,6 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         } catch (error: any) {
           log(`Error loading user data: ${error.message}`);
           
-          // Only update state if user hasn't changed
           const currentState = get();
           if (currentState.user?.uid === user.uid) {
             set({
@@ -308,20 +302,49 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
       });
 
       authUnsubscribe = unsub;
+      set({ authInitialized: true });
+    },
+
+    cleanupAuth: () => {
+      log("Manual cleanup of auth listeners");
+      if (authUnsubscribe) {
+        authUnsubscribe();
+        authUnsubscribe = null;
+      }
+      if (studentUnsub) {
+        studentUnsub();
+        studentUnsub = null;
+      }
+      currentUserId = null;
+      set({ authInitialized: false });
+    },
+
+    // ✅ ADDED: Emergency reset function
+    forceReset: () => {
+      log("🔄 FORCE RESET: Manually resetting entire store");
       
-      // FIXED: Return proper cleanup function
-      return () => {
-        log("Cleaning up auth listener");
-        if (authUnsubscribe) {
-          authUnsubscribe();
-          authUnsubscribe = null;
-        }
-        if (studentUnsub) {
-          studentUnsub();
-          studentUnsub = null;
-        }
-        currentUserId = null;
-      };
+      // Clean up all listeners
+      if (authUnsubscribe) {
+        authUnsubscribe();
+        authUnsubscribe = null;
+      }
+      if (studentUnsub) {
+        studentUnsub();
+        studentUnsub = null;
+      }
+      currentUserId = null;
+      
+      // Reset all state
+      set({
+        user: null,
+        userData: null,
+        teacherClasses: [],
+        students: [],
+        loading: false, // ⚠️ CRITICAL: Ensure loading is false
+        error: null,
+        authInitialized: false,
+        debug: [],
+      });
     },
 
     refreshStudents: () => {
@@ -332,36 +355,55 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
 
     clearError: () => set({ error: null }),
 
+    // ✅ FIXED: signOutUser function
     signOutUser: async () => {
       try {
-        log("Signing out user...");
+        log("🚪 Signing out user...");
         
-        // Clean up listeners first
-        if (authUnsubscribe) {
-          authUnsubscribe();
-          authUnsubscribe = null;
-        }
+        // Clean up student listener first
         if (studentUnsub) {
           studentUnsub();
           studentUnsub = null;
         }
+        
+        // Sign out from Firebase
+        await signOut(auth);
+        log("✅ Sign-out successful");
+        
+        // Clean up auth listener
+        if (authUnsubscribe) {
+          authUnsubscribe();
+          authUnsubscribe = null;
+        }
         currentUserId = null;
         
-        await signOut(auth);
-        log("Sign-out successful");
-
+        // ⚠️ CRITICAL: Reset ALL store state with loading: false
         set({
           user: null,
           userData: null,
           teacherClasses: [],
           students: [],
-          loading: false,
+          loading: false, // ⚠️ THIS PREVENTS BLANK PAGES
           error: null,
-          authInitialized: false,
-          debug: [],
+          authInitialized: false, // ⚠️ Reset this flag
         });
+        
+        log("🔄 Store fully reset after sign out");
+        
       } catch (err: any) {
-        log(`Sign-out error: ${err.message}`);
+        log(`❌ Sign-out error: ${err.message}`);
+        
+        // Even on error, reset the store to prevent stuck state
+        set({
+          user: null,
+          userData: null,
+          teacherClasses: [],
+          students: [],
+          loading: false, // ⚠️ Always set loading to false
+          error: err.message,
+          authInitialized: false,
+        });
+        
         throw err;
       }
     },

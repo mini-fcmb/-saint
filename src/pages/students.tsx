@@ -2370,15 +2370,6 @@ const StudentDashboard: React.FC = () => {
     }
   }, [user, userData]);
 
-  useEffect(() => {
-    console.log("🔄 StudentDashboard - Setting up auth");
-    const unsubscribe = initializeAuth();
-    return () => {
-      console.log("🧹 StudentDashboard - Cleaning up auth");
-      unsubscribe();
-    };
-  }, [initializeAuth]);
-
   // Initialize online status and working hours
   useEffect(() => {
     const today = new Date().toDateString();
@@ -2620,10 +2611,19 @@ const StudentDashboard: React.FC = () => {
   // Logout handler
   const handleLogout = async () => {
     try {
+      console.log("🚪 Dashboard: Logging out and redirecting...");
+
+      // 1. Sign out
       await signOutUser();
-      navigate("/login", { replace: true });
-    } catch (err) {
-      console.error("Logout failed:", err);
+
+      // 2. ✅ CRITICAL: Force immediate navigation to login
+      window.location.href = "/login"; // This breaks the loop!
+
+      // OR if you have access to navigate hook:
+      // navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+      window.location.href = "/login"; // Fallback
     }
   };
 
