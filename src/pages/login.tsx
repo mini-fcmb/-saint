@@ -145,7 +145,7 @@ export default function Login() {
       <div className="login-modal">
         <div className="modal-backdrop"></div>
         <div className="login-card">
-          <button className="close-btn" onClick={() => navigate(-1)}>
+          <button className="close-btn" onClick={() => navigate("/")}>
             ×
           </button>
 
