@@ -231,7 +231,14 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     loading: true,
     error: null,
     debug: [],
-    authInitialized: false, // NEW
+    authInitialized: false,
+
+    // inside useFirebaseStore return
+ready: () => {
+  const state = get();
+  return state.authInitialized && state.user !== null && state.userData !== null;
+},
+
 
     initializeAuth: () => {
       // FIXED: Only initialize once
@@ -493,6 +500,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         const message = err?.message ?? "Failed to update student class";
         log(`updateStudentClass error: ${message}`);
         return { success: false, error: message };
+        
       }
     },
   };
