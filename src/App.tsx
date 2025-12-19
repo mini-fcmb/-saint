@@ -8,7 +8,7 @@ import Signup from "./pages/signup";
 import Login from "./pages/login";
 import TeacherDashboard from "./pages/teachers";
 import StudentDashboard from "./pages/students";
-import AdminDashboard from "./pages/admin"; // <-- import admin dashboard
+import AdminDashboard from "./pages/admin";
 import QuizDashboard from "./pages/quiz";
 import QuizSubjects from "./pages/QuizSubject";
 import QuizResults from "./pages/QuizResults";
@@ -27,74 +27,59 @@ function useRouteLoading() {
   }, [location.pathname, setLoading]);
 }
 
-// General private route for teachers/students
+// GENERAL PRIVATE ROUTE
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useFirebaseStore();
+  const { user, authInitialized, userData } = useFirebaseStore();
 
-  if (loading) return <LoadingOverlay />;
+  // Wait until auth + userData fully loaded
+  if (!authInitialized || !userData) return <LoadingOverlay />;
 
   if (!user) return <Navigate to="/login" replace />;
-
-  if (!user.emailVerified) {
-    alert("Please verify your email first.");
-    return <Navigate to="/login" replace />;
-  }
+  if (!user.emailVerified) return <Navigate to="/login" replace />;
 
   return <>{children}</>;
 }
 
-// Admin-specific route
+// ADMIN ROUTE
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading, userData } = useFirebaseStore();
+  const { user, authInitialized, userData } = useFirebaseStore();
 
-  if (loading) return <LoadingOverlay />;
+  if (!authInitialized || !userData) return <LoadingOverlay />;
 
   if (!user) return <Navigate to="/login" replace />;
 
-  // Allow admin to skip email verification
   const isAdmin = user.email === "minibossfcmb@proton.me";
-  if (!user.emailVerified && !isAdmin) {
-    alert("Please verify your email first.");
-    return <Navigate to="/login" replace />;
-  }
-
-  if (!isAdmin) {
-    alert("Access denied. Admins only.");
-    return <Navigate to="/login" replace />;
-  }
+  if (!user.emailVerified && !isAdmin) return <Navigate to="/login" replace />;
+  if (!isAdmin) return <Navigate to="/login" replace />;
 
   return <>{children}</>;
 }
 
+// STUDENT ROUTE
 function StudentRoute({ children }: { children: React.ReactNode }) {
-  const { user, userData, loading } = useFirebaseStore();
+  const { user, authInitialized, userData } = useFirebaseStore();
 
-  if (loading) return <LoadingOverlay />;
+  if (!authInitialized || !userData) return <LoadingOverlay />;
 
   if (!user) return <Navigate to="/login" replace />;
+  if (!user.emailVerified) return <Navigate to="/login" replace />;
 
-  if (!user.emailVerified) {
-    alert("Please verify your email first.");
-    return <Navigate to="/login" replace />;
-  }
-
-  if (userData?.role !== "student") {
-    alert("Access denied. This page is for students only.");
-    return <Navigate to="/dashboard" replace />;
-  }
+  if (userData.role !== "student") return <Navigate to="/dashboard" replace />;
 
   return <>{children}</>;
 }
 
+// SMART REDIRECT
 function SmartRedirect() {
-  const { user, userData } = useFirebaseStore();
+  const { user, authInitialized, userData } = useFirebaseStore();
+
+  if (!authInitialized || !userData) return <LoadingOverlay />;
 
   if (!user || !user.emailVerified) return <Navigate to="/login" replace />;
 
-  if (userData?.role === "teacher") return <Navigate to="/teachers" replace />;
-  if (userData?.role === "student") return <Navigate to="/students" replace />;
+  if (userData.role === "teacher") return <Navigate to="/teachers" replace />;
+  if (userData.role === "student") return <Navigate to="/students" replace />;
 
-  // Fallback
   return <Navigate to="/login" replace />;
 }
 
@@ -108,9 +93,12 @@ export default function App() {
     return () => unsubscribe();
   }, [initializeAuth]);
 
+  // GLOBAL LOADING STATE FROM STORE
+  const { loading } = useFirebaseStore();
+
   return (
     <>
-      <LoadingOverlay />
+      {loading && <LoadingOverlay />}
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/signup" element={<Signup />} />
@@ -128,9 +116,9 @@ export default function App() {
         <Route
           path="/students"
           element={
-            <PrivateRoute>
+            <StudentRoute>
               <StudentDashboard />
-            </PrivateRoute>
+            </StudentRoute>
           }
         />
         <Route
