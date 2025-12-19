@@ -8,7 +8,7 @@ import Signup from "./pages/signup";
 import Login from "./pages/login";
 import TeacherDashboard from "./pages/teachers";
 import StudentDashboard from "./pages/students";
-import AdminDashboard from "./pages/admin";
+import AdminDashboard from "./pages/admin"; // <-- import admin dashboard
 import QuizDashboard from "./pages/quiz";
 import QuizSubjects from "./pages/QuizSubject";
 import QuizResults from "./pages/QuizResults";
@@ -27,84 +27,90 @@ function useRouteLoading() {
   }, [location.pathname, setLoading]);
 }
 
-// --------------------------
-// PRIVATE ROUTES
-// --------------------------
+// General private route for teachers/students
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { user, authInitialized, userData, loading } = useFirebaseStore();
+  const { user, loading } = useFirebaseStore();
 
-  // Wait until auth + userData fully loaded
-  if (!authInitialized || !userData || loading) return <LoadingOverlay />;
+  if (loading) return <LoadingOverlay />;
 
   if (!user) return <Navigate to="/login" replace />;
-  if (!user.emailVerified) return <Navigate to="/login" replace />;
+
+  if (!user.emailVerified) {
+    alert("Please verify your email first.");
+    return <Navigate to="/login" replace />;
+  }
 
   return <>{children}</>;
 }
 
+// Admin-specific route
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user, authInitialized, userData, loading } = useFirebaseStore();
+  const { user, loading, userData } = useFirebaseStore();
 
-  if (!authInitialized || !userData || loading) return <LoadingOverlay />;
+  if (loading) return <LoadingOverlay />;
 
   if (!user) return <Navigate to="/login" replace />;
 
+  // Allow admin to skip email verification
   const isAdmin = user.email === "minibossfcmb@proton.me";
-  if (!user.emailVerified && !isAdmin) return <Navigate to="/login" replace />;
-  if (!isAdmin) return <Navigate to="/login" replace />;
+  if (!user.emailVerified && !isAdmin) {
+    alert("Please verify your email first.");
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!isAdmin) {
+    alert("Access denied. Admins only.");
+    return <Navigate to="/login" replace />;
+  }
 
   return <>{children}</>;
 }
 
 function StudentRoute({ children }: { children: React.ReactNode }) {
-  const { user, authInitialized, userData, loading } = useFirebaseStore();
+  const { user, userData, loading } = useFirebaseStore();
 
-  if (!authInitialized || !userData || loading) return <LoadingOverlay />;
+  if (loading) return <LoadingOverlay />;
 
   if (!user) return <Navigate to="/login" replace />;
-  if (!user.emailVerified) return <Navigate to="/login" replace />;
 
-  if (userData.role !== "student") return <Navigate to="/dashboard" replace />;
+  if (!user.emailVerified) {
+    alert("Please verify your email first.");
+    return <Navigate to="/login" replace />;
+  }
+
+  if (userData?.role !== "student") {
+    alert("Access denied. This page is for students only.");
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return <>{children}</>;
 }
 
-// --------------------------
-// SMART REDIRECT
-// --------------------------
 function SmartRedirect() {
-  const { user, authInitialized, userData, loading } = useFirebaseStore();
-
-  if (!authInitialized || !userData || loading) return <LoadingOverlay />;
+  const { user, userData } = useFirebaseStore();
 
   if (!user || !user.emailVerified) return <Navigate to="/login" replace />;
 
-  if (userData.role === "teacher") return <Navigate to="/teachers" replace />;
-  if (userData.role === "student") return <Navigate to="/students" replace />;
+  if (userData?.role === "teacher") return <Navigate to="/teachers" replace />;
+  if (userData?.role === "student") return <Navigate to="/students" replace />;
 
+  // Fallback
   return <Navigate to="/login" replace />;
 }
 
-// --------------------------
-// MAIN APP
-// --------------------------
 export default function App() {
   useRouteLoading();
 
   const initializeAuth = useFirebaseStore((state) => state.initializeAuth);
-  const { authInitialized, loading } = useFirebaseStore();
 
   React.useEffect(() => {
     const unsubscribe = initializeAuth();
     return () => unsubscribe();
   }, [initializeAuth]);
 
-  // Wait until Firebase auth is initialized before rendering Routes
-  if (!authInitialized) return <LoadingOverlay />;
-
   return (
     <>
-      {loading && <LoadingOverlay />}
+      <LoadingOverlay />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/signup" element={<Signup />} />
@@ -122,9 +128,9 @@ export default function App() {
         <Route
           path="/students"
           element={
-            <StudentRoute>
+            <PrivateRoute>
               <StudentDashboard />
-            </StudentRoute>
+            </PrivateRoute>
           }
         />
         <Route

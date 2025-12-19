@@ -1,15 +1,19 @@
 // src/pages/Login.tsx
-import { Eye, EyeOff } from "lucide-react";
-import { useState, FormEvent, useEffect } from "react";
+import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
-import { auth, googleProvider } from "../firebase/config";
-import { useFirebaseStore } from "../stores/useFirebaseStore";
+import { Eye, EyeOff } from "lucide-react";
+import {
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  reload,
+} from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db, googleProvider } from "../firebase/config";
 import "../styles/signin.css";
 
-const ADMIN_EMAIL = "minibossfcmb@proton.me";
-const ADMIN_CODE = "971566510072";
-const TEACHER_CODE = "mini-fcmb";
+const ADMIN_EMAIL = "minibossfcmb@proton.me"; // admin email
+const ADMIN_CODE = "971566510072"; // admin code
+const TEACHER_CODE = "mini-fcmb"; // teacher code
 
 const DASHBOARD_ROUTES = {
   admin: "/admin",
@@ -19,12 +23,6 @@ const DASHBOARD_ROUTES = {
 
 export default function Login() {
   const navigate = useNavigate();
-  const {
-    initializeAuth,
-    user,
-    authInitialized,
-    loading: storeLoading,
-  } = useFirebaseStore();
 
   const [userType, setUserType] = useState<"teacher" | "student">("teacher");
   const [email, setEmail] = useState("");
@@ -33,51 +31,57 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Initialize auth store on mount
-  useEffect(() => {
-    initializeAuth();
-  }, [initializeAuth]);
-
-  // Redirect if already logged in
-  useEffect(() => {
-    if (authInitialized && user) {
-      const { role } = useFirebaseStore.getState().userData || {};
-
-      if (role === "teacher") {
-        navigate(DASHBOARD_ROUTES.teacher, { replace: true });
-      } else if (role === "student") {
-        navigate(DASHBOARD_ROUTES.student, { replace: true });
-      } else if (email === ADMIN_EMAIL && adminCode === ADMIN_CODE) {
-        navigate(DASHBOARD_ROUTES.admin, { replace: true });
-      }
-    }
-  }, [authInitialized, user, navigate]);
-
-  // Show loading while store is initializing
-  if (!authInitialized || storeLoading) {
-    return (
-      <div className="login-page">
-        <div className="login-modal">
-          <div className="login-card">
-            <div className="loading-spinner">Initializing...</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
-    if (isLoading) return;
-
     setIsLoading(true);
 
     try {
-      // Sign in with Firebase
-      await signInWithEmailAndPassword(auth, email, password);
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const user = cred.user;
 
-      // The store will automatically update via onAuthStateChanged
-      // and the useEffect above will handle redirection
+      await reload(user);
+      const refreshedUser = auth.currentUser;
+      if (!refreshedUser) throw new Error("User not found after reload");
+
+      const isAdmin = email === ADMIN_EMAIL && adminCode === ADMIN_CODE;
+
+      // Skip email verification for admin only
+      if (!refreshedUser.emailVerified && !isAdmin) {
+        alert("Please verify your email before logging in.");
+        await auth.signOut();
+        setIsLoading(false);
+        return;
+      }
+
+      // Teacher admin code validation
+      if (userType === "teacher" && !isAdmin && adminCode !== TEACHER_CODE) {
+        alert("Invalid Admin Code for Teacher!");
+        await auth.signOut();
+        setIsLoading(false);
+        return;
+      }
+
+      // Direct admin login
+      if (isAdmin) {
+        navigate(DASHBOARD_ROUTES.admin);
+        setIsLoading(false);
+        return;
+      }
+
+      // Check Firestore profile for teacher/student
+      const collection = userType === "teacher" ? "teachers" : "students";
+      const docSnap = await getDoc(doc(db, collection, user.uid));
+
+      if (!docSnap.exists()) {
+        alert(`No ${userType} profile found. Please sign up.`);
+        await auth.signOut();
+        navigate("/signup");
+        setIsLoading(false);
+        return;
+      }
+
+      // SUCCESS: go to the right dashboard
+      navigate(DASHBOARD_ROUTES[userType]);
     } catch (err: any) {
       alert(err.message || "Login failed.");
     } finally {
@@ -86,34 +90,55 @@ export default function Login() {
   };
 
   const handleGoogle = async () => {
-    if (isLoading) return;
     setIsLoading(true);
-
     try {
-      await signInWithPopup(auth, googleProvider);
-      // The store will automatically update via onAuthStateChanged
-      // and the useEffect above will handle redirection
-    } catch (err: any) {
-      if (err.code !== "auth/popup-closed-by-user") {
-        alert(err.message || "Google login failed.");
+      const res = await signInWithPopup(auth, googleProvider);
+      const user = res.user;
+      await reload(user);
+      const refreshedUser = auth.currentUser;
+      if (!refreshedUser) throw new Error("User not found after reload");
+
+      const isAdmin = email === ADMIN_EMAIL && adminCode === ADMIN_CODE;
+
+      if (!refreshedUser.emailVerified && !isAdmin) {
+        alert("Google account email is not verified.");
+        await auth.signOut();
+        setIsLoading(false);
+        return;
       }
+
+      if (userType === "teacher" && !isAdmin && adminCode !== TEACHER_CODE) {
+        alert("Invalid Admin Code for Teacher!");
+        await auth.signOut();
+        setIsLoading(false);
+        return;
+      }
+
+      if (isAdmin) {
+        navigate(DASHBOARD_ROUTES.admin);
+        setIsLoading(false);
+        return;
+      }
+
+      const collection = userType === "teacher" ? "teachers" : "students";
+      const docSnap = await getDoc(doc(db, collection, user.uid));
+
+      if (!docSnap.exists()) {
+        alert(`No ${userType} profile linked to this Google account.`);
+        await auth.signOut();
+        navigate("/signup");
+        setIsLoading(false);
+        return;
+      }
+
+      navigate(DASHBOARD_ROUTES[userType]);
+    } catch (err: any) {
+      if (err.code !== "auth/popup-closed-by-user")
+        alert(err.message || "Google login failed.");
     } finally {
       setIsLoading(false);
     }
   };
-
-  // If user is already logged in, show redirecting message
-  if (user) {
-    return (
-      <div className="login-page">
-        <div className="login-modal">
-          <div className="login-card">
-            <div className="loading-spinner">Redirecting to dashboard...</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="login-page">
@@ -128,14 +153,12 @@ export default function Login() {
             <button
               className={`tab ${userType === "teacher" ? "active" : ""}`}
               onClick={() => setUserType("teacher")}
-              disabled={isLoading}
             >
               Teacher
             </button>
             <button
               className={`tab ${userType === "student" ? "active" : ""}`}
               onClick={() => setUserType("student")}
-              disabled={isLoading}
             >
               Student
             </button>
@@ -143,7 +166,6 @@ export default function Login() {
 
           <form onSubmit={handleLogin} className="login-form">
             <h2>Sign Into your account</h2>
-
             <input
               type="email"
               placeholder="Enter your email"
@@ -152,7 +174,6 @@ export default function Login() {
               required
               disabled={isLoading}
             />
-
             <div className="password-input-container">
               <input
                 type={showPassword ? "text" : "password"}
@@ -163,17 +184,20 @@ export default function Login() {
                 disabled={isLoading}
                 className="text-input"
               />
+
               <button
                 type="button"
                 className="password-toggle"
                 onClick={() => setShowPassword(!showPassword)}
                 tabIndex={-1}
-                disabled={isLoading}
               >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPassword ? (
+                  <EyeOff size={18} color="#6b7280" />
+                ) : (
+                  <Eye size={18} color="#6b7280" />
+                )}
               </button>
             </div>
-
             {userType === "teacher" && (
               <input
                 type="password"
@@ -184,14 +208,12 @@ export default function Login() {
                 disabled={isLoading}
               />
             )}
-
             <button type="submit" className="login-btn" disabled={isLoading}>
               {isLoading ? "Signing in..." : "Log in"}
             </button>
           </form>
 
           <div className="divider">OR SIGN IN WITH</div>
-
           <div className="social-row">
             <button
               onClick={handleGoogle}
@@ -200,12 +222,10 @@ export default function Login() {
             >
               <img src="/icons/google.svg" alt="Google" />
             </button>
-
             <button className="social apple" disabled>
               <img src="/icons/apple.svg" alt="Apple" />
             </button>
           </div>
-
           <p className="terms">
             Don't have an account? <a href="/signup">Sign up</a>
           </p>
