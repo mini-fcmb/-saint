@@ -1,7 +1,7 @@
 // src/App.tsx
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Home from "./pages/Home";
 import Signup from "./pages/signup";
@@ -16,6 +16,8 @@ import LoadingOverlay from "./components/LoadingOverlay";
 import { useLoading } from "./hooks/useLoading";
 import { useFirebaseStore } from "./stores/useFirebaseStore";
 
+const ADMIN_EMAIL = "minibossfcmb@proton.me";
+
 function useRouteLoading() {
   const location = useLocation();
   const { setLoading } = useLoading();
@@ -28,93 +30,179 @@ function useRouteLoading() {
 }
 
 // --------------------------
-// PRIVATE ROUTES
+// PRIVATE ROUTES - UPDATED
 // --------------------------
-function PrivateRoute({ children }: { children: React.ReactNode }) {
+function PrivateRoute({
+  children,
+  requiredRole,
+}: {
+  children: React.ReactNode;
+  requiredRole?: "teacher" | "student" | "admin";
+}) {
   const { user, authInitialized, userData, loading } = useFirebaseStore();
 
-  // Wait until auth + userData fully loaded
-  if (!authInitialized || !userData || loading) return <LoadingOverlay />;
+  // If auth isn't initialized yet, show loading
+  if (!authInitialized || loading) {
+    return <LoadingOverlay />;
+  }
 
-  if (!user) return <Navigate to="/login" replace />;
-  if (!user.emailVerified) return <Navigate to="/login" replace />;
+  // No user? Redirect to login
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
-  return <>{children}</>;
-}
+  // If userData isn't loaded yet (should be quick after auth)
+  if (!userData) {
+    return <LoadingOverlay />;
+  }
 
-function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user, authInitialized, userData, loading } = useFirebaseStore();
+  // Check email verification for non-admin users
+  const isAdminUser = user.email === ADMIN_EMAIL;
+  if (!user.emailVerified && !isAdminUser) {
+    return <Navigate to="/login" replace />;
+  }
 
-  if (!authInitialized || !userData || loading) return <LoadingOverlay />;
-
-  if (!user) return <Navigate to="/login" replace />;
-
-  const isAdmin = user.email === "minibossfcmb@proton.me";
-  if (!user.emailVerified && !isAdmin) return <Navigate to="/login" replace />;
-  if (!isAdmin) return <Navigate to="/login" replace />;
-
-  return <>{children}</>;
-}
-
-function StudentRoute({ children }: { children: React.ReactNode }) {
-  const { user, authInitialized, userData, loading } = useFirebaseStore();
-
-  if (!authInitialized || !userData || loading) return <LoadingOverlay />;
-
-  if (!user) return <Navigate to="/login" replace />;
-  if (!user.emailVerified) return <Navigate to="/login" replace />;
-
-  if (userData.role !== "student") return <Navigate to="/dashboard" replace />;
+  // Check role if required
+  if (requiredRole) {
+    if (requiredRole === "admin" && !isAdminUser) {
+      return <Navigate to="/login" replace />;
+    }
+    if (requiredRole === "teacher" && userData.role !== "teacher") {
+      return <Navigate to="/login" replace />;
+    }
+    if (requiredRole === "student" && userData.role !== "student") {
+      return <Navigate to="/login" replace />;
+    }
+  }
 
   return <>{children}</>;
 }
 
 // --------------------------
-// SMART REDIRECT
+// SMART REDIRECT - UPDATED
 // --------------------------
 function SmartRedirect() {
   const { user, authInitialized, userData, loading } = useFirebaseStore();
 
-  if (!authInitialized || !userData || loading) return <LoadingOverlay />;
+  // Wait for auth to initialize
+  if (!authInitialized || loading) {
+    return <LoadingOverlay />;
+  }
 
-  if (!user || !user.emailVerified) return <Navigate to="/login" replace />;
+  // No user? Go to login
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
-  if (userData.role === "teacher") return <Navigate to="/teachers" replace />;
-  if (userData.role === "student") return <Navigate to="/students" replace />;
+  // If userData isn't loaded yet
+  if (!userData) {
+    return <LoadingOverlay />;
+  }
 
+  // Check email verification for non-admin users
+  const isAdminUser = user.email === ADMIN_EMAIL;
+  if (!user.emailVerified && !isAdminUser) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Redirect based on role/admin status
+  if (isAdminUser) {
+    return <Navigate to="/admin" replace />;
+  }
+
+  if (userData.role === "teacher") {
+    return <Navigate to="/teachers" replace />;
+  }
+
+  if (userData.role === "student") {
+    return <Navigate to="/students" replace />;
+  }
+
+  // Fallback to login
   return <Navigate to="/login" replace />;
 }
 
 // --------------------------
-// MAIN APP
+// PUBLIC ONLY ROUTE
+// --------------------------
+function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { user, authInitialized, loading } = useFirebaseStore();
+
+  // Wait for auth to initialize
+  if (!authInitialized || loading) {
+    return <LoadingOverlay />;
+  }
+
+  // If user is already logged in, redirect to appropriate dashboard
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+// --------------------------
+// MAIN APP - FIXED
 // --------------------------
 export default function App() {
+  const location = useLocation();
   useRouteLoading();
 
   const initializeAuth = useFirebaseStore((state) => state.initializeAuth);
-  const { authInitialized, loading } = useFirebaseStore();
+  const { authInitialized, loading: storeLoading } = useFirebaseStore();
+  const { setLoading } = useLoading();
 
-  React.useEffect(() => {
-    const unsubscribe = initializeAuth();
-    return () => unsubscribe();
+  // Initialize auth ONCE when app starts
+  useEffect(() => {
+    console.log("App: Initializing auth...");
+    const cleanup = initializeAuth();
+
+    return () => {
+      console.log("App: Cleaning up auth...");
+      cleanup();
+    };
   }, [initializeAuth]);
 
-  // Wait until Firebase auth is initialized before rendering Routes
-  if (!authInitialized) return <LoadingOverlay />;
+  // Show loading overlay while store is loading AND auth isn't initialized
+  // This prevents flash of login page when user is actually logged in
+  if (!authInitialized || storeLoading) {
+    return <LoadingOverlay />;
+  }
 
   return (
     <>
-      {loading && <LoadingOverlay />}
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/login" element={<Login />} />
+        {/* Public routes */}
+        <Route
+          path="/"
+          element={
+            <PublicOnlyRoute>
+              <Home />
+            </PublicOnlyRoute>
+          }
+        />
+        <Route
+          path="/signup"
+          element={
+            <PublicOnlyRoute>
+              <Signup />
+            </PublicOnlyRoute>
+          }
+        />
+        <Route
+          path="/login"
+          element={
+            <PublicOnlyRoute>
+              <Login />
+            </PublicOnlyRoute>
+          }
+        />
 
-        {/* Dashboards */}
+        {/* Protected dashboard routes */}
         <Route
           path="/teachers"
           element={
-            <PrivateRoute>
+            <PrivateRoute requiredRole="teacher">
               <TeacherDashboard />
             </PrivateRoute>
           }
@@ -122,43 +210,43 @@ export default function App() {
         <Route
           path="/students"
           element={
-            <StudentRoute>
+            <PrivateRoute requiredRole="student">
               <StudentDashboard />
-            </StudentRoute>
+            </PrivateRoute>
           }
         />
         <Route
           path="/admin"
           element={
-            <AdminRoute>
+            <PrivateRoute requiredRole="admin">
               <AdminDashboard />
-            </AdminRoute>
+            </PrivateRoute>
           }
         />
 
-        {/* Quiz Routes */}
+        {/* Protected quiz routes */}
         <Route
           path="/quiz-subjects"
           element={
-            <StudentRoute>
+            <PrivateRoute requiredRole="student">
               <QuizSubjects />
-            </StudentRoute>
+            </PrivateRoute>
           }
         />
         <Route
           path="/quiz/:subjectId"
           element={
-            <StudentRoute>
+            <PrivateRoute requiredRole="student">
               <QuizDashboard />
-            </StudentRoute>
+            </PrivateRoute>
           }
         />
         <Route
           path="/quiz/:subjectId/results"
           element={
-            <StudentRoute>
+            <PrivateRoute requiredRole="student">
               <QuizResults />
-            </StudentRoute>
+            </PrivateRoute>
           }
         />
         <Route
@@ -166,8 +254,11 @@ export default function App() {
           element={<Navigate to="/quiz-subjects" replace />}
         />
 
+        {/* Smart redirect routes */}
         <Route path="/dashboard" element={<SmartRedirect />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+
+        {/* Catch-all route */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
   );
