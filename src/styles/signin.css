@@ -1,3 +1,4 @@
+
 /* src/styles/login.css */
 .login-page *,
 .login-page *::before,
@@ -21,6 +22,14 @@
   background: #fff;
   opacity: 0.96;
   backdrop-filter: blur(6px);
+}
+.loading-spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  color: #666;
+  font-size: 16px;
 }
 .password-input-container {
   position: relative;
