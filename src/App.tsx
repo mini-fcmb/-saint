@@ -27,12 +27,14 @@ function useRouteLoading() {
   }, [location.pathname, setLoading]);
 }
 
-// GENERAL PRIVATE ROUTE
+// --------------------------
+// PRIVATE ROUTES
+// --------------------------
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { user, authInitialized, userData } = useFirebaseStore();
+  const { user, authInitialized, userData, loading } = useFirebaseStore();
 
   // Wait until auth + userData fully loaded
-  if (!authInitialized || !userData) return <LoadingOverlay />;
+  if (!authInitialized || !userData || loading) return <LoadingOverlay />;
 
   if (!user) return <Navigate to="/login" replace />;
   if (!user.emailVerified) return <Navigate to="/login" replace />;
@@ -40,11 +42,10 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// ADMIN ROUTE
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user, authInitialized, userData } = useFirebaseStore();
+  const { user, authInitialized, userData, loading } = useFirebaseStore();
 
-  if (!authInitialized || !userData) return <LoadingOverlay />;
+  if (!authInitialized || !userData || loading) return <LoadingOverlay />;
 
   if (!user) return <Navigate to="/login" replace />;
 
@@ -55,11 +56,10 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// STUDENT ROUTE
 function StudentRoute({ children }: { children: React.ReactNode }) {
-  const { user, authInitialized, userData } = useFirebaseStore();
+  const { user, authInitialized, userData, loading } = useFirebaseStore();
 
-  if (!authInitialized || !userData) return <LoadingOverlay />;
+  if (!authInitialized || !userData || loading) return <LoadingOverlay />;
 
   if (!user) return <Navigate to="/login" replace />;
   if (!user.emailVerified) return <Navigate to="/login" replace />;
@@ -69,11 +69,13 @@ function StudentRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// --------------------------
 // SMART REDIRECT
+// --------------------------
 function SmartRedirect() {
-  const { user, authInitialized, userData } = useFirebaseStore();
+  const { user, authInitialized, userData, loading } = useFirebaseStore();
 
-  if (!authInitialized || !userData) return <LoadingOverlay />;
+  if (!authInitialized || !userData || loading) return <LoadingOverlay />;
 
   if (!user || !user.emailVerified) return <Navigate to="/login" replace />;
 
@@ -83,18 +85,22 @@ function SmartRedirect() {
   return <Navigate to="/login" replace />;
 }
 
+// --------------------------
+// MAIN APP
+// --------------------------
 export default function App() {
   useRouteLoading();
 
   const initializeAuth = useFirebaseStore((state) => state.initializeAuth);
+  const { authInitialized, loading } = useFirebaseStore();
 
   React.useEffect(() => {
     const unsubscribe = initializeAuth();
     return () => unsubscribe();
   }, [initializeAuth]);
 
-  // GLOBAL LOADING STATE FROM STORE
-  const { loading } = useFirebaseStore();
+  // Wait until Firebase auth is initialized before rendering Routes
+  if (!authInitialized) return <LoadingOverlay />;
 
   return (
     <>
