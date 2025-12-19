@@ -374,7 +374,7 @@ ready: () => {
           students: [],
           loading: false,
           error: null,
-          authInitialized: false,
+          authInitialized: true,
           debug: [],
         });
       } catch (err: any) {
