@@ -1,3 +1,4 @@
+// stores/useFirebaseStore.ts - UPGRADED VERSION
 "use client";
 
 import { create } from "zustand";
@@ -59,16 +60,13 @@ interface FirebaseStore {
   loading: boolean;
   error: string | null;
   debug: string[];
-  authInitialized: boolean;
-  
-  // Core functions
-  initializeAuth: () => () => void; // Returns cleanup function
+  authInitialized: boolean; // NEW: Track if auth is initialized
+  initializeAuth: () => Unsubscribe;
   refreshStudents: () => void;
   clearError: () => void;
   signOutUser: () => Promise<void>;
-  cleanup: () => void;
-  
-  // Teacher API
+
+  // NEW API
   updateTeacherProfile: (teacherId: string, data: Partial<Record<string, any>>) => Promise<{ success: boolean; error?: string }>;
   switchTeacherClass: (teacherId: string, newClass: string) => Promise<{ success: boolean; error?: string }>;
   promoteStudents: (oldClass: string, newClass: string) => Promise<{ success: boolean; error?: string }>;
@@ -87,27 +85,16 @@ const splitName = (fullName = "") => {
 export const useFirebaseStore = create<FirebaseStore>((set, get) => {
   let studentUnsub: Unsubscribe | null = null;
   let authUnsubscribe: Unsubscribe | null = null;
-  let currentUserId: string | null = null;
-  let initialized = false; // Track if store was initialized
+  let currentUserId: string | null = null; // NEW: Track current user to prevent reloads
 
   const log = (msg: string) => {
     const time = new Date().toISOString().slice(11, 19);
     console.log("[FB-Store]", msg);
-    set((s) => ({ debug: [...s.debug.slice(-50), `[${time}] ${msg}`] }));
-  };
-
-  const internalCleanup = () => {
-    log("Internal cleanup triggered");
-    
-    if (studentUnsub) {
-      studentUnsub();
-      studentUnsub = null;
-    }
-    
-    currentUserId = null;
+    set((s) => ({ debug: [...s.debug.slice(-50), `[${time}] ${msg}`] })); // Limit debug array size
   };
 
   const loadUserData = async (uid: string): Promise<{ userData: UserData; role: "teacher" | "student" }> => {
+    // FIXED: Prevent reloading same user data
     if (currentUserId === uid && get().userData) {
       log(`User data already loaded for UID: ${uid}`);
       return { userData: get().userData!, role: get().userData!.role };
@@ -131,7 +118,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         className: data.className || "",
       };
       
-      currentUserId = uid;
+      currentUserId = uid; // Track current user
       return { userData, role: "teacher" };
     }
 
@@ -154,7 +141,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         semester: data.semester || "IV",
       };
       
-      currentUserId = uid;
+      currentUserId = uid; // Track current user
       return { userData, role: "student" };
     }
 
@@ -236,83 +223,6 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     studentUnsub = unsub;
   };
 
-  // Process user authentication
-  const handleAuthStateChange = async (user: User | null) => {
-    log(`Auth state changed: ${user ? `User ${user.uid}` : 'No user'}`);
-    
-    // Store the user in state immediately
-    set({ 
-      user, 
-      loading: true,
-      error: null 
-    });
-
-    if (!user) {
-      log("No user - clearing all data");
-      internalCleanup();
-      set({
-        userData: null,
-        teacherClasses: [],
-        students: [],
-        loading: false,
-        authInitialized: true,
-      });
-      return;
-    }
-
-    try {
-      const { userData, role } = await loadUserData(user.uid);
-      
-      // Double-check we're still dealing with the same user
-      const currentState = get();
-      if (currentState.user?.uid !== user.uid) {
-        log("User changed during data load, aborting");
-        return;
-      }
-
-      log(`User role: ${role}, Name: ${userData.fullName}`);
-      set({ userData });
-
-      if (role === "teacher") {
-        const classes = loadTeacherClasses(userData);
-        log(`Setting teacher classes: ${JSON.stringify(classes)}`);
-        set({ teacherClasses: classes });
-        
-        // Start student listener for teacher
-        if (classes.length > 0) {
-          startStudentListener(classes.map((c) => c.id));
-        } else {
-          set({ loading: false, students: [] });
-        }
-      } else {
-        // For students, no need to load other students
-        log("Student logged in, skipping student list");
-        set({ 
-          teacherClasses: [],
-          students: [],
-          loading: false,
-          authInitialized: true 
-        });
-      }
-
-    } catch (error: any) {
-      log(`Error loading user data: ${error.message}`);
-      
-      // Only update error state if user hasn't changed
-      const currentState = get();
-      if (currentState.user?.uid === user.uid) {
-        set({
-          userData: null,
-          teacherClasses: [],
-          students: [],
-          loading: false,
-          error: error.message,
-          authInitialized: true,
-        });
-      }
-    }
-  };
-
   return {
     user: null,
     userData: null,
@@ -323,37 +233,111 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     debug: [],
     authInitialized: false,
 
+    // inside useFirebaseStore return
+ready: () => {
+  const state = get();
+  return state.authInitialized && state.user !== null && state.userData !== null;
+},
+
+
     initializeAuth: () => {
-      if (initialized) {
-        log("Auth already initialized");
-        return () => {
-          log("Cleanup skipped - already initialized");
-        };
+      // FIXED: Only initialize once
+      if (authUnsubscribe) {
+        log("Auth already initialized, returning existing unsubscribe");
+        return authUnsubscribe;
       }
 
-      log("=== Initializing Firebase auth ===");
-      initialized = true;
+      log("Initializing auth listener...");
       
-      // Set initial loading state
-      set({ 
-        loading: true,
-        authInitialized: false 
+      const unsub = onAuthStateChanged(auth, async (user) => {
+        log(`Auth state changed: ${user ? `User ${user.uid}` : 'No user'}`);
+        
+        // FIXED: Prevent unnecessary state updates for same user
+        const currentUser = get().user;
+        if (user?.uid === currentUser?.uid && !get().loading) {
+          log("Same user, skipping state update");
+          return;
+        }
+
+        if (!user) {
+          log("No user - clearing state");
+          if (studentUnsub) {
+            studentUnsub();
+            studentUnsub = null;
+          }
+          currentUserId = null;
+          
+          set({
+            user: null,
+            userData: null,
+            teacherClasses: [],
+            students: [],
+            loading: false,
+            error: null,
+            authInitialized: true,
+          });
+          return;
+        }
+
+        log(`Processing user: ${user.uid} – ${user.email}`);
+        set({ user, loading: true, error: null, authInitialized: true });
+
+        try {
+          const { userData, role } = await loadUserData(user.uid);
+         
+          // FIXED: Only update if we're still dealing with the same user
+          const currentState = get();
+          if (currentState.user?.uid !== user.uid) {
+            log("User changed during data load, skipping update");
+            return;
+          }
+
+          set({ userData });
+
+          if (role === "teacher") {
+            const classes = loadTeacherClasses(userData);
+            set({ teacherClasses: classes });
+            startStudentListener(classes.map((c) => c.id));
+          } else {
+            // For students, we don't need to load other students
+            set({ 
+              teacherClasses: [],
+              students: [],
+              loading: false 
+            });
+          }
+
+        } catch (error: any) {
+          log(`Error loading user data: ${error.message}`);
+          
+          // Only update state if user hasn't changed
+          const currentState = get();
+          if (currentState.user?.uid === user.uid) {
+            set({
+              userData: null,
+              teacherClasses: [],
+              students: [],
+              loading: false,
+              error: error.message,
+            });
+          }
+        }
       });
 
-      // Set up auth state listener
-      authUnsubscribe = onAuthStateChanged(auth, (user) => {
-        handleAuthStateChange(user);
-      });
-
-      // Return cleanup function
+      authUnsubscribe = unsub;
+      
+      // FIXED: Return proper cleanup function
       return () => {
-        log("=== Cleaning up Firebase auth ===");
+        log("Cleaning up auth listener");
         if (authUnsubscribe) {
           authUnsubscribe();
           authUnsubscribe = null;
         }
-        internalCleanup();
-        initialized = false;
+        if (studentUnsub) {
+          studentUnsub();
+          studentUnsub = null;
+        }
+        currentUserId = null;
       };
     },
 
@@ -365,42 +349,24 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
 
     clearError: () => set({ error: null }),
 
-    cleanup: () => {
-      log("Manual cleanup called");
-      if (authUnsubscribe) {
-        authUnsubscribe();
-        authUnsubscribe = null;
-      }
-      internalCleanup();
-      initialized = false;
-      set({
-        user: null,
-        userData: null,
-        teacherClasses: [],
-        students: [],
-        loading: false,
-        error: null,
-        authInitialized: false,
-      });
-    },
-
     signOutUser: async () => {
       try {
-        log("=== Starting sign out ===");
+        log("Signing out user...");
         
-        // First, clean up listeners
+        // Clean up listeners first
         if (authUnsubscribe) {
           authUnsubscribe();
           authUnsubscribe = null;
         }
-        internalCleanup();
-        initialized = false;
+        if (studentUnsub) {
+          studentUnsub();
+          studentUnsub = null;
+        }
+        currentUserId = null;
         
-        // Sign out from Firebase
         await signOut(auth);
-        log("Firebase sign out successful");
+        log("Sign-out successful");
 
-        // Clear Zustand state
         set({
           user: null,
           userData: null,
@@ -408,11 +374,9 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
           students: [],
           loading: false,
           error: null,
-          authInitialized: true, // Set to true so UI knows auth is initialized
+          authInitialized: true,
           debug: [],
         });
-        
-        log("=== Sign out completed ===");
       } catch (err: any) {
         log(`Sign-out error: ${err.message}`);
         throw err;
@@ -420,14 +384,14 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     },
 
     // -------------------------------
-    // Teacher Profile Update
+    // NEW: Update Teacher Profile
     // -------------------------------
     updateTeacherProfile: async (teacherId: string, data: Partial<Record<string, any>>) => {
       try {
         const teacherRef = doc(db, "teachers", teacherId);
         await updateDoc(teacherRef, data);
 
-        // Update local state
+        // Update local Zustand userData immediately if present
         set((state) => ({
           userData: state.userData
             ? {
@@ -437,24 +401,26 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
             : null,
         }));
 
-        // Handle class name changes
+        // If className changed → refresh student listener and teacherClasses
         if (data.className) {
           const newClass = data.className.toString().trim();
           set({ teacherClasses: [{ id: newClass, name: newClass }] });
-          get().refreshStudents();
+
+          // restart student listener for new class
+          const { refreshStudents } = get();
+          refreshStudents();
         }
 
-        // Handle teaching array changes
-        if (Array.isArray(data.teaching)) {
+        // If teaching array changed, reload teacherClasses
+        if (Array.isArray(data.teaching) && data.teaching.length > 0) {
           const classes = (data.teaching as any[]).map((t) => {
             const id = (t.classLevel ?? t.className ?? "").toString().trim();
             return id ? { id, name: id } : null;
           }).filter(Boolean) as TeacherClass[];
-          
-          if (classes.length) {
-            set({ teacherClasses: classes });
-            get().refreshStudents();
-          }
+          if (classes.length) set({ teacherClasses: classes });
+          // restart listener with updated classes
+          const { refreshStudents } = get();
+          refreshStudents();
         }
 
         return { success: true };
@@ -466,7 +432,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     },
 
     // -------------------------------
-    // Switch Teacher Class
+    // NEW: Switch Teacher Class (convenience wrapper)
     // -------------------------------
     switchTeacherClass: async (teacherId: string, newClass: string) => {
       try {
@@ -481,7 +447,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     },
 
     // -------------------------------
-    // Promote Students
+    // NEW: Promote Students (bulk update oldClass -> newClass)
     // -------------------------------
     promoteStudents: async (oldClass: string, newClass: string) => {
       try {
@@ -494,6 +460,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
           return { success: true };
         }
 
+        // Use batch to update - respects Firestore batch semantics
         const batch = writeBatch(db);
         snapshot.docs.forEach((d) => {
           const ref = doc(db, "students", d.id);
@@ -503,7 +470,9 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         await batch.commit();
         log(`Promoted ${snapshot.docs.length} students to ${newClass}`);
 
-        get().refreshStudents();
+        // If current user is a teacher whose class was promoted, refresh students
+        const { refreshStudents } = get();
+        refreshStudents();
 
         return { success: true };
       } catch (err: any) {
@@ -514,14 +483,16 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     },
 
     // -------------------------------
-    // Update Student Class
+    // NEW: Update a single student's class
     // -------------------------------
     updateStudentClass: async (studentId: string, newClass: string) => {
       try {
         const studentRef = doc(db, "students", studentId);
         await updateDoc(studentRef, { className: newClass });
 
-        get().refreshStudents();
+        // If the current teacher is watching that class, refresh students
+        const { refreshStudents } = get();
+        refreshStudents();
 
         log(`Student ${studentId} moved to ${newClass}`);
         return { success: true };
@@ -529,6 +500,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         const message = err?.message ?? "Failed to update student class";
         log(`updateStudentClass error: ${message}`);
         return { success: false, error: message };
+        
       }
     },
   };
