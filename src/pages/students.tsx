@@ -33,6 +33,18 @@ import {
   Eye,
   EyeOff,
   BarChart3,
+  UserCheck,
+  RefreshCw,
+  UserX,
+  Building,
+  Table,
+  Upload,
+  Download,
+  Book,
+  FileSpreadsheet,
+  Calculator,
+  Save,
+  Users2,
 } from "lucide-react";
 import { useFirebaseStore } from "../stores/useFirebaseStore";
 import { useLiveDate, useCalendar } from "../hooks/useDateUtils";
@@ -62,6 +74,7 @@ interface Quiz {
   status: "upcoming" | "active" | "expired";
   questions: Question[];
   maxScore: number;
+  targetClass?: string;
 }
 
 interface Question {
@@ -89,6 +102,24 @@ interface WorkingHoursData {
   startTime?: Date;
 }
 
+interface EnhancedMonitoringData {
+  studentId: string;
+  studentName: string;
+  studentClass: string;
+  quizId: string;
+  quizName: string;
+  quizClass: string;
+  status: "in-progress" | "submitted" | "violation" | "expired";
+  progress: number;
+  timeSpent: string;
+  currentQuestion: number;
+  totalQuestions: number;
+  violations: EnhancedViolation[];
+  lastActivity: Date;
+  score?: number;
+  maxScore?: number;
+}
+
 interface Violation {
   id: string;
   timestamp: Date;
@@ -102,6 +133,371 @@ interface Violation {
   severity: "low" | "medium" | "high";
 }
 
+interface EnhancedViolation {
+  id: string;
+  timestamp: Date;
+  type:
+    | "keyboard"
+    | "right-click"
+    | "tab-switch"
+    | "dev-tools"
+    | "fullscreen-exit";
+  description: string;
+  severity: "low" | "medium" | "high";
+  studentId: string;
+  studentName: string;
+  studentClass: string;
+  quizId: string;
+  quizName: string;
+  quizClass: string;
+  browser: string;
+  deviceType: string;
+}
+
+// Enhanced Live Monitoring Modal Component for Students
+interface StudentLiveMonitoringModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  quizzes: Quiz[];
+  studentId: string;
+  studentName: string;
+  studentClass?: string;
+}
+
+const StudentLiveMonitoringModal: React.FC<StudentLiveMonitoringModalProps> = ({
+  isOpen,
+  onClose,
+  quizzes,
+  studentId,
+  studentName,
+  studentClass,
+}) => {
+  const [monitoringData, setMonitoringData] = useState<
+    EnhancedMonitoringData[]
+  >([]);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [selectedQuiz, setSelectedQuiz] = useState<string>("all");
+
+  // Load student's own monitoring data
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const loadMonitoringData = () => {
+      try {
+        // Load from teacher's monitoring data
+        const savedData = localStorage.getItem("teacher-quiz-monitoring");
+        let allMonitoringData: EnhancedMonitoringData[] = [];
+
+        if (savedData) {
+          allMonitoringData = JSON.parse(savedData).map((item: any) => ({
+            ...item,
+            lastActivity: new Date(item.lastActivity),
+            violations: (item.violations || []).map((v: any) => ({
+              ...v,
+              timestamp: new Date(v.timestamp),
+            })),
+          }));
+        }
+
+        // Filter data for this specific student
+        const studentData = allMonitoringData.filter(
+          (data) => data.studentId === studentId
+        );
+
+        setMonitoringData(studentData);
+      } catch (error) {
+        console.error("Error loading monitoring data:", error);
+      }
+    };
+
+    loadMonitoringData();
+
+    if (autoRefresh) {
+      const interval = setInterval(loadMonitoringData, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [isOpen, autoRefresh, studentId]);
+
+  // Helper functions
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "in-progress":
+        return <RefreshCw size={16} color="#3b82f6" />;
+      case "submitted":
+        return <CheckCircle size={16} color="#10b981" />;
+      case "violation":
+        return <AlertTriangle size={16} color="#ef4444" />;
+      case "expired":
+        return <Clock size={16} color="#6b7280" />;
+      default:
+        return <Clock size={16} color="#6b7280" />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "in-progress":
+        return "#3b82f6";
+      case "submitted":
+        return "#10b981";
+      case "violation":
+        return "#ef4444";
+      case "expired":
+        return "#6b7280";
+      default:
+        return "#6b7280";
+    }
+  };
+
+  const getViolationIcon = (type: string) => {
+    switch (type) {
+      case "keyboard":
+        return "⌨️";
+      case "right-click":
+        return "🖱️";
+      case "tab-switch":
+        return "🔍";
+      case "dev-tools":
+        return "⚙️";
+      case "fullscreen-exit":
+        return "📱";
+      default:
+        return "⚠️";
+    }
+  };
+
+  const getViolationSeverityColor = (severity: string) => {
+    switch (severity) {
+      case "low":
+        return "#f59e0b";
+      case "medium":
+        return "#f97316";
+      case "high":
+        return "#ef4444";
+      default:
+        return "#6b7280";
+    }
+  };
+
+  // Filter data based on selected quiz
+  const filteredData =
+    selectedQuiz === "all"
+      ? monitoringData
+      : monitoringData.filter((data) => data.quizId === selectedQuiz);
+
+  // Calculate statistics for current student
+  const activeQuizzes = filteredData.filter(
+    (d) => d.status === "in-progress"
+  ).length;
+  const submittedQuizzes = filteredData.filter(
+    (d) => d.status === "submitted"
+  ).length;
+  const violationQuizzes = filteredData.filter(
+    (d) => d.status === "violation"
+  ).length;
+  const totalViolations = filteredData.reduce(
+    (total, data) => total + data.violations.length,
+    0
+  );
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div
+        className="modal-content xl-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <h2>Your Quiz Activity Monitor</h2>
+            <p>Track your quiz performance and activities</p>
+          </div>
+          <div className="monitoring-controls">
+            <div className="live-indicator">
+              <div className="live-dot"></div>
+              Live Tracking
+            </div>
+            <button
+              className={`refresh-btn ${autoRefresh ? "active" : ""}`}
+              onClick={() => setAutoRefresh(!autoRefresh)}
+            >
+              <RefreshCw size={16} />
+              Auto-refresh: {autoRefresh ? "ON" : "OFF"}
+            </button>
+            <select
+              className="quiz-selector"
+              value={selectedQuiz}
+              onChange={(e) => setSelectedQuiz(e.target.value)}
+            >
+              <option value="all">All Quizzes</option>
+              {quizzes.map((quiz) => (
+                <option key={quiz.id} value={quiz.id}>
+                  {quiz.name} ({quiz.subject})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="modal-body">
+          {/* Student Stats */}
+          <div className="monitoring-stats">
+            <div className="stat-card">
+              <UserCheck size={24} color="#3b82f6" />
+              <span className="stat-number">{activeQuizzes}</span>
+              <span className="stat-label">Active</span>
+            </div>
+            <div className="stat-card">
+              <CheckCircle size={24} color="#10b981" />
+              <span className="stat-number">{submittedQuizzes}</span>
+              <span className="stat-label">Submitted</span>
+            </div>
+            <div className="stat-card">
+              <AlertTriangle size={24} color="#ef4444" />
+              <span className="stat-number">{violationQuizzes}</span>
+              <span className="stat-label">Violations</span>
+            </div>
+            <div className="stat-card">
+              <Users size={24} color="#6b7280" />
+              <span className="stat-number">{filteredData.length}</span>
+              <span className="stat-label">Total</span>
+            </div>
+          </div>
+
+          {/* Student's Quiz Activities */}
+          <div className="students-monitoring">
+            <h4>Your Quiz Activities ({filteredData.length} quizzes)</h4>
+            <div className="monitoring-list">
+              {filteredData.length === 0 ? (
+                <div className="empty-state">
+                  <EyeOff size={48} color="#9ca3af" />
+                  <p>No monitoring data available</p>
+                  <span>Start a quiz to see your activity here</span>
+                </div>
+              ) : (
+                filteredData.map((data) => (
+                  <div key={data.quizId} className="monitoring-item">
+                    <div className="student-info">
+                      <div className="student-avatar-small">
+                        {studentName
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")
+                          .toUpperCase()
+                          .slice(0, 2)}
+                      </div>
+                      <div className="student-details">
+                        <div className="student-name-section">
+                          <strong>{studentName}</strong>
+                          <span
+                            className={`status-badge status-${data.status}`}
+                          >
+                            {getStatusIcon(data.status)}
+                            {data.status === "in-progress"
+                              ? "In Progress"
+                              : data.status === "submitted"
+                              ? "Submitted"
+                              : data.status === "violation"
+                              ? "Violation Detected"
+                              : "Expired"}
+                          </span>
+                        </div>
+                        <div className="student-meta">
+                          <span>
+                            <FileText size={12} /> Quiz: {data.quizName}
+                          </span>
+                          <span>
+                            <Building size={12} /> Class: {data.studentClass}
+                          </span>
+                          <span>
+                            <Clock size={12} /> Time Spent: {data.timeSpent}
+                          </span>
+                          <span>
+                            <BookOpen size={12} /> Q: {data.currentQuestion}/
+                            {data.totalQuestions}
+                          </span>
+                          {data.score !== undefined && (
+                            <span>
+                              <Award size={12} /> Score: {data.score}/
+                              {data.maxScore}
+                            </span>
+                          )}
+                        </div>
+                        {data.violations.length > 0 && (
+                          <div className="violations-list">
+                            <div className="violation-header">
+                              <strong>
+                                Violations ({data.violations.length})
+                              </strong>
+                            </div>
+                            {data.violations.map((violation, index) => (
+                              <div key={index} className="violation-item">
+                                <div className="violation-meta">
+                                  <span className="violation-icon">
+                                    {getViolationIcon(violation.type)}
+                                  </span>
+                                  <span className="violation-type">
+                                    {violation.type.replace("-", " ")}
+                                  </span>
+                                  <span
+                                    className="severity-badge"
+                                    style={{
+                                      backgroundColor:
+                                        getViolationSeverityColor(
+                                          violation.severity
+                                        ),
+                                      color: "white",
+                                    }}
+                                  >
+                                    {violation.severity}
+                                  </span>
+                                </div>
+                                <span className="violation-desc">
+                                  {violation.description}
+                                </span>
+                                <span className="violation-time">
+                                  {violation.timestamp.toLocaleTimeString()}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="progress-display">
+                      <div className="progress-bar">
+                        <div
+                          className="progress-fill"
+                          style={{
+                            width: `${data.progress}%`,
+                            backgroundColor: getStatusColor(data.status),
+                          }}
+                        ></div>
+                      </div>
+                      <span className="progress-text">{data.progress}%</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="action-btn export-btn">
+            <Download size={16} />
+            Export Report
+          </button>
+          <button className="action-btn primary" onClick={onClose}>
+            Close Monitor
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Performance Menu Component
 const PerformanceMenu: React.FC<{
   isOpen: boolean;
@@ -110,33 +506,42 @@ const PerformanceMenu: React.FC<{
 }> = ({ isOpen, onClose, onFeatureSelect }) => {
   if (!isOpen) return null;
 
+  // Add this to the menuItems array in PerformanceMenu component:
   const menuItems = [
     {
       id: "analytics",
       label: "Performance Analytics",
       description: "View detailed performance reports and insights",
-      icon: "📊",
+      icon: BarChart3,
       color: "#3B82F6",
     },
     {
       id: "grades",
       label: "Grade History",
       description: "Track your grades over time",
-      icon: "📈",
+      icon: Table,
       color: "#10B981",
     },
     {
       id: "progress",
       label: "Learning Progress",
       description: "Monitor your course completion and progress",
-      icon: "🎯",
+      icon: Award,
       color: "#8B5CF6",
+    },
+    // ADD THIS NEW ITEM:
+    {
+      id: "live-monitoring",
+      label: "Activity Monitor",
+      description: "View your quiz activities and violations",
+      icon: Eye,
+      color: "#EF4444",
     },
     {
       id: "ranking",
       label: "Class Ranking",
       description: "See where you stand in your class",
-      icon: "🏆",
+      icon: Users2,
       color: "#F59E0B",
     },
   ];
@@ -806,6 +1211,7 @@ const StrictQuizInterface: React.FC<{
   strictModeActive: boolean;
   studentName: string;
   studentId: string;
+  currentUserClass?: string;
 }> = ({
   quiz,
   onClose,
@@ -813,6 +1219,7 @@ const StrictQuizInterface: React.FC<{
   strictModeActive,
   studentName,
   studentId,
+  currentUserClass,
 }) => {
   // State declarations
   const [timeLeft, setTimeLeft] = useState(quiz.duration * 60);
@@ -834,6 +1241,108 @@ const StrictQuizInterface: React.FC<{
 
   // KEY IMPROVEMENT: Track emergency exit state
   const [emergencyExitActive, setEmergencyExitActive] = useState(false);
+
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes.toString().padStart(2, "0")}:${secs
+      .toString()
+      .padStart(2, "0")}`;
+  };
+
+  const calculateResults = () => {
+    let correctAnswers = 0;
+    quiz.questions.forEach((question, index) => {
+      if (answers[index] === question.correctAnswer) {
+        correctAnswers++;
+      }
+    });
+
+    const score = (correctAnswers / quiz.questions.length) * quiz.maxScore;
+    const finalScore = Math.round(score);
+    return finalScore;
+  };
+
+  // Save to teacher monitoring function - ADD THIS INSIDE StrictQuizInterface
+  const saveToTeacherMonitoring = useCallback(() => {
+    if (!quizStarted || !studentName || !studentId || emergencyExitActive)
+      return;
+
+    try {
+      const teacherMonitoringKey = "teacher-quiz-monitoring";
+      const existingData = localStorage.getItem(teacherMonitoringKey);
+      const monitoringDataArray = existingData ? JSON.parse(existingData) : [];
+
+      const timeElapsed = quiz.duration * 60 - timeLeft;
+      const totalTime = quiz.duration * 60;
+      const progress = Math.round((timeElapsed / totalTime) * 100);
+
+      const monitoringData = {
+        studentId: studentId,
+        studentName: studentName,
+        studentClass: currentUserClass || "Unknown Class",
+        quizId: quiz.id,
+        quizName: quiz.name,
+        quizClass: quiz.targetClass || "Unknown Class",
+        status: isAutoSubmitting ? "submitted" : "in-progress",
+        progress: Math.min(100, progress),
+        timeSpent: formatTime(timeElapsed),
+        currentQuestion: currentQuestion + 1,
+        totalQuestions: quiz.questions.length,
+        violations: violations.map((v) => ({
+          ...v,
+          timestamp: v.timestamp.toISOString(),
+          studentId,
+          studentName,
+          studentClass: currentUserClass || "Unknown Class",
+          quizId: quiz.id,
+          quizName: quiz.name,
+          quizClass: quiz.targetClass || "Unknown Class",
+          browser: navigator.userAgent.split(" ")[0],
+          deviceType: /mobile/i.test(navigator.userAgent)
+            ? "Mobile"
+            : "Desktop",
+        })),
+        lastActivity: new Date().toISOString(),
+        score: isAutoSubmitting ? calculateResults() : undefined,
+        maxScore: quiz.maxScore,
+        isOnline: true,
+        lastUpdated: new Date().toISOString(),
+      };
+
+      const filteredMonitoring = monitoringDataArray.filter(
+        (item: any) =>
+          !(item.studentId === studentId && item.quizId === quiz.id)
+      );
+
+      filteredMonitoring.push(monitoringData);
+      localStorage.setItem(
+        teacherMonitoringKey,
+        JSON.stringify(filteredMonitoring)
+      );
+
+      const studentMonitoringKey = `student-monitoring-${studentId}-${quiz.id}`;
+      localStorage.setItem(
+        studentMonitoringKey,
+        JSON.stringify(monitoringData)
+      );
+    } catch (error) {
+      console.error("Error saving to teacher monitoring:", error);
+    }
+  }, [
+    quizStarted,
+    studentName,
+    studentId,
+    quiz,
+    timeLeft,
+    currentQuestion,
+    violations,
+    currentUserClass,
+    isAutoSubmitting,
+    emergencyExitActive,
+    calculateResults,
+    formatTime,
+  ]);
 
   // Report violation function - skip if emergency exit is active
   const reportViolation = useCallback(
@@ -1049,19 +1558,6 @@ const StrictQuizInterface: React.FC<{
     );
   };
 
-  const calculateResults = () => {
-    let correctAnswers = 0;
-    quiz.questions.forEach((question, index) => {
-      if (answers[index] === question.correctAnswer) {
-        correctAnswers++;
-      }
-    });
-
-    const score = (correctAnswers / quiz.questions.length) * quiz.maxScore;
-    const finalScore = Math.round(score);
-    return finalScore;
-  };
-
   const handleAutoSubmit = () => {
     // Prevent multiple auto-submissions
     if (isAutoSubmitting) return;
@@ -1113,14 +1609,6 @@ const StrictQuizInterface: React.FC<{
 
     // Close quiz interface
     onClose();
-  };
-
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${minutes.toString().padStart(2, "0")}:${secs
-      .toString()
-      .padStart(2, "0")}`;
   };
 
   const answeredQuestions = Object.keys(answers).length;
@@ -2320,6 +2808,7 @@ const StudentDashboard: React.FC = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [filteredQuizzes, setFilteredQuizzes] = useState<Quiz[]>([]);
   const [studentSubjects, setStudentSubjects] = useState<string[]>([]);
+  const [showLiveMonitoring, setShowLiveMonitoring] = useState(false);
 
   const {
     user,
@@ -2575,10 +3064,29 @@ const StudentDashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, [onlineStartTime]);
 
+  // Update handlePerformanceFeatureSelect function:
   const handlePerformanceFeatureSelect = (feature: string) => {
-    console.log(`Selected performance feature: ${feature}`);
     setPerformanceMenuOpen(false);
-    alert(`Performance feature "${feature}" selected. Implementation pending.`);
+
+    switch (feature) {
+      case "live-monitoring":
+        setShowLiveMonitoring(true); // This opens the monitoring modal
+        break;
+      case "analytics":
+        alert("Performance Analytics feature coming soon!");
+        break;
+      case "grades":
+        alert("Grade History feature coming soon!");
+        break;
+      case "progress":
+        alert("Learning Progress feature coming soon!");
+        break;
+      case "ranking":
+        alert("Class Ranking feature coming soon!");
+        break;
+      default:
+        break;
+    }
   };
 
   // Quiz functions
@@ -3290,6 +3798,16 @@ const StudentDashboard: React.FC = () => {
         onClose={() => setPerformanceMenuOpen(false)}
         onFeatureSelect={handlePerformanceFeatureSelect}
       />
+      {showLiveMonitoring && (
+        <StudentLiveMonitoringModal
+          isOpen={showLiveMonitoring}
+          onClose={() => setShowLiveMonitoring(false)}
+          quizzes={filteredQuizzes}
+          studentId={user?.uid || "unknown"}
+          studentName={userInfo.fullName}
+          studentClass={currentUserClass}
+        />
+      )}
 
       {/* Include all CSS styles - keep your existing CSS */}
       <style>{`
