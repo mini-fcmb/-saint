@@ -1,4 +1,4 @@
-  // app/teachers/page.tsx
+// app/teachers/page.tsx
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
@@ -2932,16 +2932,36 @@ const TeacherDashboard: React.FC = () => {
     try {
       const quizzesRef = collection(db, "quizzes");
       await setDoc(doc(quizzesRef, quiz.id), {
-        ...quiz,
-        createdAt: new Date(),
+        name: quiz.name,
+        subject: quiz.subject,
+        scheduledDate: quiz.scheduledDate,
+        scheduledTime: quiz.scheduledTime,
+        duration: quiz.duration,
+        totalDuration: quiz.totalDuration,
+        questions: quiz.questions.map((q) => ({
+          id: q.id,
+          text: q.text,
+          imageUrl: q.imageUrl,
+          options: q.options,
+          correctAnswer: q.correctAnswer,
+        })),
+        maxScore: quiz.maxScore,
+        targetClass: quiz.targetClass, // Ensure this is included
         teacherId: user?.uid,
         teacherName: localStorage.getItem("teacherName") || user?.displayName,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        status: quiz.status,
+        // Add these fields for easier querying
+        classId: quiz.targetClass, // Duplicate for compatibility
+        published: true, // Add published flag
+        active: quiz.status === "active",
       });
+      console.log("Quiz saved to Firestore successfully:", quiz.id);
     } catch (error) {
       console.error("Error saving quiz to Firestore:", error);
     }
   };
-
   const handleEditQuiz = useCallback((quiz: Quiz) => {
     setEditingQuiz(quiz);
     setQuizModalOpen(true);
@@ -6570,4 +6590,4 @@ get-in-touch{
   );
 };
 
-export default TeacherDashboard; 
+export default TeacherDashboard;
