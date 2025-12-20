@@ -37,7 +37,8 @@ import {
 import { useFirebaseStore } from "../stores/useFirebaseStore";
 import { useLiveDate, useCalendar } from "../hooks/useDateUtils";
 import { useNavigate } from "react-router-dom";
-
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "../firebase/config";
 // Types
 interface Student {
   id: string;
@@ -2317,6 +2318,8 @@ const StudentDashboard: React.FC = () => {
   const [quizInProgress, setQuizInProgress] = useState(false);
   const [performanceMenuOpen, setPerformanceMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [filteredQuizzes, setFilteredQuizzes] = useState<Quiz[]>([]);
+  const [studentSubjects, setStudentSubjects] = useState<string[]>([]);
 
   const {
     user,
@@ -2483,6 +2486,67 @@ const StudentDashboard: React.FC = () => {
       );
     }
   }, []);
+
+  useEffect(() => {
+    const loadStudentSubjects = async () => {
+      if (user?.email) {
+        try {
+          const studentsRef = collection(db, "students");
+          const q = query(studentsRef, where("email", "==", user.email));
+          const querySnapshot = await getDocs(q);
+
+          if (!querySnapshot.empty) {
+            const studentData = querySnapshot.docs[0].data();
+            const subjects = studentData.subjects || [];
+            setStudentSubjects(subjects);
+            localStorage.setItem("studentSubjects", JSON.stringify(subjects));
+          }
+        } catch (error) {
+          console.error("Error loading student subjects:", error);
+        }
+      }
+    };
+
+    if (user?.email) {
+      loadStudentSubjects();
+    } else {
+      // Fallback to localStorage
+      const savedSubjects = localStorage.getItem("studentSubjects");
+      if (savedSubjects) {
+        try {
+          setStudentSubjects(JSON.parse(savedSubjects));
+        } catch (error) {
+          console.error("Error parsing student subjects:", error);
+        }
+      }
+    }
+  }, [user]);
+
+  // Add this filtering useEffect (put it after your quizzes loading useEffect):
+  useEffect(() => {
+    if (quizzes.length === 0 || !currentUserClass) {
+      setFilteredQuizzes([]);
+      return;
+    }
+
+    const filtered = quizzes.filter((quiz) => {
+      // Check if quiz has targetClass property
+      const quizTargetClass = (quiz as any).targetClass || "All Classes";
+
+      // Check 1: Is the quiz for the student's class?
+      const classMatch =
+        quizTargetClass === currentUserClass ||
+        quizTargetClass === "All Classes";
+
+      // Check 2: Does the student offer this subject?
+      const subjectMatch =
+        studentSubjects.length === 0 || studentSubjects.includes(quiz.subject);
+
+      return classMatch && subjectMatch;
+    });
+
+    setFilteredQuizzes(filtered);
+  }, [quizzes, currentUserClass, studentSubjects]);
 
   // Update working minutes
   useEffect(() => {
@@ -2685,7 +2749,7 @@ const StudentDashboard: React.FC = () => {
 
   // Upcoming classes and quizzes
   const upcomingClasses = useMemo(() => {
-    const quizItems = quizzes
+    const quizItems = filteredQuizzes
       .filter((quiz) => quiz.status === "upcoming" || quiz.status === "active")
       .map((quiz) => ({
         id: `quiz-${quiz.id}`,
@@ -2716,7 +2780,7 @@ const StudentDashboard: React.FC = () => {
     ];
 
     return [...classItems, ...quizItems].slice(0, 5);
-  }, [quizzes]);
+  }, [filteredQuizzes]);
 
   const firstName = userInfo.firstName;
   const fullName = userInfo.fullName;
@@ -3037,20 +3101,20 @@ const StudentDashboard: React.FC = () => {
           <div className="bottom-grid">
             <div className="card student-tests">
               <div className="card-header">
-                <h3>Available Quizzes ({quizzes.length})</h3>
+                <h3>Available Quizzes ({filteredQuizzes.length})</h3>
                 <a href="#" className="view-all">
                   All quizzes
                 </a>
               </div>
               <div className="quizzes-grid">
-                {quizzes.length === 0 ? (
+                {filteredQuizzes.length === 0 ? (
                   <div className="empty-state">
                     <FileText size={48} color="#6b7280" />
                     <h3>No quizzes available</h3>
                     <p>Your teacher hasn't uploaded any quizzes yet.</p>
                   </div>
                 ) : (
-                  quizzes.map((quiz) => {
+                  filteredQuizzes.map((quiz) => {
                     const buttonProps = getQuizButtonProps(quiz);
                     const submission = quizSubmissions[quiz.id];
 
