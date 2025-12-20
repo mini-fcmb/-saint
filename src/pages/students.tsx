@@ -570,7 +570,7 @@ const PerformanceMenu: React.FC<{
                 className="menu-item-icon"
                 style={{ backgroundColor: `${item.color}20` }}
               >
-                <span style={{ fontSize: "24px" }}>{item.icon}</span>
+                <span style={{ fontSize: "24px" }}></span>
               </div>
               <div className="menu-item-content">
                 <h4>{item.label}</h4>
