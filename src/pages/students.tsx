@@ -49,7 +49,15 @@ import {
 import { useFirebaseStore } from "../stores/useFirebaseStore";
 import { useLiveDate, useCalendar } from "../hooks/useDateUtils";
 import { useNavigate } from "react-router-dom";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  onSnapshot,
+  doc,
+  setDoc,
+} from "firebase/firestore";
 import { db } from "../firebase/config";
 // Types
 interface Student {
@@ -2886,52 +2894,61 @@ const StudentDashboard: React.FC = () => {
   }, []);
 
   // Load quizzes from localStorage
+  // Replace the useEffect at line ~358 with this:
   useEffect(() => {
-    const loadQuizzes = () => {
-      const savedQuizzes = localStorage.getItem("teacher-quizzes");
-      if (savedQuizzes) {
-        try {
-          const parsedQuizzes: Quiz[] = JSON.parse(savedQuizzes);
-          const updatedQuizzes = parsedQuizzes.map((quiz) => {
-            const now = new Date();
-            const scheduledDateTime = new Date(
-              `${quiz.scheduledDate}T${quiz.scheduledTime}`
-            );
-            const endTime = new Date(
-              scheduledDateTime.getTime() + quiz.totalDuration * 60000
-            );
+    if (!userData || userData.role !== "student" || !userData.className) return;
 
-            let status: "upcoming" | "active" | "expired" = "upcoming";
-            if (now >= scheduledDateTime && now <= endTime) {
-              status = "active";
-            } else if (now > endTime) {
-              status = "expired";
-            }
-            return { ...quiz, status };
-          });
-          setQuizzes(updatedQuizzes);
-        } catch (error) {
-          console.error("Error loading quizzes:", error);
-        }
-      }
-    };
+    const q = query(
+      collection(db, "quizzes"),
+      where("targetClass", "==", userData.className) // Use "targetClass" instead of "classId"
+      // Remove the "published" condition or add this field when creating quizzes
+    );
 
-    const savedSubmissions = localStorage.getItem("student-quiz-submissions");
-    if (savedSubmissions) {
-      setQuizSubmissions(JSON.parse(savedSubmissions));
-    }
+    const unsub = onSnapshot(q, (snapshot) => {
+      const updatedQuizzes = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        const quiz = {
+          id: doc.id,
+          name: data.name || "Unnamed Quiz",
+          subject: data.subject || "General",
+          teacherName: data.teacherName || "Teacher",
+          scheduledDate: data.scheduledDate,
+          scheduledTime: data.scheduledTime,
+          duration: data.duration || 30,
+          totalDuration: data.totalDuration || 40,
+          questions: data.questions || [],
+          maxScore: data.maxScore || 40,
+          targetClass: data.targetClass || userData.className,
+        } as Quiz;
 
-    loadQuizzes();
-    const interval = setInterval(loadQuizzes, 30000);
-    return () => clearInterval(interval);
-  }, []);
+        // Calculate status
+        const now = new Date();
+        const scheduledDateTime = new Date(
+          `${quiz.scheduledDate}T${quiz.scheduledTime}`
+        );
+        const endTime = new Date(
+          scheduledDateTime.getTime() + quiz.totalDuration * 60000
+        );
+
+        let status: "upcoming" | "active" | "expired" = "upcoming";
+        if (now >= scheduledDateTime && now <= endTime) status = "active";
+        else if (now > endTime) status = "expired";
+
+        return { ...quiz, status };
+      });
+
+      setQuizzes(updatedQuizzes);
+    });
+
+    return () => unsub();
+  }, [userData]);
 
   // Save submissions
   useEffect(() => {
-    localStorage.setItem(
-      "student-quiz-submissions",
-      JSON.stringify(quizSubmissions)
-    );
+    if (!userData) return;
+
+    const docRef = doc(db, "quizSubmissions", userData.email); // or uid
+    setDoc(docRef, { submissions: quizSubmissions }, { merge: true });
   }, [quizSubmissions]);
 
   // Initialize working hours function
