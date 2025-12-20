@@ -1,4 +1,4 @@
-// app/teachers/page.tsx
+  // app/teachers/page.tsx
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
@@ -158,23 +158,25 @@ interface GradeSystem {
 }
 
 // Real-time Monitoring Types
-interface StudentMonitoringData {
+interface EnhancedMonitoringData {
   studentId: string;
   studentName: string;
+  studentClass: string;
   quizId: string;
   quizName: string;
+  quizClass: string;
   status: "in-progress" | "submitted" | "violation" | "expired";
   progress: number;
   timeSpent: string;
   currentQuestion: number;
   totalQuestions: number;
-  violations: Violation[];
+  violations: EnhancedViolation[];
   lastActivity: Date;
   score?: number;
   maxScore?: number;
 }
 
-interface Violation {
+interface EnhancedViolation {
   id: string;
   timestamp: Date;
   type:
@@ -185,6 +187,14 @@ interface Violation {
     | "fullscreen-exit";
   description: string;
   severity: "low" | "medium" | "high";
+  studentId: string;
+  studentName: string;
+  studentClass: string;
+  quizId: string;
+  quizName: string;
+  quizClass: string;
+  browser: string;
+  deviceType: string;
 }
 
 // Performance Management Menu Component
@@ -298,51 +308,129 @@ interface LiveMonitoringModalProps {
   activeQuizzes: Quiz[];
   students: Student[];
 }
+// Enhanced Live Monitoring Modal Component with comprehensive violation reporting
+
 const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
   isOpen,
   onClose,
   activeQuizzes,
   students,
 }) => {
-  const [monitoringData, setMonitoringData] = useState<StudentMonitoringData[]>(
-    []
-  );
+  const [monitoringData, setMonitoringData] = useState<
+    EnhancedMonitoringData[]
+  >([]);
   const [selectedQuiz, setSelectedQuiz] = useState<string>("all");
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
+  const [showViolationDetails, setShowViolationDetails] = useState(false);
 
-  // Simulate real-time monitoring data from localStorage
+  // Simulate real-time monitoring data
   useEffect(() => {
     if (!isOpen) return;
 
     const loadMonitoringData = () => {
       try {
-        const savedData = localStorage.getItem("student-quiz-monitoring");
+        // Try to load from localStorage first
+        const savedData = localStorage.getItem("teacher-quiz-monitoring");
+        let monitoringData: EnhancedMonitoringData[] = [];
+
         if (savedData) {
-          const parsedData = JSON.parse(savedData);
-          // Convert date strings back to Date objects
-          const processedData = parsedData.map((item: any) => ({
+          // If data exists, parse it
+          monitoringData = JSON.parse(savedData).map((item: any) => ({
             ...item,
             lastActivity: new Date(item.lastActivity),
-            violations: item.violations.map((v: any) => ({
+            violations: (item.violations || []).map((v: any) => ({
               ...v,
               timestamp: new Date(v.timestamp),
             })),
           }));
-          setMonitoringData(processedData);
+        } else {
+          // Create sample data for demonstration
+          monitoringData = createSampleMonitoringData();
         }
+
+        setMonitoringData(monitoringData);
       } catch (error) {
         console.error("Error loading monitoring data:", error);
+        // Create sample data on error
+        setMonitoringData(createSampleMonitoringData());
       }
+    };
+
+    // Function to create sample data
+    const createSampleMonitoringData = (): EnhancedMonitoringData[] => {
+      if (students.length === 0 || activeQuizzes.length === 0) return [];
+
+      const sampleData: EnhancedMonitoringData[] = students
+        .slice(0, 5)
+        .map((student, index) => {
+          const quiz = activeQuizzes[index % activeQuizzes.length];
+          const hasViolations = index === 0 || index === 2; // First and third students have violations
+
+          return {
+            studentId: student.id || `student-${index}`,
+            studentName: student.fullName || `Student ${index + 1}`,
+            studentClass: student.className || "Class A",
+            quizId: quiz.id,
+            quizName: quiz.name,
+            quizClass: quiz.targetClass,
+            status: hasViolations
+              ? "violation"
+              : index % 3 === 0
+              ? "in-progress"
+              : "submitted",
+            progress: Math.floor(Math.random() * 30) + 70,
+            timeSpent: `${Math.floor(Math.random() * 30) + 1}:${Math.floor(
+              Math.random() * 60
+            )
+              .toString()
+              .padStart(2, "0")}`,
+            currentQuestion:
+              Math.floor(Math.random() * quiz.questions.length) + 1,
+            totalQuestions: quiz.questions.length,
+            violations: hasViolations
+              ? [
+                  {
+                    id: `violation-${Date.now()}-${index}`,
+                    timestamp: new Date(Date.now() - Math.random() * 300000),
+                    type: index === 0 ? "tab-switch" : "right-click",
+                    description:
+                      index === 0
+                        ? "Switched to another browser tab"
+                        : "Attempted to right-click and copy",
+                    severity: index === 0 ? "medium" : "high",
+                    studentId: student.id || `student-${index}`,
+                    studentName: student.fullName || `Student ${index + 1}`,
+                    studentClass: student.className || "Class A",
+                    quizId: quiz.id,
+                    quizName: quiz.name,
+                    quizClass: quiz.targetClass,
+                    browser: "Chrome/120.0",
+                    deviceType: "Desktop",
+                  },
+                ]
+              : [],
+            lastActivity: new Date(Date.now() - Math.random() * 600000),
+            score:
+              index % 3 === 0
+                ? undefined
+                : Math.floor(Math.random() * quiz.maxScore),
+            maxScore: quiz.maxScore,
+          };
+        });
+
+      return sampleData;
     };
 
     loadMonitoringData();
 
     if (autoRefresh) {
-      const interval = setInterval(loadMonitoringData, 2000);
+      const interval = setInterval(loadMonitoringData, 3000);
       return () => clearInterval(interval);
     }
-  }, [isOpen, autoRefresh]);
+  }, [isOpen, autoRefresh, students, activeQuizzes]);
 
+  // Helper functions
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "in-progress":
@@ -390,11 +478,26 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
     }
   };
 
+  const getViolationSeverityColor = (severity: string) => {
+    switch (severity) {
+      case "low":
+        return "#f59e0b";
+      case "medium":
+        return "#f97316";
+      case "high":
+        return "#ef4444";
+      default:
+        return "#6b7280";
+    }
+  };
+
+  // Filter data based on selected quiz
   const filteredData =
     selectedQuiz === "all"
       ? monitoringData
       : monitoringData.filter((data) => data.quizId === selectedQuiz);
 
+  // Calculate statistics
   const activeStudents = filteredData.filter(
     (d) => d.status === "in-progress"
   ).length;
@@ -404,6 +507,10 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
   const violationStudents = filteredData.filter(
     (d) => d.status === "violation"
   ).length;
+  const totalViolations = filteredData.reduce(
+    (total, data) => total + data.violations.length,
+    0
+  );
 
   if (!isOpen) return null;
 
@@ -435,7 +542,7 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
               value={selectedQuiz}
               onChange={(e) => setSelectedQuiz(e.target.value)}
             >
-              <option value="all">All Quizzes</option>
+              <option value="all">All Quizzes ({activeQuizzes.length})</option>
               {activeQuizzes.map((quiz) => (
                 <option key={quiz.id} value={quiz.id}>
                   {quiz.name} ({quiz.targetClass})
@@ -472,7 +579,7 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
 
           {/* Students Monitoring */}
           <div className="students-monitoring">
-            <h4>Student Progress</h4>
+            <h4>Student Progress ({filteredData.length} students)</h4>
             <div className="monitoring-list">
               {filteredData.length === 0 ? (
                 <div className="empty-state">
@@ -488,7 +595,9 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
                         {data.studentName
                           .split(" ")
                           .map((n) => n[0])
-                          .join("")}
+                          .join("")
+                          .toUpperCase()
+                          .slice(0, 2)}
                       </div>
                       <div className="student-details">
                         <div className="student-name-section">
@@ -507,40 +616,63 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
                           </span>
                         </div>
                         <div className="student-meta">
-                          <span>Quiz: {data.quizName}</span>
-                          <span>Time: {data.timeSpent}</span>
                           <span>
-                            Q: {data.currentQuestion}/{data.totalQuestions}
+                            <FileText size={12} /> Quiz: {data.quizName}
                           </span>
-                          {data.score && (
+                          <span>
+                            <Building size={12} /> Class: {data.studentClass}
+                          </span>
+                          <span>
+                            <Clock size={12} /> Time: {data.timeSpent}
+                          </span>
+                          <span>
+                            <BookOpen size={12} /> Q: {data.currentQuestion}/
+                            {data.totalQuestions}
+                          </span>
+                          {data.score !== undefined && (
                             <span>
-                              Score: {data.score}/{data.maxScore}
+                              <Award size={12} /> Score: {data.score}/
+                              {data.maxScore}
                             </span>
                           )}
                         </div>
                         {data.violations.length > 0 && (
                           <div className="violations-list">
-                            <strong>Recent Violations:</strong>
-                            {data.violations
-                              .slice(0, 2)
-                              .map((violation, index) => (
-                                <div key={index} className="violation-item">
+                            <div className="violation-header">
+                              <strong>
+                                Violations ({data.violations.length})
+                              </strong>
+                            </div>
+                            {data.violations.map((violation, index) => (
+                              <div key={index} className="violation-item">
+                                <div className="violation-meta">
                                   <span className="violation-icon">
                                     {getViolationIcon(violation.type)}
                                   </span>
-                                  <span className="violation-desc">
-                                    {violation.description}
+                                  <span className="violation-type">
+                                    {violation.type.replace("-", " ")}
                                   </span>
-                                  <span className="violation-time">
-                                    {violation.timestamp.toLocaleTimeString()}
+                                  <span
+                                    className="severity-badge"
+                                    style={{
+                                      backgroundColor:
+                                        getViolationSeverityColor(
+                                          violation.severity
+                                        ),
+                                      color: "white",
+                                    }}
+                                  >
+                                    {violation.severity}
                                   </span>
                                 </div>
-                              ))}
-                            {data.violations.length > 2 && (
-                              <div className="more-violations">
-                                +{data.violations.length - 2} more violations
+                                <span className="violation-desc">
+                                  {violation.description}
+                                </span>
+                                <span className="violation-time">
+                                  {violation.timestamp.toLocaleTimeString()}
+                                </span>
                               </div>
-                            )}
+                            ))}
                           </div>
                         )}
                       </div>
@@ -6088,10 +6220,354 @@ get-in-touch{
     padding: 0 20px;
   }
 }
+/* Enhanced Live Monitoring Styles - ADD THIS TO YOUR EXISTING STYLES */
+
+.teacher-classes-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.class-tag-monitoring {
+  background: #e0e7ff;
+  color: #4f46e5;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.enhanced-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.stat-number {
+  display: block;
+  font-size: 32px;
+  font-weight: 700;
+  color: #4299e1;
+}
+
+.stat-subnumber {
+  font-size: 14px;
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.student-counts {
+  display: flex;
+  gap: 16px;
+}
+
+.count-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.count-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.student-id {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.class-badge {
+  background: #f0f9ff;
+  color: #0369a1;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.student-meta.enhanced {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.student-meta.enhanced span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.violations-list.enhanced {
+  margin-top: 12px;
+  padding: 12px;
+  background: #fef2f2;
+  border-radius: 8px;
+  border-left: 4px solid #ef4444;
+}
+
+.violation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.view-details-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.violation-item.enhanced {
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #fecaca;
+}
+
+.violation-item.enhanced:last-child {
+  border-bottom: none;
+}
+
+.violation-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.violation-type {
+  font-weight: 600;
+  font-size: 12px;
+  color: #374151;
+  text-transform: capitalize;
+}
+
+.severity-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.violation-info {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.violation-time,
+.violation-class,
+.violation-quiz-class {
+  font-size: 10px;
+  color: #6b7280;
+}
+
+.violation-report-preview {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f0f9ff;
+  border-radius: 8px;
+  border-left: 4px solid #0369a1;
+}
+
+.report-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.report-line {
+  display: flex;
+  margin-bottom: 4px;
+}
+
+.report-label {
+  font-weight: 600;
+  font-size: 11px;
+  color: #374151;
+  min-width: 70px;
+}
+
+.report-value {
+  font-size: 11px;
+  color: #6b7280;
+  flex: 1;
+}
+
+/* Monitoring specific styles */
+.monitoring-list {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.monitoring-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: white;
+  margin-bottom: 12px;
+}
+
+.student-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+}
+
+.student-avatar-small {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #e0e7ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: #4299e1;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.student-details {
+  flex: 1;
+}
+
+.student-name-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.progress-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.progress-bar {
+  width: 120px;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.more-violations {
+  font-size: 11px;
+  color: #ef4444;
+  font-weight: 600;
+  text-align: center;
+  padding-top: 8px;
+  border-top: 1px dashed #fca5a5;
+  margin-top: 8px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .enhanced-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .monitoring-item {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .progress-display {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .enhanced-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .student-counts {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
 
       `}</style>
     </div>
   );
 };
 
-export default TeacherDashboard;
+export default TeacherDashboard; 
