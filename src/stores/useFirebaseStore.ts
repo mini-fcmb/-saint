@@ -78,10 +78,30 @@ interface FirebaseStore {
 }
 
 /* ------------------------------------------------------------------ */
-const splitName = (fullName = "") => {
+const splitName = (fullName = "", email = "") => {
+  // If no fullName, try to extract from email
+  if (!fullName || !fullName.trim()) {
+    const emailPart = email?.split('@')[0] || 'student';
+    // Clean up email part (remove numbers, dots, underscores)
+    const nameFromEmail = emailPart
+      .replace(/[0-9._-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    const parts = nameFromEmail.split(' ');
+    if (parts.length >= 2) {
+      return { first: parts[0] || 'Student', last: parts.slice(1).join(' ') || 'Name' };
+    } else if (parts.length === 1) {
+      return { first: parts[0] || 'Student', last: 'Student' };
+    } else {
+      return { first: 'Student', last: 'Name' };
+    }
+  }
+  
+  // Normal fullName processing
   const parts = fullName.trim().split(/\s+/);
-  const first = parts[0] ?? "";
-  const last = parts.slice(1).join(" ") ?? "";
+  const first = parts[0] || 'Student';
+  const last = parts.slice(1).join(' ') || 'Name';
   return { first, last };
 };
 
@@ -170,30 +190,64 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     log(`Teacher classes: ${JSON.stringify(classes)}`);
     return classes;
   };
-
   const startStudentListener = (classLevels: string[]) => {
     if (studentUnsub) {
       studentUnsub();
       studentUnsub = null;
     }
-
+  
     const clean = classLevels.map((l) => l.trim()).filter(Boolean);
-
+  
     if (!clean.length) {
       log("No class levels → empty student list");
       set({ students: [], loading: false });
       return;
     }
-
-    log(`Query students WHERE className IN [${clean.join(", ")}]`);
-    const q = query(collection(db, "students"), where("className", "in", clean));
-
+  
+    // Create array with both original and normalized versions
+    const allClassNames: string[] = [];
+    clean.forEach(className => {
+      // Add original
+      allClassNames.push(className);
+      
+      // Add without spaces
+      const noSpace = className.replace(/\s+/g, '');
+      if (noSpace !== className) {
+        allClassNames.push(noSpace);
+      }
+      
+      // Add with different spacing variations
+      const withDash = className.replace(/\s+/g, '-');
+      if (withDash !== className && withDash !== noSpace) {
+        allClassNames.push(withDash);
+      }
+      
+      const withUnderscore = className.replace(/\s+/g, '_');
+      if (withUnderscore !== className && withUnderscore !== noSpace) {
+        allClassNames.push(withUnderscore);
+      }
+    });
+  
+    // Remove duplicates
+    const uniqueClassNames = [...new Set(allClassNames)];
+    
+    log(`Query students WHERE className IN [${uniqueClassNames.join(", ")}]`);
+    
+    // Firestore "in" query supports up to 10 values
+    if (uniqueClassNames.length > 10) {
+      log("Too many class name variations, using first 10");
+      uniqueClassNames.length = 10;
+    }
+  
+    const q = query(collection(db, "students"), where("className", "in", uniqueClassNames));
+  
     const unsub = onSnapshot(
       q,
       (snap) => {
         const students: Student[] = snap.docs.map((d) => {
           const data = d.data() as DocumentData;
-          const { first, last } = splitName(data.fullName);
+          // Use updated splitName that handles missing names
+          const { first, last } = splitName(data.fullName, data.email);
           return {
             id: d.id,
             first,
@@ -207,12 +261,18 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
             semester: data.semester,
           };
         });
-
+  
         students.sort((a, b) =>
           `${a.first} ${a.last}`.localeCompare(`${b.first} ${b.last}`)
         );
-
+  
         log(`Students loaded: ${students.length}`);
+        console.log("📋 Loaded students details:", students.map(s => ({
+          name: `${s.first} ${s.last}`,
+          class: s.className,
+          email: s.email
+        })));
+        
         set({ students, loading: false, error: null });
       },
       (err) => {
@@ -220,7 +280,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         set({ error: "Failed to load students", loading: false });
       }
     );
-
+  
     studentUnsub = unsub;
   };
 
