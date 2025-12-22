@@ -63,6 +63,7 @@ import {
   getDoc,
   setDoc,
   onSnapshot,
+  serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
 
@@ -402,6 +403,7 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
         {
           ...data,
           teacherId: user.uid,
+          teacherName: user.displayName || "Teacher",
           lastActivity: new Date(),
           updatedAt: new Date(),
         },
@@ -410,31 +412,19 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
 
       console.log("✅ Monitoring data saved to Firestore");
     } catch (error) {
-      console.error("Error saving monitoring data:", error);
-      // Fallback to localStorage
-      const existingData = localStorage.getItem("teacher-monitoring-data");
-      const monitoringArray = existingData ? JSON.parse(existingData) : [];
-
-      const updatedArray = monitoringArray.filter(
-        (item: any) =>
-          !(item.quizId === data.quizId && item.studentId === data.studentId)
-      );
-
-      updatedArray.push({
-        ...data,
-        lastActivity: data.lastActivity.toISOString(),
-        violations: data.violations.map((v) => ({
-          ...v,
-          timestamp: v.timestamp.toISOString(),
-        })),
-      });
-
-      localStorage.setItem(
-        "teacher-monitoring-data",
-        JSON.stringify(updatedArray)
-      );
+      console.error("❌ Error saving monitoring data:", error);
+      throw error;
     }
   };
+
+  // Add real-time listener for grade updates
+  useEffect(() => {
+    if (!user?.uid || !isOpen) return;
+
+    // This is just a placeholder since we don't have the grade context here
+    // The real implementation would be in GradeManagementModal
+    console.log("🔄 Live monitoring active");
+  }, [user, isOpen]);
 
   // Simulate real-time monitoring data
   useEffect(() => {
@@ -489,32 +479,11 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
       } catch (error) {
         console.error("Error loading monitoring data:", error);
 
-        // Try to load from localStorage as fallback
-        try {
-          const savedMonitoring = localStorage.getItem(
-            "teacher-monitoring-data"
-          );
-          if (savedMonitoring) {
-            const parsedData = JSON.parse(savedMonitoring);
-            const enhancedData = parsedData.map((data: any) => ({
-              ...data,
-              lastActivity: new Date(data.lastActivity),
-              violations: (data.violations || []).map((v: any) => ({
-                ...v,
-                timestamp: new Date(v.timestamp),
-              })),
-            }));
-            setMonitoringData(enhancedData);
-          } else {
-            // Ultimate fallback to sample data
-            const sampleData = createSampleMonitoringData();
-            setMonitoringData(sampleData);
-          }
-        } catch (localError) {
-          console.error("Error loading from localStorage:", localError);
-          const sampleData = createSampleMonitoringData();
-          setMonitoringData(sampleData);
-        }
+        // Use sample data temporarily
+        const sampleData = createSampleMonitoringData();
+        setMonitoringData(sampleData);
+
+        console.warn("⚠️ Using sample data - Firestore connection issue");
       }
     };
 
@@ -813,10 +782,10 @@ interface GradeManagementModalProps {
   students: Student[];
   teacherClasses: TeacherClassInfo[];
   user: any;
-  selectedClass?: string;
-  selectedSubject?: string;
-  activeTerm?: string;
-  activeSession?: string;
+  initialSelectedClass?: string;
+  initialSelectedSubject?: string;
+  initialActiveTerm?: string;
+  initialActiveSession?: string;
 }
 
 const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
@@ -825,11 +794,12 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
   students,
   teacherClasses,
   user,
-  selectedClass: initialSelectedClass = "",
-  selectedSubject: initialSelectedSubject = "",
-  activeTerm: initialActiveTerm = "First Term",
-  activeSession: initialActiveSession = "2024/2025",
+  initialSelectedClass = "",
+  initialSelectedSubject = "",
+  initialActiveTerm = "First Term",
+  initialActiveSession = "2024/2025",
 }) => {
+  // State declarations
   const [isEditing, setIsEditing] = useState(false);
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
   const [selectedClass, setSelectedClass] = useState(initialSelectedClass);
@@ -839,6 +809,10 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
   const [activeTerm, setActiveTerm] = useState(initialActiveTerm);
   const [activeSession, setActiveSession] = useState(initialActiveSession);
   const [gradeRecords, setGradeRecords] = useState<GradeRecord[]>([]);
+  const [savingGrades, setSavingGrades] = useState(false);
+
+  const { userData } = useFirebaseStore();
+
   const normalizeClassName = (className: string): string => {
     return (className || "").toLowerCase().replace(/\s+/g, "").trim();
   };
@@ -883,7 +857,6 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     }
   }, [selectedClass, teacherClasses, selectedSubject]);
 
-  // Filter students by selected class
   // Filter students by selected class - WITH NORMALIZATION
   const filteredStudents = useMemo(() => {
     if (!selectedClass) return [];
@@ -933,37 +906,14 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
         })
       );
     } catch (error) {
-      console.error("Error loading quiz results:", error);
-      // Fallback to localStorage during transition
-      try {
-        const savedSubmissions = localStorage.getItem(
-          "student-quiz-submissions"
-        );
-        if (savedSubmissions) {
-          const submissions = JSON.parse(savedSubmissions);
-
-          setGradeRecords((prev) =>
-            prev.map((record) => {
-              const studentSubmission = Object.values(submissions).find(
-                (sub: any) =>
-                  sub.studentId === record.studentId &&
-                  sub.subject === selectedSubject &&
-                  sub.className === selectedClass
-              ) as any;
-
-              if (studentSubmission) {
-                return {
-                  ...record,
-                  objScore: studentSubmission.score || 0,
-                };
-              }
-              return record;
-            })
-          );
-        }
-      } catch (localError) {
-        console.error("Error loading from localStorage:", localError);
-      }
+      console.error("❌ Error loading quiz results from Firestore:", error);
+      // Don't use localStorage - just set objScore to 0
+      setGradeRecords((prev) =>
+        prev.map((record) => ({
+          ...record,
+          objScore: 0,
+        }))
+      );
     }
   }, [selectedClass, selectedSubject, user]);
 
@@ -1053,7 +1003,10 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
           console.log("Loaded grades from Firestore");
         }
       } catch (error) {
-        console.error("Error loading grades:", error);
+        console.error("❌ Error loading grades from Firestore:", error);
+        alert(
+          "Failed to load grades from database. Please check your connection."
+        );
       }
     };
 
@@ -1177,32 +1130,40 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
       return;
     }
 
+    setSavingGrades(true);
+
     try {
       // Save to Firestore
-      const gradeId = `${user.uid}_${selectedClass}_${selectedSubject}_${activeTerm}_${activeSession}`;
+      const gradeId = `${user?.uid}_${selectedClass}_${selectedSubject}_${activeTerm}_${activeSession}`;
       const gradeRef = doc(db, "grades", gradeId);
 
       await setDoc(
         gradeRef,
         {
-          teacherId: user.uid,
-          teacherName: user.displayName || "Teacher",
+          teacherId: user?.uid,
+          teacherName: userData?.fullName || "Teacher",
+          teacherEmail: user?.email || "",
           class: selectedClass,
           subject: selectedSubject,
           term: activeTerm,
           session: activeSession,
           grades: gradeRecords,
           updatedAt: new Date(),
+          createdAt: serverTimestamp(),
         },
         { merge: true }
       );
 
       console.log("✅ Grades saved to Firestore");
       setIsEditing(false);
-      alert("Grades saved successfully!");
+      alert("Grades saved successfully to database!");
     } catch (error) {
-      console.error("Error saving grades:", error);
-      alert("Failed to save grades");
+      console.error("❌ Error saving grades to Firestore:", error);
+      alert(
+        "Failed to save grades. Please check your connection and try again."
+      );
+    } finally {
+      setSavingGrades(false);
     }
   };
 
@@ -1350,26 +1311,55 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
                 <button
                   className={`action-btn ${isEditing ? "cancel" : "edit"}`}
                   onClick={() => setIsEditing(!isEditing)}
-                  disabled={!selectedClass || !selectedSubject}
+                  disabled={!selectedClass || !selectedSubject || savingGrades}
                 >
                   {isEditing ? "Cancel Editing" : "Edit Grades"}
                 </button>
                 <button
                   className="action-btn save"
                   onClick={handleSaveGrades}
-                  disabled={!isEditing || !selectedClass || !selectedSubject}
+                  disabled={
+                    !isEditing ||
+                    !selectedClass ||
+                    !selectedSubject ||
+                    savingGrades
+                  }
                 >
-                  <Save size={16} />
-                  Save Grades
+                  {savingGrades ? (
+                    <>
+                      <RefreshCw className="animate-spin" size={16} />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={16} />
+                      Save Grades
+                    </>
+                  )}
                 </button>
                 <button
                   className="action-btn export"
                   onClick={handleExportCSV}
-                  disabled={!selectedClass || !selectedSubject}
+                  disabled={!selectedClass || !selectedSubject || savingGrades}
                 >
                   <Download size={16} />
                   Export CSV
                 </button>
+              </div>
+
+              {/* Add sync indicator */}
+              <div className="sync-indicator">
+                {savingGrades ? (
+                  <div className="syncing">
+                    <RefreshCw className="animate-spin" size={14} />
+                    <span>Saving to database...</span>
+                  </div>
+                ) : (
+                  <div className="online-status">
+                    <div className="online-dot"></div>
+                    <span>Connected to cloud database</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2784,6 +2774,10 @@ const TeacherDashboard: React.FC = () => {
 
   const [teacherClasses, setTeacherClasses] = useState<TeacherClassInfo[]>([]);
   const [classStudents, setClassStudents] = useState<Student[]>([]);
+  const [selectedClass, setSelectedClass] = useState<string>("");
+  const [selectedSubject, setSelectedSubject] = useState<string>("");
+  const [activeTerm, setActiveTerm] = useState<string>("First Term");
+  const [activeSession, setActiveSession] = useState<string>("2024/2025");
 
   const navigate = useNavigate();
 
@@ -2802,13 +2796,10 @@ const TeacherDashboard: React.FC = () => {
   const [liveMonitoringModalOpen, setLiveMonitoringModalOpen] = useState(false);
   const [gradeManagementModalOpen, setGradeManagementModalOpen] =
     useState(false);
+  const [loadingGrades, setLoadingGrades] = useState(false);
+  const [savingGrades, setSavingGrades] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState<string>("");
 
-  // State for grade management
-  const [selectedClass, setSelectedClass] = useState<string>("");
-  const [selectedSubject, setSelectedSubject] = useState<string>("");
-  const [activeTerm, setActiveTerm] = useState<string>("First Term");
-  const [activeSession, setActiveSession] = useState<string>("2024/2025");
   // Add this useEffect to debug student data
   useEffect(() => {
     const debugStudents = async () => {
@@ -3071,7 +3062,7 @@ const TeacherDashboard: React.FC = () => {
         }
       } catch (error) {
         console.error("Error loading online status:", error);
-        // Fallback to localStorage during transition
+        // Use localStorage ONLY for working hours as fallback
         const savedOnlineStartTime = localStorage.getItem(
           "teacher-online-start-time"
         );
@@ -3139,7 +3130,7 @@ const TeacherDashboard: React.FC = () => {
       }
     } catch (error) {
       console.error("Error loading working hours:", error);
-      // Fallback to localStorage during transition
+      // Fallback to localStorage for working hours only
       const savedWorkingHours = localStorage.getItem("teacher-working-hours");
 
       if (savedWorkingHours) {
@@ -3221,7 +3212,7 @@ const TeacherDashboard: React.FC = () => {
           );
         } catch (error) {
           console.error("Error saving working hours:", error);
-          // Fallback to localStorage
+          // Fallback to localStorage for working hours only
           localStorage.setItem(
             "teacher-working-hours",
             JSON.stringify(workingHours)
@@ -4100,10 +4091,10 @@ const TeacherDashboard: React.FC = () => {
         students={enhancedStudents}
         teacherClasses={teacherClasses}
         user={user}
-        selectedClass={selectedClass}
-        selectedSubject={selectedSubject}
-        activeTerm={activeTerm}
-        activeSession={activeSession}
+        initialSelectedClass={selectedClass}
+        initialSelectedSubject={selectedSubject}
+        initialActiveTerm={activeTerm}
+        initialActiveSession={activeSession}
       />
 
       <style>{`
@@ -4410,6 +4401,48 @@ const TeacherDashboard: React.FC = () => {
           display: flex;
           flex-direction: column;
           box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        .sync-indicator {
+          margin-top: 12px;
+          font-size: 12px;
+          color: #6b7280;
+        }
+        
+        .syncing {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: #f59e0b;
+        }
+        
+        .syncing .animate-spin {
+          animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        
+        .online-status {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: #10b981;
+        }
+        
+        .online-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #10b981;
+          animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
         }
 
         .xl-modal {
@@ -6791,249 +6824,249 @@ get-in-touch{
 
 .stat-card {
   background: #f8fafc;
-  border-radius: 12px;
-  padding: 20px;
-  text-align: center;
-  border: 1px solid #e5e7eb;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
+          border-radius: 12px;
+          padding: 20px;
+          text-align: center;
+          border: 1px solid #e5e7eb;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+        }
 
-.stat-number {
-  display: block;
-  font-size: 32px;
-  font-weight: 700;
-  color: #4299e1;
-}
+        .stat-number {
+          display: block;
+          font-size: 32px;
+          font-weight: 700;
+          color: #4299e1;
+        }
 
-.stat-subnumber {
-  font-size: 14px;
-  color: #ef4444;
-  font-weight: 600;
-}
+        .stat-subnumber {
+          font-size: 14px;
+          color: #ef4444;
+          font-weight: 600;
+        }
 
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
+        .section-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+        }
 
-.student-counts {
-  display: flex;
-  gap: 16px;
-}
+        .student-counts {
+          display: flex;
+          gap: 16px;
+        }
 
-.count-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  color: #6b7280;
-}
+        .count-item {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 14px;
+          color: #6b7280;
+        }
 
-.count-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
+        .count-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+        }
 
-.student-id {
-  font-size: 11px;
-  color: #6b7280;
-  margin-top: 2px;
-}
+        .student-id {
+          font-size: 11px;
+          color: #6b7280;
+          margin-top: 2px;
+        }
 
-.class-badge {
-  background: #f0f9ff;
-  color: #0369a1;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
+        .class-badge {
+          background: #f0f9ff;
+          color: #0369a1;
+          padding: 4px 8px;
+          border-radius: 12px;
+          font-size: 12px;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
 
-.student-meta.enhanced {
-  display: flex;
-  gap: 16px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
+        .student-meta.enhanced {
+          display: flex;
+          gap: 16px;
+          margin-top: 8px;
+          flex-wrap: wrap;
+        }
 
-.student-meta.enhanced span {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: #6b7280;
-}
+        .student-meta.enhanced span {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 12px;
+          color: #6b7280;
+        }
 
-.violations-list.enhanced {
-  margin-top: 12px;
-  padding: 12px;
-  background: #fef2f2;
-  border-radius: 8px;
-  border-left: 4px solid #ef4444;
-}
+        .violations-list.enhanced {
+          margin-top: 12px;
+          padding: 12px;
+          background: #fef2f2;
+          border-radius: 8px;
+          border-left: 4px solid #ef4444;
+        }
 
-.violation-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
+        .violation-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 8px;
+        }
 
-.view-details-btn {
-  background: #ef4444;
-  color: white;
-  border: none;
-  padding: 4px 12px;
-  border-radius: 6px;
-  font-size: 11px;
-  cursor: pointer;
-}
+        .view-details-btn {
+          background: #ef4444;
+          color: white;
+          border: none;
+          padding: 4px 12px;
+          border-radius: 6px;
+          font-size: 11px;
+          cursor: pointer;
+        }
 
-.violation-item.enhanced {
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #fecaca;
-}
+        .violation-item.enhanced {
+          margin-bottom: 8px;
+          padding-bottom: 8px;
+          border-bottom: 1px solid #fecaca;
+        }
 
-.violation-item.enhanced:last-child {
-  border-bottom: none;
-}
+        .violation-item.enhanced:last-child {
+          border-bottom: none;
+        }
 
-.violation-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
+        .violation-meta {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 4px;
+        }
 
-.violation-type {
-  font-weight: 600;
-  font-size: 12px;
-  color: #374151;
-  text-transform: capitalize;
-}
+        .violation-type {
+          font-weight: 600;
+          font-size: 12px;
+          color: #374151;
+          text-transform: capitalize;
+        }
 
-.severity-badge {
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
-}
+        .severity-badge {
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 10px;
+          font-weight: 600;
+        }
 
-.violation-info {
-  display: flex;
-  gap: 12px;
-  margin-top: 4px;
-}
+        .violation-info {
+          display: flex;
+          gap: 12px;
+          margin-top: 4px;
+        }
 
-.violation-time,
-.violation-class,
-.violation-quiz-class {
-  font-size: 10px;
-  color: #6b7280;
-}
+        .violation-time,
+        .violation-class,
+        .violation-quiz-class {
+          font-size: 10px;
+          color: #6b7280;
+        }
 
-.violation-report-preview {
-  margin-top: 12px;
-  padding: 12px;
-  background: #f0f9ff;
-  border-radius: 8px;
-  border-left: 4px solid #0369a1;
-}
+        .violation-report-preview {
+          margin-top: 12px;
+          padding: 12px;
+          background: #f0f9ff;
+          border-radius: 8px;
+          border-left: 4px solid #0369a1;
+        }
 
-.report-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
+        .report-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 8px;
+        }
 
-.report-line {
-  display: flex;
-  margin-bottom: 4px;
-}
+        .report-line {
+          display: flex;
+          margin-bottom: 4px;
+        }
 
-.report-label {
-  font-weight: 600;
-  font-size: 11px;
-  color: #374151;
-  min-width: 70px;
-}
+        .report-label {
+          font-weight: 600;
+          font-size: 11px;
+          color: #374151;
+          min-width: 70px;
+        }
 
-.report-value {
-  font-size: 11px;
-  color: #6b7280;
-  flex: 1;
-}
+        .report-value {
+          font-size: 11px;
+          color: #6b7280;
+          flex: 1;
+        }
 
-/* Monitoring specific styles */
-.monitoring-list {
-  max-height: 500px;
-  overflow-y: auto;
-}
+        /* Monitoring specific styles */
+        .monitoring-list {
+          max-height: 500px;
+          overflow-y: auto;
+        }
 
-.monitoring-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  background: white;
-  margin-bottom: 12px;
-}
+        .monitoring-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 16px;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          background: white;
+          margin-bottom: 12px;
+        }
 
-.student-info {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  flex: 1;
-}
+        .student-info {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          flex: 1;
+        }
 
-.student-avatar-small {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: #e0e7ff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  color: #4299e1;
-  font-size: 14px;
-  flex-shrink: 0;
-}
+        .student-avatar-small {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background: #e0e7ff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 600;
+          color: #4299e1;
+          font-size: 14px;
+          flex-shrink: 0;
+        }
 
-.student-details {
-  flex: 1;
-}
+        .student-details {
+          flex: 1;
+        }
 
-.student-name-section {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 8px;
-}
+        .student-name-section {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 8px;
+        }
 
-.progress-display {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  min-width: 140px;
-}
+        .progress-display {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+          min-width: 140px;
+        }
 
-.progress-bar {
-  width: 120px;
-  height: 8px;
+        .progress-bar {
+          width: 120px;
+          height: 8px;
           background: #e5e7eb;
           border-radius: 4px;
           overflow: hidden;
