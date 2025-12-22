@@ -57,8 +57,12 @@ import {
   onSnapshot,
   doc,
   setDoc,
+  getDoc,
+  serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
+
 // Types
 interface Student {
   id: string;
@@ -111,6 +115,7 @@ interface WorkingHoursData {
 }
 
 interface EnhancedMonitoringData {
+  id: string;
   studentId: string;
   studentName: string;
   studentClass: string;
@@ -126,6 +131,7 @@ interface EnhancedMonitoringData {
   lastActivity: Date;
   score?: number;
   maxScore?: number;
+  studentEmail?: string;
 }
 
 interface Violation {
@@ -170,6 +176,7 @@ interface StudentLiveMonitoringModalProps {
   studentId: string;
   studentName: string;
   studentClass?: string;
+  user: any;
 }
 
 const StudentLiveMonitoringModal: React.FC<StudentLiveMonitoringModalProps> = ({
@@ -179,6 +186,7 @@ const StudentLiveMonitoringModal: React.FC<StudentLiveMonitoringModalProps> = ({
   studentId,
   studentName,
   studentClass,
+  user,
 }) => {
   const [monitoringData, setMonitoringData] = useState<
     EnhancedMonitoringData[]
@@ -188,33 +196,147 @@ const StudentLiveMonitoringModal: React.FC<StudentLiveMonitoringModalProps> = ({
 
   // Load student's own monitoring data
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !studentId || !user?.email) return;
 
-    const loadMonitoringData = () => {
+    const loadMonitoringData = async () => {
       try {
-        // Load from teacher's monitoring data
-        const savedData = localStorage.getItem("teacher-quiz-monitoring");
-        let allMonitoringData: EnhancedMonitoringData[] = [];
+        // Load from Firestore - Method 1: Direct studentId match
+        const monitoringRef = collection(db, "monitoring");
+        const q = query(monitoringRef, where("studentId", "==", studentId));
+        const querySnapshot = await getDocs(q);
 
-        if (savedData) {
-          allMonitoringData = JSON.parse(savedData).map((item: any) => ({
-            ...item,
-            lastActivity: new Date(item.lastActivity),
-            violations: (item.violations || []).map((v: any) => ({
+        const firestoreData: EnhancedMonitoringData[] = [];
+
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          firestoreData.push({
+            id: doc.id,
+            studentId: data.studentId || "",
+            studentName: data.studentName || "",
+            studentClass: data.studentClass || "",
+            quizId: data.quizId || "",
+            quizName: data.quizName || "",
+            quizClass: data.quizClass || "",
+            status: data.status || "in-progress",
+            progress: data.progress || 0,
+            timeSpent: data.timeSpent || "00:00",
+            currentQuestion: data.currentQuestion || 0,
+            totalQuestions: data.totalQuestions || 0,
+            violations: (data.violations || []).map((v: any) => ({
               ...v,
-              timestamp: new Date(v.timestamp),
+              timestamp: v.timestamp?.toDate() || new Date(),
             })),
-          }));
-        }
+            lastActivity: data.lastActivity?.toDate() || new Date(),
+            score: data.score,
+            maxScore: data.maxScore,
+            studentEmail: data.studentEmail || "", // ADD THIS
+          } as EnhancedMonitoringData);
 
-        // Filter data for this specific student
-        const studentData = allMonitoringData.filter(
-          (data) => data.studentId === studentId
+          emailData.push({
+            id: doc.id,
+            studentId: data.studentId || studentId, // Use prop studentId if missing
+            studentName: data.studentName || studentName,
+            studentClass: data.studentClass || studentClass || "",
+            quizId: data.quizId || "",
+            quizName: data.quizName || "",
+            quizClass: data.quizClass || studentClass || "",
+            status: data.status || "in-progress",
+            progress: data.progress || 0,
+            timeSpent: data.timeSpent || "00:00",
+            currentQuestion: data.currentQuestion || 0,
+            totalQuestions: data.totalQuestions || 0,
+            violations: (data.violations || []).map((v: any) => ({
+              ...v,
+              timestamp: v.timestamp?.toDate() || new Date(),
+            })),
+            lastActivity: data.lastActivity?.toDate() || new Date(),
+            score: data.score,
+            maxScore: data.maxScore,
+            studentEmail: data.studentEmail || "",
+          } as EnhancedMonitoringData);
+        });
+
+        // Method 2: Also check by student email (teacher's perspective)
+        const emailQ = query(
+          monitoringRef,
+          where("studentEmail", "==", user.email)
+        );
+        const emailSnapshot = await getDocs(emailQ);
+
+        const emailData: EnhancedMonitoringData[] = [];
+
+        // Replace lines 270-278 with:
+        emailSnapshot.forEach((doc) => {
+          const data = doc.data();
+          // Create a properly typed object
+          const emailItem: EnhancedMonitoringData = {
+            id: doc.id,
+            studentId: data.studentId || "",
+            studentName: data.studentName || "",
+            studentClass: data.studentClass || "",
+            quizId: data.quizId || "",
+            quizName: data.quizName || "",
+            quizClass: data.quizClass || "",
+            status: data.status || "in-progress",
+            progress: data.progress || 0,
+            timeSpent: data.timeSpent || "00:00",
+            currentQuestion: data.currentQuestion || 0,
+            totalQuestions: data.totalQuestions || 0,
+            violations: (data.violations || []).map((v: any) => ({
+              ...v,
+              timestamp: v.timestamp?.toDate() || new Date(),
+            })),
+            lastActivity: data.lastActivity?.toDate() || new Date(),
+            score: data.score,
+            maxScore: data.maxScore,
+            studentEmail: data.studentEmail || "",
+          };
+          emailData.push(emailItem);
+        });
+
+        // Combine both data sources
+        const allData = [...firestoreData, ...emailData];
+
+        // Remove duplicates (same quizId for same student)
+        const uniqueData = Array.from(
+          new Map(
+            allData.map((item) => [`${item.quizId}_${item.studentId}`, item])
+          ).values()
+        );
+
+        // Filter for current student (double-check)
+        const studentData = uniqueData.filter(
+          (data) =>
+            data.studentId === studentId || data.studentEmail === user.email
         );
 
         setMonitoringData(studentData);
       } catch (error) {
-        console.error("Error loading monitoring data:", error);
+        console.error("Error loading monitoring data from Firestore:", error);
+
+        // Fallback to localStorage
+        try {
+          const savedData = localStorage.getItem("teacher-quiz-monitoring");
+          if (savedData) {
+            const allMonitoringData = JSON.parse(savedData).map(
+              (item: any) => ({
+                ...item,
+                lastActivity: new Date(item.lastActivity),
+                violations: (item.violations || []).map((v: any) => ({
+                  ...v,
+                  timestamp: new Date(v.timestamp),
+                })),
+              })
+            );
+
+            const studentData = allMonitoringData.filter(
+              (data: any) => data.studentId === studentId
+            );
+            setMonitoringData(studentData);
+          }
+        } catch (localError) {
+          console.error("Error loading from localStorage:", localError);
+        }
       }
     };
 
@@ -224,8 +346,7 @@ const StudentLiveMonitoringModal: React.FC<StudentLiveMonitoringModalProps> = ({
       const interval = setInterval(loadMonitoringData, 3000);
       return () => clearInterval(interval);
     }
-  }, [isOpen, autoRefresh, studentId]);
-
+  }, [isOpen, autoRefresh, studentId, user]);
   // Helper functions
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -1220,6 +1341,7 @@ const StrictQuizInterface: React.FC<{
   studentName: string;
   studentId: string;
   currentUserClass?: string;
+  user: any;
 }> = ({
   quiz,
   onClose,
@@ -1228,6 +1350,7 @@ const StrictQuizInterface: React.FC<{
   studentName,
   studentId,
   currentUserClass,
+  user,
 }) => {
   // State declarations
   const [timeLeft, setTimeLeft] = useState(quiz.duration * 60);
@@ -1272,15 +1395,18 @@ const StrictQuizInterface: React.FC<{
   };
 
   // Save to teacher monitoring function - ADD THIS INSIDE StrictQuizInterface
-  const saveToTeacherMonitoring = useCallback(() => {
-    if (!quizStarted || !studentName || !studentId || emergencyExitActive)
+  const saveToTeacherMonitoring = useCallback(async () => {
+    if (
+      !quizStarted ||
+      !studentName ||
+      !studentId ||
+      emergencyExitActive ||
+      !user?.uid
+    )
       return;
 
     try {
-      const teacherMonitoringKey = "teacher-quiz-monitoring";
-      const existingData = localStorage.getItem(teacherMonitoringKey);
-      const monitoringDataArray = existingData ? JSON.parse(existingData) : [];
-
+      // Calculate time elapsed based on quiz duration and remaining time
       const timeElapsed = quiz.duration * 60 - timeLeft;
       const totalTime = quiz.duration * 60;
       const progress = Math.round((timeElapsed / totalTime) * 100);
@@ -1291,7 +1417,7 @@ const StrictQuizInterface: React.FC<{
         studentClass: currentUserClass || "Unknown Class",
         quizId: quiz.id,
         quizName: quiz.name,
-        quizClass: quiz.targetClass || "Unknown Class",
+        quizClass: quiz.targetClass || currentUserClass || "Unknown Class",
         status: isAutoSubmitting ? "submitted" : "in-progress",
         progress: Math.min(100, progress),
         timeSpent: formatTime(timeElapsed),
@@ -1299,43 +1425,44 @@ const StrictQuizInterface: React.FC<{
         totalQuestions: quiz.questions.length,
         violations: violations.map((v) => ({
           ...v,
-          timestamp: v.timestamp.toISOString(),
+          timestamp: v.timestamp,
           studentId,
           studentName,
           studentClass: currentUserClass || "Unknown Class",
           quizId: quiz.id,
           quizName: quiz.name,
-          quizClass: quiz.targetClass || "Unknown Class",
+          quizClass: quiz.targetClass || currentUserClass || "Unknown Class",
           browser: navigator.userAgent.split(" ")[0],
           deviceType: /mobile/i.test(navigator.userAgent)
             ? "Mobile"
             : "Desktop",
         })),
-        lastActivity: new Date().toISOString(),
+        lastActivity: new Date(),
         score: isAutoSubmitting ? calculateResults() : undefined,
         maxScore: quiz.maxScore,
         isOnline: true,
-        lastUpdated: new Date().toISOString(),
+        studentEmail: user?.email,
+        lastUpdated: new Date(),
       };
 
-      const filteredMonitoring = monitoringDataArray.filter(
-        (item: any) =>
-          !(item.studentId === studentId && item.quizId === quiz.id)
+      // Save to Firestore
+      const monitoringId = `${quiz.id}_${studentId}`;
+      const monitoringRef = doc(db, "monitoring", monitoringId);
+
+      await setDoc(
+        monitoringRef,
+        {
+          ...monitoringData,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
       );
 
-      filteredMonitoring.push(monitoringData);
-      localStorage.setItem(
-        teacherMonitoringKey,
-        JSON.stringify(filteredMonitoring)
-      );
-
-      const studentMonitoringKey = `student-monitoring-${studentId}-${quiz.id}`;
-      localStorage.setItem(
-        studentMonitoringKey,
-        JSON.stringify(monitoringData)
-      );
+      console.log("✅ Student monitoring data saved to Firestore");
     } catch (error) {
-      console.error("Error saving to teacher monitoring:", error);
+      console.error("Error saving monitoring data to Firestore:", error);
+      // Fallback to localStorage...
     }
   }, [
     quizStarted,
@@ -1350,6 +1477,7 @@ const StrictQuizInterface: React.FC<{
     emergencyExitActive,
     calculateResults,
     formatTime,
+    user,
   ]);
 
   // Report violation function - skip if emergency exit is active
@@ -1566,7 +1694,7 @@ const StrictQuizInterface: React.FC<{
     );
   };
 
-  const handleAutoSubmit = () => {
+  const handleAutoSubmit = async () => {
     // Prevent multiple auto-submissions
     if (isAutoSubmitting) return;
 
@@ -1585,8 +1713,11 @@ const StrictQuizInterface: React.FC<{
     // Show the score modal (which has auto-redirect)
     setShowScoreModal(true);
 
-    // Submit the quiz results
-    onSubmit(quiz.id, finalScore, quiz.maxScore);
+    try {
+      await onSubmit(quiz.id, finalScore, quiz.maxScore);
+    } catch (error) {
+      console.error("Error submitting quiz:", error);
+    }
   };
 
   const handleSubmitClick = () => {
@@ -2857,6 +2988,79 @@ const StudentDashboard: React.FC = () => {
     email: "student@example.com",
   });
 
+  const loadQuizSubmissions = useCallback(async () => {
+    if (!user?.uid) return;
+
+    try {
+      const submissionsRef = collection(db, "quizSubmissions");
+      const q = query(submissionsRef, where("studentId", "==", user.uid));
+      const querySnapshot = await getDocs(q);
+
+      const submissionsMap: { [key: string]: QuizSubmission } = {};
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        const quizId = data.quizId;
+
+        submissionsMap[quizId] = {
+          quizId,
+          status: data.status || "submitted",
+          score: data.score || 0,
+          maxScore: data.maxScore || 0,
+          submittedAt: data.submittedAt || new Date().toISOString(),
+          attempts: data.attempts || 1,
+        };
+      });
+
+      setQuizSubmissions(submissionsMap);
+      console.log("Loaded quiz submissions from Firestore");
+    } catch (error) {
+      console.error("Error loading quiz submissions:", error);
+
+      // Fallback to localStorage
+      try {
+        const keys = Object.keys(localStorage);
+        const studentSubmissions = keys.filter((key) =>
+          key.startsWith(`quiz-submission-${user.uid}-`)
+        );
+
+        const submissionsMap: { [key: string]: QuizSubmission } = {};
+
+        studentSubmissions.forEach((key) => {
+          try {
+            const data = JSON.parse(localStorage.getItem(key) || "{}");
+            // Extract quizId from the key format: quiz-submission-USERID-QUIZID
+            const parts = key.split("-");
+            const quizId = parts.length > 3 ? parts[3] : "";
+
+            if (quizId && data.quizId) {
+              submissionsMap[quizId] = {
+                quizId: data.quizId,
+                status: data.status || "submitted",
+                score: data.score || 0,
+                maxScore: data.maxScore || 0,
+                submittedAt: data.submittedAt || new Date().toISOString(),
+                attempts: data.attempts || 1,
+              };
+            }
+          } catch (parseError) {
+            console.error("Error parsing localStorage item:", parseError);
+          }
+        });
+
+        setQuizSubmissions(submissionsMap);
+      } catch (localError) {
+        console.error("Error loading from localStorage:", localError);
+      }
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user?.uid && authInitialized) {
+      loadQuizSubmissions();
+    }
+  }, [user, authInitialized, loadQuizSubmissions]);
+
   useEffect(() => {
     if (userData?.fullName || user?.displayName) {
       const fullName = userData?.fullName || user?.displayName || "Student";
@@ -2952,47 +3156,87 @@ const StudentDashboard: React.FC = () => {
   }, [quizSubmissions]);
 
   // Initialize working hours function
-  const initializeWorkingHours = useCallback(() => {
+  const initializeWorkingHours = useCallback(async () => {
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const today = new Date();
     const todayIndex = (today.getDay() + 6) % 7;
+    const todayStr = today.toDateString();
 
-    const savedWorkingHours = localStorage.getItem("student-working-hours");
+    if (!user?.uid) return;
 
-    if (savedWorkingHours) {
-      const parsedHours = JSON.parse(savedWorkingHours);
-      const lastUpdated = localStorage.getItem(
-        "student-working-hours-last-updated"
+    try {
+      // Load from Firestore
+      const workingHoursRef = doc(
+        db,
+        "studentWorkingHours",
+        `${user.uid}_${todayStr}`
       );
-      const todayStr = today.toDateString();
+      const docSnap = await getDoc(workingHoursRef);
 
-      if (lastUpdated !== todayStr) {
-        const updatedHours = parsedHours.map(
-          (day: WorkingHoursData, index: number) =>
-            index === todayIndex
-              ? { ...day, minutes: 1, online: true, startTime: new Date() }
-              : day
-        );
-        setWorkingHours(updatedHours);
-        localStorage.setItem("student-working-hours-last-updated", todayStr);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setWorkingHours(data.hours || []);
       } else {
-        setWorkingHours(parsedHours);
-      }
-    } else {
-      const hoursData = days.map((day, index) => ({
-        day,
-        minutes: index === todayIndex ? 1 : 0,
-        online: index === todayIndex,
-        startTime: index === todayIndex ? new Date() : undefined,
-      }));
-      setWorkingHours(hoursData);
-      localStorage.setItem(
-        "student-working-hours-last-updated",
-        today.toDateString()
-      );
-    }
-  }, []);
+        // Create initial working hours
+        const hoursData = days.map((day, index) => ({
+          day,
+          minutes: index === todayIndex ? 1 : 0,
+          online: index === todayIndex,
+          startTime: index === todayIndex ? new Date() : undefined,
+        }));
+        setWorkingHours(hoursData);
 
+        await setDoc(
+          workingHoursRef,
+          {
+            studentId: user.uid,
+            date: todayStr,
+            hours: hoursData,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
+    } catch (error) {
+      console.error("Error loading working hours:", error);
+      // Fallback to localStorage
+      const savedWorkingHours = localStorage.getItem("student-working-hours");
+      if (savedWorkingHours) {
+        setWorkingHours(JSON.parse(savedWorkingHours));
+      }
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const saveWorkingHours = async () => {
+      if (workingHours.length > 0 && user?.uid) {
+        const todayStr = new Date().toDateString();
+        try {
+          const workingHoursRef = doc(
+            db,
+            "studentWorkingHours",
+            `${user.uid}_${todayStr}`
+          );
+          await setDoc(
+            workingHoursRef,
+            {
+              studentId: user.uid,
+              date: todayStr,
+              hours: workingHours,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+        } catch (error) {
+          console.error("Error saving working hours:", error);
+        }
+      }
+    };
+
+    const interval = setInterval(saveWorkingHours, 30000); // Save every 30 seconds
+    return () => clearInterval(interval);
+  }, [workingHours, user]);
   useEffect(() => {
     const loadStudentSubjects = async () => {
       if (user?.email) {
@@ -3128,11 +3372,33 @@ const StudentDashboard: React.FC = () => {
     setQuizInProgress(true);
   };
 
-  const handleQuizSubmitted = (
+  const handleQuizSubmitted = async (
     quizId: string,
     score: number,
     maxScore: number
   ) => {
+    if (!user?.uid || !userInfo.fullName) {
+      console.error("Cannot save quiz submission: User not authenticated");
+      return;
+    }
+
+    const submission = {
+      quizId,
+      status: "submitted" as const,
+      score,
+      maxScore,
+      submittedAt: new Date().toISOString(),
+      attempts: 1,
+      studentId: user.uid,
+      studentName: userInfo.fullName,
+      studentEmail: user.email || "",
+      className: currentUserClass || "Unknown Class",
+      subject: selectedQuiz?.subject || "Unknown",
+      teacherId: null, // Will be populated when teacher views it
+      teacherName: selectedQuiz?.teacherName || "Unknown Teacher",
+    };
+
+    // Update local state first
     setQuizSubmissions((prev) => ({
       ...prev,
       [quizId]: {
@@ -3144,6 +3410,52 @@ const StudentDashboard: React.FC = () => {
         attempts: (prev[quizId]?.attempts || 0) + 1,
       },
     }));
+
+    // Save to Firestore
+    try {
+      const submissionId = `${user.uid}_${quizId}`;
+      const submissionRef = doc(db, "quizSubmissions", submissionId);
+
+      await setDoc(
+        submissionRef,
+        {
+          ...submission,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      console.log("✅ Quiz submission saved to Firestore:", submissionId);
+
+      // Also update the monitoring record if it exists
+      try {
+        const monitoringId = `${quizId}_${user.uid}`;
+        const monitoringRef = doc(db, "monitoring", monitoringId);
+        await updateDoc(monitoringRef, {
+          status: "submitted",
+          score: score,
+          lastActivity: new Date(),
+          updatedAt: serverTimestamp(),
+        });
+        console.log("✅ Monitoring record updated");
+      } catch (monitoringError) {
+        console.log("No monitoring record to update (this is normal)");
+      }
+    } catch (error) {
+      console.error("Error saving quiz submission to Firestore:", error);
+
+      // Fallback to localStorage
+      try {
+        localStorage.setItem(
+          `quiz-submission-${user.uid}-${quizId}`,
+          JSON.stringify(submission)
+        );
+        console.log("Saved to localStorage as fallback");
+      } catch (localError) {
+        console.error("Failed to save to localStorage:", localError);
+      }
+    }
   };
 
   const handleQuizClose = () => {
@@ -3806,6 +4118,7 @@ const StudentDashboard: React.FC = () => {
           strictModeActive={quizInProgress}
           studentName={userInfo.fullName}
           studentId={user?.uid || "unknown"}
+          user={user}
         />
       )}
 
@@ -3823,6 +4136,7 @@ const StudentDashboard: React.FC = () => {
           studentId={user?.uid || "unknown"}
           studentName={userInfo.fullName}
           studentClass={currentUserClass}
+          user={user}
         />
       )}
 
