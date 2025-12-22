@@ -839,6 +839,9 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
   const [activeTerm, setActiveTerm] = useState(initialActiveTerm);
   const [activeSession, setActiveSession] = useState(initialActiveSession);
   const [gradeRecords, setGradeRecords] = useState<GradeRecord[]>([]);
+  const normalizeClassName = (className: string): string => {
+    return (className || "").toLowerCase().replace(/\s+/g, "").trim();
+  };
 
   // Initialize grade system
   const gradeSystem: GradeSystem = {
@@ -881,9 +884,18 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
   }, [selectedClass, teacherClasses, selectedSubject]);
 
   // Filter students by selected class
+  // Filter students by selected class - WITH NORMALIZATION
   const filteredStudents = useMemo(() => {
     if (!selectedClass) return [];
-    return students.filter((s) => s.className === selectedClass);
+
+    // Normalize the selected class name
+    const normalizedSelectedClass = normalizeClassName(selectedClass);
+
+    return students.filter((s) => {
+      const studentClassName = s.className || "";
+      const normalizedStudentClass = normalizeClassName(studentClassName);
+      return normalizedStudentClass === normalizedSelectedClass;
+    });
   }, [students, selectedClass]);
 
   // Load quiz results from student submissions for selected subject
