@@ -45,6 +45,7 @@ import {
   ChevronDown,
   Book,
   Building,
+  Info,
 } from "lucide-react";
 import {
   useFirebaseStore,
@@ -61,6 +62,7 @@ import {
   updateDoc,
   getDoc,
   setDoc,
+  onSnapshot,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
 
@@ -307,128 +309,222 @@ interface LiveMonitoringModalProps {
   onClose: () => void;
   activeQuizzes: Quiz[];
   students: Student[];
+  teacherClasses: TeacherClassInfo[];
+  user: any;
 }
-// Enhanced Live Monitoring Modal Component with comprehensive violation reporting
 
 const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
   isOpen,
   onClose,
   activeQuizzes,
   students,
+  teacherClasses,
+  user,
 }) => {
   const [monitoringData, setMonitoringData] = useState<
     EnhancedMonitoringData[]
   >([]);
   const [selectedQuiz, setSelectedQuiz] = useState<string>("all");
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
-  const [showViolationDetails, setShowViolationDetails] = useState(false);
+
+  // Inside LiveMonitoringModal component, after the state declarations
+  const createSampleMonitoringData = (): EnhancedMonitoringData[] => {
+    if (students.length === 0 || activeQuizzes.length === 0) return [];
+
+    return students.slice(0, 5).map((student, index) => {
+      const quiz = activeQuizzes[index % activeQuizzes.length];
+
+      return {
+        studentId: student.id || `student-${index}`,
+        studentName: student.fullName || `Student ${index + 1}`,
+        studentClass: student.className || "Class A",
+        quizId: quiz.id,
+        quizName: quiz.name,
+        quizClass: quiz.targetClass || "Class A",
+        status:
+          index === 0 || index === 2
+            ? "violation"
+            : index % 3 === 0
+            ? "in-progress"
+            : "submitted",
+        progress: Math.floor(Math.random() * 30) + 70,
+        timeSpent: `${Math.floor(Math.random() * 30) + 1}:${Math.floor(
+          Math.random() * 60
+        )
+          .toString()
+          .padStart(2, "0")}`,
+        currentQuestion: Math.floor(Math.random() * quiz.questions.length) + 1,
+        totalQuestions: quiz.questions.length,
+        violations:
+          index === 0 || index === 2
+            ? [
+                {
+                  id: `violation-${Date.now()}-${index}`,
+                  timestamp: new Date(Date.now() - Math.random() * 300000),
+                  type: index === 0 ? "tab-switch" : "right-click",
+                  description:
+                    index === 0
+                      ? "Switched to another browser tab"
+                      : "Attempted to right-click and copy",
+                  severity: index === 0 ? "medium" : "high",
+                  studentId: student.id || `student-${index}`,
+                  studentName: student.fullName || `Student ${index + 1}`,
+                  studentClass: student.className || "Class A",
+                  quizId: quiz.id,
+                  quizName: quiz.name,
+                  quizClass: quiz.targetClass || "Class A",
+                  browser: "Chrome/120.0",
+                  deviceType: "Desktop",
+                },
+              ]
+            : [],
+        lastActivity: new Date(Date.now() - Math.random() * 600000),
+        score:
+          index % 3 === 0
+            ? undefined
+            : Math.floor(Math.random() * quiz.maxScore),
+        maxScore: quiz.maxScore,
+      };
+    });
+  };
+
+  const saveMonitoringDataToFirestore = async (
+    data: EnhancedMonitoringData
+  ) => {
+    if (!user?.uid) return;
+
+    try {
+      const monitoringId = `${data.quizId}_${data.studentId}`;
+      const monitoringRef = doc(db, "monitoring", monitoringId);
+
+      await setDoc(
+        monitoringRef,
+        {
+          ...data,
+          teacherId: user.uid,
+          lastActivity: new Date(),
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
+
+      console.log("✅ Monitoring data saved to Firestore");
+    } catch (error) {
+      console.error("Error saving monitoring data:", error);
+      // Fallback to localStorage
+      const existingData = localStorage.getItem("teacher-monitoring-data");
+      const monitoringArray = existingData ? JSON.parse(existingData) : [];
+
+      const updatedArray = monitoringArray.filter(
+        (item: any) =>
+          !(item.quizId === data.quizId && item.studentId === data.studentId)
+      );
+
+      updatedArray.push({
+        ...data,
+        lastActivity: data.lastActivity.toISOString(),
+        violations: data.violations.map((v) => ({
+          ...v,
+          timestamp: v.timestamp.toISOString(),
+        })),
+      });
+
+      localStorage.setItem(
+        "teacher-monitoring-data",
+        JSON.stringify(updatedArray)
+      );
+    }
+  };
 
   // Simulate real-time monitoring data
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !user?.uid) return;
 
-    const loadMonitoringData = () => {
+    const loadData = async () => {
       try {
-        // Try to load from localStorage first
-        const savedData = localStorage.getItem("teacher-quiz-monitoring");
-        let monitoringData: EnhancedMonitoringData[] = [];
+        // Load from Firestore
+        const monitoringRef = collection(db, "monitoring");
+        let q;
 
-        if (savedData) {
-          // If data exists, parse it
-          monitoringData = JSON.parse(savedData).map((item: any) => ({
-            ...item,
-            lastActivity: new Date(item.lastActivity),
-            violations: (item.violations || []).map((v: any) => ({
-              ...v,
-              timestamp: new Date(v.timestamp),
-            })),
-          }));
+        if (selectedQuiz === "all") {
+          // Get all monitoring for teacher's classes
+          const teacherClassNames = teacherClasses.map(
+            (c: TeacherClassInfo) => c.className
+          );
+          q = query(monitoringRef, where("quizClass", "in", teacherClassNames));
         } else {
-          // Create sample data for demonstration
-          monitoringData = createSampleMonitoringData();
+          q = query(monitoringRef, where("quizId", "==", selectedQuiz));
         }
+
+        const querySnapshot = await getDocs(q);
+        const monitoringData: EnhancedMonitoringData[] = querySnapshot.docs.map(
+          (doc) => {
+            const data = doc.data();
+            // Add default values for missing properties
+            return {
+              id: doc.id,
+              studentId: data.studentId || "",
+              studentName: data.studentName || "",
+              studentClass: data.studentClass || "",
+              quizId: data.quizId || "",
+              quizName: data.quizName || "",
+              quizClass: data.quizClass || "",
+              status: data.status || "in-progress",
+              progress: data.progress || 0,
+              timeSpent: data.timeSpent || "00:00",
+              currentQuestion: data.currentQuestion || 0,
+              totalQuestions: data.totalQuestions || 0,
+              violations: (data.violations || []).map((v: any) => ({
+                ...v,
+                timestamp: v.timestamp?.toDate() || new Date(),
+              })),
+              lastActivity: data.lastActivity?.toDate() || new Date(),
+              score: data.score,
+              maxScore: data.maxScore,
+            };
+          }
+        );
 
         setMonitoringData(monitoringData);
       } catch (error) {
         console.error("Error loading monitoring data:", error);
-        // Create sample data on error
-        setMonitoringData(createSampleMonitoringData());
+
+        // Try to load from localStorage as fallback
+        try {
+          const savedMonitoring = localStorage.getItem(
+            "teacher-monitoring-data"
+          );
+          if (savedMonitoring) {
+            const parsedData = JSON.parse(savedMonitoring);
+            const enhancedData = parsedData.map((data: any) => ({
+              ...data,
+              lastActivity: new Date(data.lastActivity),
+              violations: (data.violations || []).map((v: any) => ({
+                ...v,
+                timestamp: new Date(v.timestamp),
+              })),
+            }));
+            setMonitoringData(enhancedData);
+          } else {
+            // Ultimate fallback to sample data
+            const sampleData = createSampleMonitoringData();
+            setMonitoringData(sampleData);
+          }
+        } catch (localError) {
+          console.error("Error loading from localStorage:", localError);
+          const sampleData = createSampleMonitoringData();
+          setMonitoringData(sampleData);
+        }
       }
     };
 
-    // Function to create sample data
-    const createSampleMonitoringData = (): EnhancedMonitoringData[] => {
-      if (students.length === 0 || activeQuizzes.length === 0) return [];
-
-      const sampleData: EnhancedMonitoringData[] = students
-        .slice(0, 5)
-        .map((student, index) => {
-          const quiz = activeQuizzes[index % activeQuizzes.length];
-          const hasViolations = index === 0 || index === 2; // First and third students have violations
-
-          return {
-            studentId: student.id || `student-${index}`,
-            studentName: student.fullName || `Student ${index + 1}`,
-            studentClass: student.className || "Class A",
-            quizId: quiz.id,
-            quizName: quiz.name,
-            quizClass: quiz.targetClass,
-            status: hasViolations
-              ? "violation"
-              : index % 3 === 0
-              ? "in-progress"
-              : "submitted",
-            progress: Math.floor(Math.random() * 30) + 70,
-            timeSpent: `${Math.floor(Math.random() * 30) + 1}:${Math.floor(
-              Math.random() * 60
-            )
-              .toString()
-              .padStart(2, "0")}`,
-            currentQuestion:
-              Math.floor(Math.random() * quiz.questions.length) + 1,
-            totalQuestions: quiz.questions.length,
-            violations: hasViolations
-              ? [
-                  {
-                    id: `violation-${Date.now()}-${index}`,
-                    timestamp: new Date(Date.now() - Math.random() * 300000),
-                    type: index === 0 ? "tab-switch" : "right-click",
-                    description:
-                      index === 0
-                        ? "Switched to another browser tab"
-                        : "Attempted to right-click and copy",
-                    severity: index === 0 ? "medium" : "high",
-                    studentId: student.id || `student-${index}`,
-                    studentName: student.fullName || `Student ${index + 1}`,
-                    studentClass: student.className || "Class A",
-                    quizId: quiz.id,
-                    quizName: quiz.name,
-                    quizClass: quiz.targetClass,
-                    browser: "Chrome/120.0",
-                    deviceType: "Desktop",
-                  },
-                ]
-              : [],
-            lastActivity: new Date(Date.now() - Math.random() * 600000),
-            score:
-              index % 3 === 0
-                ? undefined
-                : Math.floor(Math.random() * quiz.maxScore),
-            maxScore: quiz.maxScore,
-          };
-        });
-
-      return sampleData;
-    };
-
-    loadMonitoringData();
+    loadData();
 
     if (autoRefresh) {
-      const interval = setInterval(loadMonitoringData, 3000);
+      const interval = setInterval(loadData, 3000);
       return () => clearInterval(interval);
     }
-  }, [isOpen, autoRefresh, students, activeQuizzes]);
+  }, [isOpen, autoRefresh, selectedQuiz, teacherClasses, user]);
 
   // Helper functions
   const getStatusIcon = (status: string) => {
@@ -716,6 +812,11 @@ interface GradeManagementModalProps {
   onClose: () => void;
   students: Student[];
   teacherClasses: TeacherClassInfo[];
+  user: any;
+  selectedClass?: string;
+  selectedSubject?: string;
+  activeTerm?: string;
+  activeSession?: string;
 }
 
 const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
@@ -723,14 +824,21 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
   onClose,
   students,
   teacherClasses,
+  user,
+  selectedClass: initialSelectedClass = "",
+  selectedSubject: initialSelectedSubject = "",
+  activeTerm: initialActiveTerm = "First Term",
+  activeSession: initialActiveSession = "2024/2025",
 }) => {
-  const [gradeRecords, setGradeRecords] = useState<GradeRecord[]>([]);
-  const [activeTerm, setActiveTerm] = useState("First Term");
-  const [activeSession, setActiveSession] = useState("2024/2025");
   const [isEditing, setIsEditing] = useState(false);
-  const [selectedClass, setSelectedClass] = useState<string>("");
-  const [selectedSubject, setSelectedSubject] = useState<string>("");
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
+  const [selectedClass, setSelectedClass] = useState(initialSelectedClass);
+  const [selectedSubject, setSelectedSubject] = useState(
+    initialSelectedSubject
+  );
+  const [activeTerm, setActiveTerm] = useState(initialActiveTerm);
+  const [activeSession, setActiveSession] = useState(initialActiveSession);
+  const [gradeRecords, setGradeRecords] = useState<GradeRecord[]>([]);
 
   // Initialize grade system
   const gradeSystem: GradeSystem = {
@@ -770,7 +878,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
         }
       }
     }
-  }, [selectedClass, teacherClasses]);
+  }, [selectedClass, teacherClasses, selectedSubject]);
 
   // Filter students by selected class
   const filteredStudents = useMemo(() => {
@@ -779,37 +887,73 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
   }, [students, selectedClass]);
 
   // Load quiz results from student submissions for selected subject
-  const loadQuizResults = useCallback(() => {
-    if (!selectedClass || !selectedSubject) return;
+  const loadQuizResults = useCallback(async () => {
+    if (!selectedClass || !selectedSubject || !user?.uid) return;
 
     try {
-      const savedSubmissions = localStorage.getItem("student-quiz-submissions");
-      if (savedSubmissions) {
-        const submissions = JSON.parse(savedSubmissions);
+      // Load from Firestore
+      const submissionsRef = collection(db, "studentQuizSubmissions");
+      const q = query(
+        submissionsRef,
+        where("teacherId", "==", user.uid),
+        where("className", "==", selectedClass),
+        where("subject", "==", selectedSubject)
+      );
 
-        setGradeRecords((prev) =>
-          prev.map((record) => {
-            const studentSubmission = Object.values(submissions).find(
-              (sub: any) =>
-                sub.studentId === record.studentId &&
-                sub.subject === selectedSubject &&
-                sub.className === selectedClass
-            ) as any;
+      const querySnapshot = await getDocs(q);
+      const submissionsMap = new Map();
 
-            if (studentSubmission) {
-              return {
-                ...record,
-                objScore: studentSubmission.score || 0,
-              };
-            }
-            return record;
-          })
-        );
-      }
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        submissionsMap.set(data.studentId, data);
+      });
+
+      setGradeRecords((prev) =>
+        prev.map((record) => {
+          const studentSubmission = submissionsMap.get(record.studentId);
+          if (studentSubmission) {
+            return {
+              ...record,
+              objScore: studentSubmission.score || 0,
+            };
+          }
+          return record;
+        })
+      );
     } catch (error) {
       console.error("Error loading quiz results:", error);
+      // Fallback to localStorage during transition
+      try {
+        const savedSubmissions = localStorage.getItem(
+          "student-quiz-submissions"
+        );
+        if (savedSubmissions) {
+          const submissions = JSON.parse(savedSubmissions);
+
+          setGradeRecords((prev) =>
+            prev.map((record) => {
+              const studentSubmission = Object.values(submissions).find(
+                (sub: any) =>
+                  sub.studentId === record.studentId &&
+                  sub.subject === selectedSubject &&
+                  sub.className === selectedClass
+              ) as any;
+
+              if (studentSubmission) {
+                return {
+                  ...record,
+                  objScore: studentSubmission.score || 0,
+                };
+              }
+              return record;
+            })
+          );
+        }
+      } catch (localError) {
+        console.error("Error loading from localStorage:", localError);
+      }
     }
-  }, [selectedClass, selectedSubject]);
+  }, [selectedClass, selectedSubject, user]);
 
   // Calculate grade based on percentage
   const calculateGrade = (percentage: number): string => {
@@ -881,10 +1025,36 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     loadQuizResults,
   ]);
 
+  // Load grades from Firestore
+  useEffect(() => {
+    const loadGrades = async () => {
+      if (!user?.uid || !selectedClass || !selectedSubject) return;
+
+      try {
+        const gradeId = `${user.uid}_${selectedClass}_${selectedSubject}_${activeTerm}_${activeSession}`;
+        const gradeRef = doc(db, "grades", gradeId);
+        const docSnap = await getDoc(gradeRef);
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setGradeRecords(data.grades || []);
+          console.log("Loaded grades from Firestore");
+        }
+      } catch (error) {
+        console.error("Error loading grades:", error);
+      }
+    };
+
+    if (isOpen) {
+      loadGrades();
+    }
+  }, [user, selectedClass, selectedSubject, activeTerm, activeSession, isOpen]);
+
   // Auto-refresh quiz results
   useEffect(() => {
     if (isOpen && selectedClass && selectedSubject) {
-      const interval = setInterval(loadQuizResults, 5000);
+      loadQuizResults(); // Load immediately
+      const interval = setInterval(loadQuizResults, 10000); // Change to 10 seconds
       return () => clearInterval(interval);
     }
   }, [isOpen, selectedClass, selectedSubject, loadQuizResults]);
@@ -995,27 +1165,33 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
       return;
     }
 
-    const key = `grades-${selectedClass}-${selectedSubject}-${activeTerm}-${activeSession}`;
-    localStorage.setItem(key, JSON.stringify(gradeRecords));
-
-    // Also save to Firestore for admin access
     try {
-      const gradesRef = collection(db, "grades");
-      await updateDoc(doc(gradesRef, key), {
-        class: selectedClass,
-        subject: selectedSubject,
-        term: activeTerm,
-        session: activeSession,
-        grades: gradeRecords,
-        teacher: localStorage.getItem("teacherName"),
-        updatedAt: new Date(),
-      });
-    } catch (error) {
-      console.error("Error saving grades to Firestore:", error);
-    }
+      // Save to Firestore
+      const gradeId = `${user.uid}_${selectedClass}_${selectedSubject}_${activeTerm}_${activeSession}`;
+      const gradeRef = doc(db, "grades", gradeId);
 
-    setIsEditing(false);
-    alert("Grades saved successfully!");
+      await setDoc(
+        gradeRef,
+        {
+          teacherId: user.uid,
+          teacherName: user.displayName || "Teacher",
+          class: selectedClass,
+          subject: selectedSubject,
+          term: activeTerm,
+          session: activeSession,
+          grades: gradeRecords,
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
+
+      console.log("✅ Grades saved to Firestore");
+      setIsEditing(false);
+      alert("Grades saved successfully!");
+    } catch (error) {
+      console.error("Error saving grades:", error);
+      alert("Failed to save grades");
+    }
   };
 
   const handleExportCSV = () => {
@@ -1495,19 +1671,13 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
   );
 };
 
-// Add the missing Info icon component
-const Info: React.FC<{ size: number }> = ({ size }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
-  </svg>
-);
-
 // Upload CA Modal Component
 interface UploadCAModalProps {
   isOpen: boolean;
   onClose: () => void;
   students: Student[];
   teacherClasses: TeacherClassInfo[];
+  user?: any;
 }
 
 const UploadCAModal: React.FC<UploadCAModalProps> = ({
@@ -1515,6 +1685,7 @@ const UploadCAModal: React.FC<UploadCAModalProps> = ({
   onClose,
   students,
   teacherClasses,
+  user,
 }) => {
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [selectedSubject, setSelectedSubject] = useState<string>("");
@@ -1572,22 +1743,28 @@ const UploadCAModal: React.FC<UploadCAModalProps> = ({
         date: new Date().toISOString(),
       };
 
-      // Save to localStorage
-      const existingData = JSON.parse(
-        localStorage.getItem("teacher-ca-scores") || "[]"
-      );
-      existingData.push(caData);
-      localStorage.setItem("teacher-ca-scores", JSON.stringify(existingData));
+      // Save to Firestore
+      try {
+        const caId = `${caData.class}_${caData.subject}_${
+          caData.category
+        }_${Date.now()}`;
+        const caRef = doc(db, "continuousAssessment", caId);
 
-      // Save to Firestore for admin access
-      const caRef = collection(db, "continuousAssessment");
-      await updateDoc(
-        doc(caRef, `${selectedClass}-${selectedSubject}-${selectedCategory}`),
-        caData
-      );
+        await setDoc(caRef, {
+          ...caData,
+          id: caId,
+          teacherId: user?.uid,
+          teacherName: user?.displayName || "Teacher",
+          createdAt: new Date(),
+        });
 
-      alert("CA scores saved successfully!");
-      onClose();
+        console.log("✅ CA scores saved to Firestore");
+        alert("CA scores saved successfully!");
+        onClose();
+      } catch (error) {
+        console.error("❌ Error saving CA scores:", error);
+        alert("Failed to save CA scores");
+      }
     } catch (error) {
       console.error("Error saving CA scores:", error);
       alert("Failed to save CA scores");
@@ -1899,7 +2076,7 @@ const QuizNameModal: React.FC<QuizNameModalProps> = ({
         setSubject(allSubjects[0]);
       }
     }
-  }, [isOpen, allSubjects]);
+  }, [isOpen, allSubjects, subject]);
 
   const handleSave = () => {
     if (!quizName.trim()) {
@@ -2430,6 +2607,7 @@ interface ClassListPanelProps {
   isOpen: boolean;
   toggle: () => void;
   loading: boolean;
+  teacherClasses: TeacherClassInfo[];
 }
 
 const ClassListPanel: React.FC<ClassListPanelProps> = ({
@@ -2437,6 +2615,7 @@ const ClassListPanel: React.FC<ClassListPanelProps> = ({
   isOpen,
   toggle,
   loading,
+  teacherClasses,
 }) => {
   return (
     <div className="card group-chats" id="group-chats">
@@ -2451,20 +2630,47 @@ const ClassListPanel: React.FC<ClassListPanelProps> = ({
         <div className="empty-state">Loading students…</div>
       ) : !isOpen ? (
         <div className="class-list-collapsed" onClick={toggle}>
-          {students.slice(0, 12).map((s) => (
-            <div key={s.id} className="initial-circle">
-              {s.fullName
-                .split(" ")
-                .map((n) => n[0])
-                .join("")
-                .toUpperCase()
-                .slice(0, 2)}
+          {students.length === 0 ? (
+            <div
+              className="empty-state-small"
+              style={{
+                textAlign: "center",
+                color: "#9ca3af",
+                padding: "20px",
+                fontSize: "14px",
+              }}
+            >
+              <div>No students found</div>
+              <div style={{ fontSize: "12px", marginTop: "5px" }}>
+                Check if classes match
+              </div>
             </div>
-          ))}
-          {students.length > 12 && (
-            <div className="initial-circle">+{students.length - 12}</div>
+          ) : (
+            <>
+              {students.slice(0, 12).map((s) => (
+                <div
+                  key={s.id}
+                  className="initial-circle"
+                  title={`${s.fullName} (${s.className})`}
+                >
+                  {s.fullName
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .toUpperCase()
+                    .slice(0, 2)}
+                </div>
+              ))}
+              {students.length > 12 && (
+                <div
+                  className="initial-circle"
+                  title={`+${students.length - 12} more`}
+                >
+                  +{students.length - 12}
+                </div>
+              )}
+            </>
           )}
-          {students.length === 0 && <div className="initial-circle">-</div>}
         </div>
       ) : (
         <div className="class-list-modal" onClick={toggle}>
@@ -2481,13 +2687,22 @@ const ClassListPanel: React.FC<ClassListPanelProps> = ({
 
             {students.length === 0 ? (
               <div className="empty-state">
-                No students have signed up for your classes yet.
+                <div style={{ marginBottom: "10px" }}>
+                  <Users size={48} color="#9ca3af" />
+                </div>
+                <p style={{ marginBottom: "5px" }}>
+                  No students have signed up for your classes yet.
+                </p>
+                <p style={{ fontSize: "14px", color: "#6b7280" }}>
+                  Teacher Classes:{" "}
+                  {teacherClasses?.map((c) => c.className).join(", ") || "None"}
+                </p>
               </div>
             ) : (
               <div className="students-list">
                 {students.map((s) => (
                   <div key={s.id} className="student-row">
-                    <div className="student-avatar">
+                    <div className="student-avatar" title={s.fullName}>
                       {s.fullName
                         .split(" ")
                         .map((n) => n[0])
@@ -2498,10 +2713,33 @@ const ClassListPanel: React.FC<ClassListPanelProps> = ({
                     <div style={{ flex: 1 }}>
                       <div>
                         <strong>{s.fullName}</strong>
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            background: "#e0e7ff",
+                            color: "#4f46e5",
+                            padding: "2px 8px",
+                            borderRadius: "10px",
+                            marginLeft: "8px",
+                          }}
+                        >
+                          {s.className}
+                        </span>
                       </div>
                       <div style={{ fontSize: "13px", color: "#6b7280" }}>
-                        {s.email} • {s.className}
+                        {s.email}
                       </div>
+                      {s.subjects && s.subjects.length > 0 && (
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#10b981",
+                            marginTop: "4px",
+                          }}
+                        >
+                          Subjects: {s.subjects.join(", ")}
+                        </div>
+                      )}
                     </div>
                     <div style={{ fontWeight: 600, color: "#4f46e5" }}>
                       {s.progress}%
@@ -2554,38 +2792,139 @@ const TeacherDashboard: React.FC = () => {
     useState(false);
   const [selectedFeature, setSelectedFeature] = useState<string>("");
 
-  // Fetch teacher's classes and subjects from Firestore
+  // State for grade management
+  const [selectedClass, setSelectedClass] = useState<string>("");
+  const [selectedSubject, setSelectedSubject] = useState<string>("");
+  const [activeTerm, setActiveTerm] = useState<string>("First Term");
+  const [activeSession, setActiveSession] = useState<string>("2024/2025");
+  // Add this useEffect to debug student data
+  useEffect(() => {
+    const debugStudents = async () => {
+      console.log("🔍 DEBUG: Checking Firestore for students...");
+
+      try {
+        // Get ALL students from Firestore
+        const studentsRef = collection(db, "students");
+        const snapshot = await getDocs(studentsRef);
+
+        console.log(`📊 Total students in Firestore: ${snapshot.size}`);
+
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          console.log(`👤 Student: ${data.first || ""} ${data.last || ""}`);
+          console.log(`   Email: ${data.email || "No email"}`);
+          console.log(`   Class: "${data.className || "No class"}"`);
+          console.log(`   Class ID: "${data.classId || "No classId"}"`);
+          console.log(`   Role: ${data.role || "No role"}`);
+          console.log(`   ID: ${doc.id}`);
+          console.log("---");
+        });
+
+        // Also check specific query that store uses
+        console.log("🔎 Testing the actual query used by store:");
+        const q = query(studentsRef, where("className", "in", ["JSS 2"]));
+        const filtered = await getDocs(q);
+        console.log(
+          `   Query WHERE className IN ["JSS 2"] returned: ${filtered.size} students`
+        );
+      } catch (error) {
+        console.error("❌ Error debugging students:", error);
+      }
+    };
+
+    if (user?.uid) {
+      debugStudents();
+    }
+  }, [user]);
+
   useEffect(() => {
     const fetchTeacherData = async () => {
       if (user?.email) {
         try {
+          console.log("🔍 Fetching teacher data for:", user.email);
+
           const teachersRef = collection(db, "teachers");
           const q = query(teachersRef, where("email", "==", user.email));
           const querySnapshot = await getDocs(q);
 
           if (!querySnapshot.empty) {
             const teacherData = querySnapshot.docs[0].data();
+            console.log("📋 Raw teacher data from Firestore:", teacherData);
+
             const classesData: TeacherClassInfo[] = [];
 
+            // Try multiple possible data structures
             if (teacherData.classes && Array.isArray(teacherData.classes)) {
+              console.log("📚 Classes array found:", teacherData.classes);
+
               for (const className of teacherData.classes) {
-                const subjects = teacherData.subjects?.[className] || [];
+                console.log("📖 Processing class:", className);
+
+                // Try different possible ways subjects might be stored
+                let subjects = [];
+
+                if (teacherData.subjects && teacherData.subjects[className]) {
+                  subjects = teacherData.subjects[className];
+                } else if (
+                  teacherData.subjects &&
+                  Array.isArray(teacherData.subjects)
+                ) {
+                  subjects = teacherData.subjects;
+                } else if (
+                  teacherData[className] &&
+                  teacherData[className].subjects
+                ) {
+                  subjects = teacherData[className].subjects;
+                }
+
+                console.log(`   Subjects for ${className}:`, subjects);
+
                 classesData.push({
                   className: String(className),
                   subjects: Array.isArray(subjects) ? subjects.map(String) : [],
                 });
               }
+            } else {
+              console.log("⚠️ No classes array found in teacher data");
+              // Try to extract classes from other fields
+              if (
+                teacherData.subjects &&
+                typeof teacherData.subjects === "object"
+              ) {
+                Object.keys(teacherData.subjects).forEach((className) => {
+                  classesData.push({
+                    className: String(className),
+                    subjects: Array.isArray(teacherData.subjects[className])
+                      ? teacherData.subjects[className].map(String)
+                      : [],
+                  });
+                });
+              }
             }
 
+            console.log("✅ Final teacherClasses:", classesData);
             setTeacherClasses(classesData);
-            localStorage.setItem("teacherClasses", JSON.stringify(classesData));
-            localStorage.setItem(
-              "teacherName",
-              teacherData.fullName || user.displayName || "Teacher"
-            );
+
+            // Auto-select first class for grade management
+            if (classesData.length > 0 && !selectedClass) {
+              setSelectedClass(classesData[0].className);
+            }
+          } else {
+            console.warn("⚠️ No teacher document found for email:", user.email);
+            // Create demo data for testing
+            setTeacherClasses([
+              { className: "Class A", subjects: ["Mathematics", "Physics"] },
+              { className: "Class B", subjects: ["Biology", "Chemistry"] },
+            ]);
+            setSelectedClass("Class A");
           }
         } catch (error) {
-          console.error("Error fetching teacher data:", error);
+          console.error("❌ Error fetching teacher data:", error);
+          // Fallback to demo data
+          setTeacherClasses([
+            { className: "Demo Class", subjects: ["Mathematics", "Science"] },
+          ]);
+          setSelectedClass("Demo Class");
         }
       }
     };
@@ -2595,49 +2934,75 @@ const TeacherDashboard: React.FC = () => {
     }
   }, [user]);
 
-  // Load teacher classes from localStorage if available
+  // Replace the ENTIRE student filtering useEffect
   useEffect(() => {
-    const savedClasses = localStorage.getItem("teacherClasses");
-    if (savedClasses) {
-      try {
-        setTeacherClasses(JSON.parse(savedClasses));
-      } catch (error) {
-        console.error("Error loading teacher classes:", error);
-      }
-    }
-  }, []);
+    console.log("🎯 ===== STUDENT FILTERING ===== ");
+    console.log("📊 Teacher classes count:", teacherClasses.length);
+    console.log("👥 Students from store count:", students.length);
 
-  // Filter students based on teacher's classes and enhance with fullName and subjects
-  useEffect(() => {
-    if (students.length > 0 && teacherClasses.length > 0) {
-      const teacherClassNames = teacherClasses.map((c) => c.className);
-      const filtered = students.filter((student) =>
-        teacherClassNames.includes(student.className || "")
-      );
-
-      // Enhance students with fullName and subjects
-      const enhanced = filtered.map(
-        (student): Student => ({
-          ...student,
-          fullName: `${student.first} ${student.last}`,
-          subjects: [], // Default empty array for subjects
-        })
-      );
-
-      setClassStudents(enhanced);
-    } else if (students.length > 0) {
-      // Enhance all students if no teacher classes filter
-      const enhanced = students.map(
-        (student): Student => ({
-          ...student,
-          fullName: `${student.first} ${student.last}`,
-          subjects: [],
-        })
-      );
-      setClassStudents(enhanced);
-    } else {
+    if (teacherClasses.length === 0) {
+      console.log("⏳ Waiting for teacher classes...");
       setClassStudents([]);
+      return;
     }
+
+    if (students.length === 0) {
+      console.log("⏳ Waiting for students from store...");
+      setClassStudents([]);
+      return;
+    }
+
+    // Get teacher class names
+    const teacherClassNames = teacherClasses.map((c) => c.className);
+    console.log("🏫 Teacher teaches:", teacherClassNames);
+    console.log("📋 Sample student from store:", students[0]);
+
+    // Normalize class names for comparison
+    const normalizeClass = (className: string): string => {
+      return (className || "").toLowerCase().replace(/\s+/g, "").trim();
+    };
+
+    const normalizedTeacherClasses = teacherClassNames.map(normalizeClass);
+    console.log("🔤 Normalized teacher classes:", normalizedTeacherClasses);
+
+    // Filter students
+    const filtered = students.filter((student) => {
+      const studentClass = student.className || "";
+      const studentNormalized = normalizeClass(studentClass);
+
+      const matches = normalizedTeacherClasses.includes(studentNormalized);
+
+      if (matches) {
+        console.log(
+          `✅ ${student.first} ${student.last}: "${studentClass}" matches teacher class`
+        );
+      } else {
+        console.log(
+          `❌ ${student.first} ${student.last}: "${studentClass}" doesn't match`
+        );
+      }
+
+      return matches;
+    });
+
+    console.log(`📈 Found ${filtered.length} matching students`);
+
+    // Enhance students with fullName and subjects
+    const enhanced = filtered.map((student) => {
+      // Find which teacher class this student belongs to
+      const studentNormalized = normalizeClass(student.className || "");
+      const classInfo = teacherClasses.find(
+        (cls) => normalizeClass(cls.className) === studentNormalized
+      );
+
+      return {
+        ...student,
+        fullName: `${student.first} ${student.last}`,
+        subjects: classInfo?.subjects || [],
+      } as Student;
+    });
+
+    setClassStudents(enhanced);
   }, [students, teacherClasses]);
 
   // Enhanced students with class information
@@ -2652,114 +3017,147 @@ const TeacherDashboard: React.FC = () => {
   // Initialize online status and working hours
   useEffect(() => {
     const today = new Date().toDateString();
-    const lastOnlineDate = localStorage.getItem("teacher-last-online-date");
-    const savedOnlineStartTime = localStorage.getItem(
-      "teacher-online-start-time"
-    );
 
-    if (lastOnlineDate === today && savedOnlineStartTime) {
-      setOnlineStartTime(new Date(savedOnlineStartTime));
-    } else {
-      const startTime = new Date();
-      setOnlineStartTime(startTime);
-      localStorage.setItem("teacher-last-online-date", today);
-      localStorage.setItem(
-        "teacher-online-start-time",
-        startTime.toISOString()
-      );
-    }
+    // First, load online start time from Firestore
+    const loadOnlineStatus = async () => {
+      if (!user?.uid) return;
 
-    initializeWorkingHours();
-  }, []);
+      try {
+        const onlineRef = doc(db, "onlineStatus", user.uid);
+        const docSnap = await getDoc(onlineRef);
 
-  //handle scroll
-  useEffect(() => {
-    let lastScroll = window.scrollY;
-
-    const handleScroll = () => {
-      const card = document.querySelector(".profile-card");
-      if (!card) return;
-
-      if (window.scrollY > lastScroll) {
-        // scrolling down → hide
-        card.classList.add("hide-card");
-      } else {
-        // scrolling up → show
-        card.classList.remove("hide-card");
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.lastOnlineDate === today && data.startTime) {
+            setOnlineStartTime(data.startTime.toDate());
+          } else {
+            const startTime = new Date();
+            setOnlineStartTime(startTime);
+            // Save to Firestore
+            await setDoc(
+              onlineRef,
+              {
+                lastOnlineDate: today,
+                startTime: startTime,
+                teacherId: user.uid,
+                updatedAt: new Date(),
+              },
+              { merge: true }
+            );
+          }
+        } else {
+          // First time - create document
+          const startTime = new Date();
+          setOnlineStartTime(startTime);
+          await setDoc(onlineRef, {
+            lastOnlineDate: today,
+            startTime: startTime,
+            teacherId: user.uid,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+      } catch (error) {
+        console.error("Error loading online status:", error);
+        // Fallback to localStorage during transition
+        const savedOnlineStartTime = localStorage.getItem(
+          "teacher-online-start-time"
+        );
+        if (savedOnlineStartTime) {
+          setOnlineStartTime(new Date(savedOnlineStartTime));
+        } else {
+          const startTime = new Date();
+          setOnlineStartTime(startTime);
+          localStorage.setItem(
+            "teacher-online-start-time",
+            startTime.toISOString()
+          );
+        }
+        localStorage.setItem("teacher-last-online-date", today);
       }
-
-      lastScroll = window.scrollY;
     };
 
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  // Load quizzes from localStorage
-  useEffect(() => {
-    const savedQuizzes = localStorage.getItem("teacher-quizzes");
-    if (savedQuizzes) {
-      try {
-        const parsedQuizzes = JSON.parse(savedQuizzes);
-        setQuizzes(parsedQuizzes);
-      } catch (error) {
-        console.error("Error loading quizzes from localStorage:", error);
-        setQuizzes([]);
-      }
-    }
-  }, []);
-
-  // Save quizzes to localStorage
-  useEffect(() => {
-    localStorage.setItem("teacher-quizzes", JSON.stringify(quizzes));
-  }, [quizzes]);
-
-  // Save working hours to localStorage
-  useEffect(() => {
-    if (workingHours.length > 0) {
-      localStorage.setItem(
-        "teacher-working-hours",
-        JSON.stringify(workingHours)
-      );
-    }
-  }, [workingHours]);
+    loadOnlineStatus();
+    initializeWorkingHours();
+  }, [user]);
 
   // Initialize working hours function
-  const initializeWorkingHours = useCallback(() => {
+  const initializeWorkingHours = useCallback(async () => {
+    if (!user?.uid) return;
+
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const today = new Date();
     const todayIndex = (today.getDay() + 6) % 7;
+    const todayStr = today.toDateString();
 
-    const savedWorkingHours = localStorage.getItem("teacher-working-hours");
+    try {
+      // Load from Firestore
+      const workingHoursRef = doc(
+        db,
+        "teacherWorkingHours",
+        `${user.uid}_${todayStr}`
+      );
+      const docSnap = await getDoc(workingHoursRef);
 
-    if (savedWorkingHours) {
-      const parsedHours = JSON.parse(savedWorkingHours);
-      const lastUpdated = localStorage.getItem("working-hours-last-updated");
-      const todayStr = today.toDateString();
-
-      if (lastUpdated !== todayStr) {
-        const updatedHours = parsedHours.map(
-          (day: WorkingHoursData, index: number) =>
-            index === todayIndex
-              ? { ...day, minutes: 1, online: true, startTime: new Date() }
-              : day
-        );
-        setWorkingHours(updatedHours);
-        localStorage.setItem("working-hours-last-updated", todayStr);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setWorkingHours(data.hours || []);
       } else {
-        setWorkingHours(parsedHours);
+        // Create initial working hours
+        const hoursData = days.map((day, index) => ({
+          day,
+          minutes: index === todayIndex ? 1 : 0,
+          online: index === todayIndex,
+          startTime: index === todayIndex ? new Date() : undefined,
+        }));
+        setWorkingHours(hoursData);
+
+        // Save to Firestore
+        await setDoc(
+          workingHoursRef,
+          {
+            teacherId: user.uid,
+            date: todayStr,
+            hours: hoursData,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
       }
-    } else {
-      const hoursData = days.map((day, index) => ({
-        day,
-        minutes: index === todayIndex ? 1 : 0,
-        online: index === todayIndex,
-        startTime: index === todayIndex ? new Date() : undefined,
-      }));
-      setWorkingHours(hoursData);
-      localStorage.setItem("working-hours-last-updated", today.toDateString());
+    } catch (error) {
+      console.error("Error loading working hours:", error);
+      // Fallback to localStorage during transition
+      const savedWorkingHours = localStorage.getItem("teacher-working-hours");
+
+      if (savedWorkingHours) {
+        const parsedHours = JSON.parse(savedWorkingHours);
+        const lastUpdated = localStorage.getItem("working-hours-last-updated");
+
+        if (lastUpdated !== todayStr) {
+          const updatedHours = parsedHours.map(
+            (day: WorkingHoursData, index: number) =>
+              index === todayIndex
+                ? { ...day, minutes: 1, online: true, startTime: new Date() }
+                : day
+          );
+          setWorkingHours(updatedHours);
+          localStorage.setItem("working-hours-last-updated", todayStr);
+        } else {
+          setWorkingHours(parsedHours);
+        }
+      } else {
+        const hoursData = days.map((day, index) => ({
+          day,
+          minutes: index === todayIndex ? 1 : 0,
+          online: index === todayIndex,
+          startTime: index === todayIndex ? new Date() : undefined,
+        }));
+        setWorkingHours(hoursData);
+        localStorage.setItem("working-hours-last-updated", todayStr);
+      }
     }
-  }, []);
+  }, [user]);
 
   // Update working minutes
   useEffect(() => {
@@ -2787,6 +3185,87 @@ const TeacherDashboard: React.FC = () => {
     updateTodayMinutes();
     return () => clearInterval(interval);
   }, [onlineStartTime]);
+
+  // Save working hours to localStorage
+  useEffect(() => {
+    const saveWorkingHours = async () => {
+      if (workingHours.length > 0 && user?.uid) {
+        const todayStr = new Date().toDateString();
+        try {
+          const workingHoursRef = doc(
+            db,
+            "teacherWorkingHours",
+            `${user.uid}_${todayStr}`
+          );
+          await setDoc(
+            workingHoursRef,
+            {
+              teacherId: user.uid,
+              date: todayStr,
+              hours: workingHours,
+              updatedAt: new Date(),
+            },
+            { merge: true }
+          );
+        } catch (error) {
+          console.error("Error saving working hours:", error);
+          // Fallback to localStorage
+          localStorage.setItem(
+            "teacher-working-hours",
+            JSON.stringify(workingHours)
+          );
+        }
+      }
+    };
+
+    saveWorkingHours();
+  }, [workingHours, user]);
+
+  // Load quizzes from Firestore in real-time
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const quizzesRef = collection(db, "quizzes");
+    const q = query(quizzesRef, where("teacherId", "==", user.uid));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const quizzesData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+        })) as Quiz[];
+
+        // Update quiz statuses
+        const now = new Date();
+        const updatedQuizzes = quizzesData.map((quiz) => {
+          const scheduledDateTime = new Date(
+            `${quiz.scheduledDate}T${quiz.scheduledTime}`
+          );
+          const endTime = new Date(
+            scheduledDateTime.getTime() + quiz.totalDuration * 60000
+          );
+
+          let status: "upcoming" | "active" | "expired" = "upcoming";
+          if (now >= scheduledDateTime && now <= endTime) {
+            status = "active";
+          } else if (now > endTime) {
+            status = "expired";
+          }
+          return { ...quiz, status };
+        });
+
+        setQuizzes(updatedQuizzes);
+        console.log("Loaded quizzes from Firestore:", updatedQuizzes.length);
+      },
+      (error) => {
+        console.error("Error listening to quizzes:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user]);
 
   // Update quiz statuses in real-time
   useEffect(() => {
@@ -2860,6 +3339,30 @@ const TeacherDashboard: React.FC = () => {
       window.location.href = "/login"; // Fallback
     }
   };
+
+  //handle scroll
+  useEffect(() => {
+    let lastScroll = window.scrollY;
+
+    const handleScroll = () => {
+      const card = document.querySelector(".profile-card");
+      if (!card) return;
+
+      if (window.scrollY > lastScroll) {
+        // scrolling down → hide
+        card.classList.add("hide-card");
+      } else {
+        // scrolling up → show
+        card.classList.remove("hide-card");
+      }
+
+      lastScroll = window.scrollY;
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   // Quiz management functions
   const handleSaveQuestions = useCallback(
     (questions: Question[]) => {
@@ -2946,15 +3449,12 @@ const TeacherDashboard: React.FC = () => {
           correctAnswer: q.correctAnswer,
         })),
         maxScore: quiz.maxScore,
-        targetClass: quiz.targetClass, // Ensure this is included
+        targetClass: quiz.targetClass,
         teacherId: user?.uid,
-        teacherName: localStorage.getItem("teacherName") || user?.displayName,
+        teacherName: user?.displayName || "Teacher",
         createdAt: new Date(),
         updatedAt: new Date(),
-        status: quiz.status,
-        // Add these fields for easier querying
-        classId: quiz.targetClass, // Duplicate for compatibility
-        published: true, // Add published flag
+        published: true,
         active: quiz.status === "active",
       });
       console.log("Quiz saved to Firestore successfully:", quiz.id);
@@ -2962,6 +3462,7 @@ const TeacherDashboard: React.FC = () => {
       console.error("Error saving quiz to Firestore:", error);
     }
   };
+
   const handleEditQuiz = useCallback((quiz: Quiz) => {
     setEditingQuiz(quiz);
     setQuizModalOpen(true);
@@ -3347,6 +3848,7 @@ const TeacherDashboard: React.FC = () => {
               isOpen={classListOpen}
               toggle={() => setClassListOpen((v) => !v)}
               loading={loading}
+              teacherClasses={teacherClasses}
             />
 
             <div className="card calendar">
@@ -3568,6 +4070,7 @@ const TeacherDashboard: React.FC = () => {
         onClose={() => setUploadCAModalOpen(false)}
         students={enhancedStudents}
         teacherClasses={teacherClasses}
+        user={user}
       />
 
       <LiveMonitoringModal
@@ -3575,6 +4078,8 @@ const TeacherDashboard: React.FC = () => {
         onClose={() => setLiveMonitoringModalOpen(false)}
         activeQuizzes={activeQuizzes}
         students={enhancedStudents}
+        teacherClasses={teacherClasses}
+        user={user}
       />
 
       <GradeManagementModal
@@ -3582,6 +4087,11 @@ const TeacherDashboard: React.FC = () => {
         onClose={() => setGradeManagementModalOpen(false)}
         students={enhancedStudents}
         teacherClasses={teacherClasses}
+        user={user}
+        selectedClass={selectedClass}
+        selectedSubject={selectedSubject}
+        activeTerm={activeTerm}
+        activeSession={activeSession}
       />
 
       <style>{`
@@ -6512,78 +7022,78 @@ get-in-touch{
 .progress-bar {
   width: 120px;
   height: 8px;
-  background: #e5e7eb;
-  border-radius: 4px;
-  overflow: hidden;
-}
+          background: #e5e7eb;
+          border-radius: 4px;
+          overflow: hidden;
+        }
 
-.progress-fill {
-  height: 100%;
-  transition: width 0.3s ease;
-}
+        .progress-fill {
+          height: 100%;
+          transition: width 0.3s ease;
+        }
 
-.progress-text {
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-}
+        .progress-text {
+          font-size: 14px;
+          font-weight: 600;
+          color: #374151;
+        }
 
-.status-badge {
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
+        .status-badge {
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-size: 12px;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
 
-.more-violations {
-  font-size: 11px;
-  color: #ef4444;
-  font-weight: 600;
-  text-align: center;
-  padding-top: 8px;
-  border-top: 1px dashed #fca5a5;
-  margin-top: 8px;
-}
+        .more-violations {
+          font-size: 11px;
+          color: #ef4444;
+          font-weight: 600;
+          text-align: center;
+          padding-top: 8px;
+          border-top: 1px dashed #fca5a5;
+          margin-top: 8px;
+        }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .enhanced-stats {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .info-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .monitoring-item {
-    flex-direction: column;
-    gap: 16px;
-  }
-  
-  .progress-display {
-    width: 100%;
-  }
-}
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+          .enhanced-stats {
+            grid-template-columns: repeat(2, 1fr);
+          }
+          
+          .info-grid {
+            grid-template-columns: 1fr;
+          }
+          
+          .monitoring-item {
+            flex-direction: column;
+            gap: 16px;
+          }
+          
+          .progress-display {
+            width: 100%;
+          }
+        }
 
-@media (max-width: 480px) {
-  .enhanced-stats {
-    grid-template-columns: 1fr;
-  }
-  
-  .section-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  
-  .student-counts {
-    width: 100%;
-    justify-content: space-between;
-  }
-}
+        @media (max-width: 480px) {
+          .enhanced-stats {
+            grid-template-columns: 1fr;
+          }
+          
+          .section-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+          }
+          
+          .student-counts {
+            width: 100%;
+            justify-content: space-between;
+          }
+        }
 
       `}</style>
     </div>
