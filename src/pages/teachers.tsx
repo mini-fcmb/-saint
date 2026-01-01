@@ -64,6 +64,7 @@ import {
   setDoc,
   onSnapshot,
   serverTimestamp,
+  deleteDoc,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
 
@@ -101,6 +102,7 @@ interface Quiz {
   maxScore: number;
   targetClass: string;
   createdAt: Date;
+  updatedAt?: Date;
 }
 
 interface WorkingHoursData {
@@ -2094,6 +2096,23 @@ const QuizNameModal: React.FC<QuizNameModalProps> = ({
   const [showClassModal, setShowClassModal] = useState(false);
   const [selectedClass, setSelectedClass] = useState("");
 
+  // Add this useEffect after the state declarations
+  useEffect(() => {
+    if (isOpen) {
+      // Reset form when modal opens
+      setQuizName("");
+      setDuration(30);
+      setMaxScore(40);
+      setSelectedClass("");
+      setShowClassModal(false);
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setScheduledDate(tomorrow.toISOString().split("T")[0]);
+      setScheduledTime("09:00");
+    }
+  }, [isOpen]);
+
   const allSubjects = useMemo(() => {
     const subjects = new Set<string>();
     teacherClasses.forEach((cls) => {
@@ -2396,31 +2415,41 @@ const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
   const currentQuestion = questions[currentQuestionIndex];
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      // Reset state when modal closes
+      setQuestions([
+        {
+          id: 1,
+          text: "",
+          image: null,
+          imageUrl: "",
+          options: ["", "", "", ""],
+          correctAnswer: 0,
+        },
+      ]);
+      setCurrentQuestionIndex(0);
+      return;
+    }
 
-    const newQuestions = editingQuiz
-      ? editingQuiz.questions
-      : [
-          {
-            id: 1,
-            text: "",
-            image: null,
-            imageUrl: "",
-            options: ["", "", "", ""],
-            correctAnswer: 0,
-          },
-        ];
-
-    setQuestions((prev) => {
-      const isSame =
-        prev.length === newQuestions.length &&
-        prev.every((q, i) => q.id === newQuestions[i].id);
-      return isSame ? prev : newQuestions;
-    });
-
-    setCurrentQuestionIndex(0);
+    if (editingQuiz) {
+      // Load editing quiz
+      setQuestions(editingQuiz.questions);
+      setCurrentQuestionIndex(0);
+    } else {
+      // Fresh new quiz
+      setQuestions([
+        {
+          id: 1,
+          text: "",
+          image: null,
+          imageUrl: "",
+          options: ["", "", "", ""],
+          correctAnswer: 0,
+        },
+      ]);
+      setCurrentQuestionIndex(0);
+    }
   }, [isOpen, editingQuiz]);
-
   const handleAddQuestion = () => {
     const newQuestion: Question = {
       id: questions.length + 1,
@@ -3163,6 +3192,69 @@ const TeacherDashboard: React.FC = () => {
       classes: student.classes || [], // Ensure classes is included
     }));
   }, [classStudents]);
+  // Add this useEffect to listen for quiz deletions from other devices
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const quizzesRef = collection(db, "quizzes");
+    const q = query(quizzesRef, where("teacherId", "==", user.uid));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const quizzesData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+        })) as Quiz[];
+
+        // Check for deleted quizzes
+        const localQuizIds = quizzes.map((q) => q.id);
+        const firestoreQuizIds = quizzesData.map((q) => q.id);
+
+        // Find quizzes that are in local state but not in Firestore
+        const deletedQuizIds = localQuizIds.filter(
+          (id) => !firestoreQuizIds.includes(id)
+        );
+
+        if (deletedQuizIds.length > 0) {
+          console.log(
+            "🧹 Removing deleted quizzes from local state:",
+            deletedQuizIds
+          );
+          setQuizzes((prev) =>
+            prev.filter((q) => !deletedQuizIds.includes(q.id))
+          );
+        }
+
+        // Update quiz statuses
+        const now = new Date();
+        const updatedQuizzes = quizzesData.map((quiz) => {
+          const scheduledDateTime = new Date(
+            `${quiz.scheduledDate}T${quiz.scheduledTime}`
+          );
+          const endTime = new Date(
+            scheduledDateTime.getTime() + quiz.totalDuration * 60000
+          );
+
+          let status: "upcoming" | "active" | "expired" = "upcoming";
+          if (now >= scheduledDateTime && now <= endTime) {
+            status = "active";
+          } else if (now > endTime) {
+            status = "expired";
+          }
+          return { ...quiz, status };
+        });
+
+        setQuizzes(updatedQuizzes);
+      },
+      (error) => {
+        console.error("Error listening to quizzes:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user]);
 
   // Initialize online status and working hours
   useEffect(() => {
@@ -3518,21 +3610,17 @@ const TeacherDashboard: React.FC = () => {
     (questions: Question[]) => {
       setTempQuestions(questions);
       if (editingQuiz) {
-        const updatedQuizzes = quizzes.map((quiz) =>
-          quiz.id === editingQuiz.id ? { ...quiz, questions } : quiz
-        );
-        setQuizzes(updatedQuizzes);
-        setEditingQuiz(null);
-        setQuizModalOpen(false);
+        // If editing, update the existing quiz
+        setQuizNameModalOpen(true);
       } else {
+        // If creating new, proceed to save
         setQuizNameModalOpen(true);
       }
     },
-    [editingQuiz, quizzes]
+    [editingQuiz]
   );
-
   const handleSaveQuizWithName = useCallback(
-    (
+    async (
       name: string,
       duration: number,
       scheduledDate: string,
@@ -3555,30 +3643,97 @@ const TeacherDashboard: React.FC = () => {
         status = "expired";
       }
 
-      const newQuiz: Quiz = {
-        id: Date.now().toString(),
-        name,
-        questions: tempQuestions,
-        duration,
-        scheduledDate,
-        scheduledTime,
-        totalDuration,
-        status,
-        subject,
-        maxScore,
-        targetClass,
-        createdAt: new Date(),
-      };
+      try {
+        if (editingQuiz) {
+          // UPDATE EXISTING QUIZ
+          const updatedQuiz: Quiz = {
+            ...editingQuiz,
+            name,
+            questions: tempQuestions,
+            duration,
+            scheduledDate,
+            scheduledTime,
+            totalDuration,
+            status,
+            subject,
+            maxScore,
+            targetClass,
+            updatedAt: new Date(),
+          };
 
-      setQuizzes((prev) => [newQuiz, ...prev]);
-      setQuizNameModalOpen(false);
-      setQuizModalOpen(false);
-      setTempQuestions([]);
+          // Update in Firestore
+          const quizRef = doc(db, "quizzes", editingQuiz.id);
+          await updateDoc(quizRef, {
+            name,
+            questions: tempQuestions.map((q) => ({
+              id: q.id,
+              text: q.text,
+              imageUrl: q.imageUrl,
+              options: q.options,
+              correctAnswer: q.correctAnswer,
+            })),
+            duration,
+            scheduledDate,
+            scheduledTime,
+            totalDuration,
+            status,
+            subject,
+            maxScore,
+            targetClass,
+            updatedAt: new Date(),
+            active: status === "active",
+          });
 
-      // Save to Firestore for student access
-      saveQuizToFirestore(newQuiz);
+          console.log("✅ Quiz updated in Firestore:", editingQuiz.id);
+        } else {
+          // CREATE NEW QUIZ
+          const quizId = Date.now().toString();
+          const newQuiz: Quiz = {
+            id: quizId,
+            name,
+            questions: tempQuestions,
+            duration,
+            scheduledDate,
+            scheduledTime,
+            totalDuration,
+            status,
+            subject,
+            maxScore,
+            targetClass,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+
+          // Save to Firestore
+          await setDoc(doc(db, "quizzes", quizId), {
+            ...newQuiz,
+            teacherId: user?.uid,
+            teacherName: user?.displayName || "Teacher",
+            published: true,
+            active: status === "active",
+          });
+
+          // Update local state
+          console.log("✅ New quiz saved to Firestore:", quizId);
+        }
+
+        // Reset states
+        setQuizNameModalOpen(false);
+        setQuizModalOpen(false);
+        setTempQuestions([]);
+        setEditingQuiz(null);
+
+        alert(
+          editingQuiz
+            ? "Quiz updated successfully!"
+            : "Quiz created successfully!"
+        );
+      } catch (error) {
+        console.error("❌ Error saving quiz to Firestore:", error);
+        alert("Failed to save quiz. Please try again.");
+      }
     },
-    [tempQuestions]
+    [tempQuestions, editingQuiz, user]
   );
 
   const saveQuizToFirestore = async (quiz: Quiz) => {
@@ -3615,15 +3770,32 @@ const TeacherDashboard: React.FC = () => {
 
   const handleEditQuiz = useCallback((quiz: Quiz) => {
     setEditingQuiz(quiz);
+    setTempQuestions(quiz.questions);
     setQuizModalOpen(true);
   }, []);
 
-  const handleDeleteQuiz = useCallback((quizId: string) => {
-    if (confirm("Are you sure you want to delete this quiz?")) {
-      setQuizzes((prev) => prev.filter((quiz) => quiz.id !== quizId));
+  const handleDeleteQuiz = useCallback(async (quizId: string) => {
+    if (
+      confirm(
+        "Are you sure you want to delete this quiz? This action cannot be undone."
+      )
+    ) {
+      try {
+        // Delete from Firestore first
+        const quizRef = doc(db, "quizzes", quizId);
+        await deleteDoc(quizRef);
+        console.log("✅ Quiz deleted from Firestore:", quizId);
+
+        // Then delete from local state
+        setQuizzes((prev) => prev.filter((quiz) => quiz.id !== quizId));
+
+        alert("Quiz deleted successfully!");
+      } catch (error) {
+        console.error("❌ Error deleting quiz from Firestore:", error);
+        alert("Failed to delete quiz. Please try again.");
+      }
     }
   }, []);
-
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "active":
@@ -4198,6 +4370,7 @@ const TeacherDashboard: React.FC = () => {
 
       {/* Modals */}
       <CreateQuizModal
+        key={editingQuiz ? `edit-${editingQuiz.id}` : "create-new"}
         isOpen={quizModalOpen}
         onClose={() => {
           setQuizModalOpen(false);
@@ -4208,8 +4381,11 @@ const TeacherDashboard: React.FC = () => {
       />
 
       <QuizNameModal
+        key={`quiz-name-${tempQuestions.length}`}
         isOpen={quizNameModalOpen}
-        onClose={() => setQuizNameModalOpen(false)}
+        onClose={() => {
+          setQuizNameModalOpen(false);
+        }}
         onSave={handleSaveQuizWithName}
         questions={tempQuestions}
         teacherClasses={teacherClasses}
