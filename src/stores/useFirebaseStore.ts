@@ -1,4 +1,4 @@
-// stores/useFirebaseStore.ts - MERGED VERSION (BEST OF BOTH)
+// stores/useFirebaseStore.ts - MERGED VERSION (BEST OF BOTH) - FIXED
 "use client";
 
 import { create } from "zustand";
@@ -46,6 +46,7 @@ interface UserData {
   email: string;
   className?: string;
   enrollmentNo?: string;
+  classes?: string[]; 
   course?: string;
   session?: string;
   semester?: string;
@@ -114,7 +115,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
   const log = (msg: string) => {
     const time = new Date().toISOString().slice(11, 19);
     console.log("[FB-Store]", msg);
-    set((s) => ({ debug: [...s.debug.slice(-50), `[${time}] ${msg}`] }));
+    set((state) => ({ debug: [...state.debug.slice(-50), `[${time}] ${msg}`] }));
   };
 
   const loadUserData = async (uid: string): Promise<{ userData: UserData; role: "teacher" | "student" }> => {
@@ -138,6 +139,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         email: data.email || "",
         teaching: data.teaching || [],
         className: data.className || "",
+        classes: data.classes || [],
       };
       
       currentUserId = uid;
@@ -172,24 +174,46 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
 
   const loadTeacherClasses = (userData: UserData): TeacherClass[] => {
     if (userData.role !== "teacher") return [];
-
-    let classLevels: string[] = [];
-
-    if (Array.isArray(userData.teaching)) {
-      classLevels = userData.teaching
-        .map((t: any) => (t.classLevel ?? "").toString().trim())
-        .filter(Boolean);
+    
+    const classes: TeacherClass[] = [];
+    
+    // Check teaching array first
+    if (userData.teaching && Array.isArray(userData.teaching)) {
+      userData.teaching.forEach((item) => {
+        const classLevel = item?.classLevel || item?.className || "";
+        if (classLevel && typeof classLevel === "string") {
+          const trimmed = classLevel.trim();
+          if (trimmed && !classes.find(c => c.id === trimmed)) {
+            classes.push({ id: trimmed, name: trimmed });
+          }
+        }
+      });
     }
-
-    if (!classLevels.length && userData.className) {
-      const name = userData.className.toString().trim();
-      if (name) classLevels = [name];
+    
+    // Check className as fallback
+    if (userData.className && typeof userData.className === "string") {
+      const trimmed = userData.className.trim();
+      if (trimmed && !classes.find(c => c.id === trimmed)) {
+        classes.push({ id: trimmed, name: trimmed });
+      }
     }
-
-    const classes: TeacherClass[] = classLevels.map((l) => ({ id: l, name: l }));
-    log(`Teacher classes: ${JSON.stringify(classes)}`);
+    
+    // Check classes array
+    if (userData.classes && Array.isArray(userData.classes)) {
+      userData.classes.forEach((className) => {
+        if (className && typeof className === "string") {
+          const trimmed = className.trim();
+          if (trimmed && !classes.find(c => c.id === trimmed)) {
+            classes.push({ id: trimmed, name: trimmed });
+          }
+        }
+      });
+    }
+    
+    log(`Loaded teacher classes: ${classes.map(c => c.name).join(", ")}`);
     return classes;
   };
+
   const startStudentListener = (classLevels: string[]) => {
     if (studentUnsub) {
       studentUnsub();
@@ -204,49 +228,31 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
       return;
     }
   
-    // Create array with both original and normalized versions
-    const allClassNames: string[] = [];
-    clean.forEach(className => {
-      // Add original
-      allClassNames.push(className);
-      
-      // Add without spaces
-      const noSpace = className.replace(/\s+/g, '');
-      if (noSpace !== className) {
-        allClassNames.push(noSpace);
-      }
-      
-      // Add with different spacing variations
-      const withDash = className.replace(/\s+/g, '-');
-      if (withDash !== className && withDash !== noSpace) {
-        allClassNames.push(withDash);
-      }
-      
-      const withUnderscore = className.replace(/\s+/g, '_');
-      if (withUnderscore !== className && withUnderscore !== noSpace) {
-        allClassNames.push(withUnderscore);
-      }
-    });
-  
-    // Remove duplicates
-    const uniqueClassNames = [...new Set(allClassNames)];
+    // SIMPLIFY: Use ONLY the original class names (no variations)
+    const classNames = [...clean];
     
+    // Remove duplicates
+    const uniqueClassNames = [...new Set(classNames)];
+  
     log(`Query students WHERE className IN [${uniqueClassNames.join(", ")}]`);
     
-    // Firestore "in" query supports up to 10 values
-    if (uniqueClassNames.length > 10) {
-      log("Too many class name variations, using first 10");
-      uniqueClassNames.length = 10;
-    }
+    // DEBUG: Check what we're querying
+    console.log("[FB-Store] DEBUG - Final query classes:", uniqueClassNames);
+    console.log("[FB-Store] DEBUG - Includes SS2?", uniqueClassNames.includes("SS2"));
   
-    const q = query(collection(db, "students"), where("className", "in", uniqueClassNames));
+    // Should be exactly 8 classes, well within the 10-item limit
+    // No need to truncate to 10!
+  
+    const q = query(
+      collection(db, "students"),
+      where("className", "in", uniqueClassNames)
+    );
   
     const unsub = onSnapshot(
       q,
       (snap) => {
         const students: Student[] = snap.docs.map((d) => {
           const data = d.data() as DocumentData;
-          // Use updated splitName that handles missing names
           const { first, last } = splitName(data.fullName, data.email);
           return {
             id: d.id,
@@ -272,7 +278,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
           class: s.className,
           email: s.email
         })));
-        
+  
         set({ students, loading: false, error: null });
       },
       (err) => {
@@ -284,6 +290,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     studentUnsub = unsub;
   };
 
+  // Return the store state and actions
   return {
     user: null,
     userData: null,
