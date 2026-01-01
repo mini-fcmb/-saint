@@ -304,7 +304,12 @@ const PerformanceMenu: React.FC<PerformanceMenuProps> = ({
   );
 };
 
-// Enhanced Live Monitoring Modal Component
+interface Student extends FirebaseStudent {
+  fullName: string;
+  subjects: string[];
+  classes?: string[];
+}
+
 interface LiveMonitoringModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -861,14 +866,49 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
   const filteredStudents = useMemo(() => {
     if (!selectedClass) return [];
 
-    // Normalize the selected class name
-    const normalizedSelectedClass = normalizeClassName(selectedClass);
+    console.log("🔍 Filtering students for class:", selectedClass);
+    console.log("📊 Total students available:", students.length);
+    console.log("🏫 Selected class:", selectedClass);
+    console.log("📋 Teacher classes:", teacherClasses);
 
-    return students.filter((s) => {
-      const studentClassName = s.className || "";
-      const normalizedStudentClass = normalizeClassName(studentClassName);
+    // Enhanced normalization function
+    const normalizeClassName = (className: string | undefined): string => {
+      if (!className) return "";
+      // Convert to lowercase, remove spaces, hyphens, underscores
+      return className
+        .toLowerCase()
+        .replace(/\s+/g, "")
+        .replace(/[_-]/g, "")
+        .trim();
+    };
+
+    // Normalize the selected class
+    const normalizedSelectedClass = normalizeClassName(selectedClass);
+    console.log("🔤 Normalized selected class:", normalizedSelectedClass);
+
+    // Filter students
+    const filtered = students.filter((student) => {
+      const studentClass = student.className || "";
+      const normalizedStudentClass = normalizeClassName(studentClass);
+
+      // Debug log for each student
+      console.log(`👤 ${student.first} ${student.last}: 
+      Original class: "${studentClass}"
+      Normalized: "${normalizedStudentClass}"
+      Matches? ${normalizedStudentClass === normalizedSelectedClass}`);
+
       return normalizedStudentClass === normalizedSelectedClass;
     });
+
+    console.log(
+      `✅ Found ${filtered.length} students for class "${selectedClass}"`
+    );
+    console.log(
+      "📋 Filtered students:",
+      filtered.map((s) => `${s.first} ${s.last} (${s.className})`)
+    );
+
+    return filtered;
   }, [students, selectedClass]);
 
   // Load quiz results from student submissions for selected subject
@@ -2800,135 +2840,201 @@ const TeacherDashboard: React.FC = () => {
   const [savingGrades, setSavingGrades] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState<string>("");
 
-  // Add this useEffect to debug student data
-  useEffect(() => {
-    const debugStudents = async () => {
-      console.log("🔍 DEBUG: Checking Firestore for students...");
+  const debugStudentData = () => {
+    console.log("🔍 DEBUG: Student & Teacher Data Analysis");
 
-      try {
-        // Get ALL students from Firestore
-        const studentsRef = collection(db, "students");
-        const snapshot = await getDocs(studentsRef);
+    // Show teacher data structure
+    console.log("🏫 TEACHER DATA STRUCTURE:");
+    console.log("Teacher classes from store:", rawTeacherClasses);
+    console.log("Processed teacherClasses:", teacherClasses);
 
-        console.log(`📊 Total students in Firestore: ${snapshot.size}`);
+    // Show student data structure
+    console.log("\n👥 STUDENT DATA STRUCTURE:");
+    console.log("Total students from store:", students.length);
 
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          console.log(`👤 Student: ${data.first || ""} ${data.last || ""}`);
-          console.log(`   Email: ${data.email || "No email"}`);
-          console.log(`   Class: "${data.className || "No class"}"`);
-          console.log(`   Class ID: "${data.classId || "No classId"}"`);
-          console.log(`   Role: ${data.role || "No role"}`);
-          console.log(`   ID: ${doc.id}`);
-          console.log("---");
-        });
-
-        // Also check specific query that store uses
-        console.log("🔎 Testing the actual query used by store:");
-        const q = query(studentsRef, where("className", "in", ["JSS 2"]));
-        const filtered = await getDocs(q);
+    // Show first 3 students
+    students.slice(0, 3).forEach((student, index) => {
+      console.log(`Student ${index + 1}:`);
+      console.log(`  Name: ${student.first} ${student.last}`);
+      console.log(`  Email: ${student.email}`);
+      console.log(`  Class (className): "${student.className}"`);
+      console.log(
+        `  Has classes array?: ${"classes" in student ? "YES" : "NO"}`
+      );
+      if ("classes" in student) {
         console.log(
-          `   Query WHERE className IN ["JSS 2"] returned: ${filtered.size} students`
+          `  Classes array: ${JSON.stringify((student as any).classes)}`
         );
-      } catch (error) {
-        console.error("❌ Error debugging students:", error);
       }
-    };
+    });
 
-    if (user?.uid) {
-      debugStudents();
-    }
-  }, [user]);
+    // Show filtering results
+    console.log("\n🔍 FILTERING RESULTS:");
+    console.log(
+      `Teacher teaches classes: ${teacherClasses
+        .map((tc) => tc.className)
+        .join(", ")}`
+    );
+    console.log(`Filtered students count: ${classStudents.length}`);
+
+    classStudents.forEach((student, index) => {
+      console.log(`${index + 1}. ${student.fullName} -> ${student.className}`);
+    });
+  };
 
   useEffect(() => {
     const fetchTeacherData = async () => {
-      if (user?.email) {
-        try {
-          console.log("🔍 Fetching teacher data for:", user.email);
+      if (!user?.email) return;
 
-          const teachersRef = collection(db, "teachers");
-          const q = query(teachersRef, where("email", "==", user.email));
-          const querySnapshot = await getDocs(q);
+      try {
+        console.log("🔍 Fetching teacher data for:", user.email);
 
-          if (!querySnapshot.empty) {
-            const teacherData = querySnapshot.docs[0].data();
-            console.log("📋 Raw teacher data from Firestore:", teacherData);
+        const teachersRef = collection(db, "teachers");
+        const q = query(teachersRef, where("email", "==", user.email));
+        const querySnapshot = await getDocs(q);
 
-            const classesData: TeacherClassInfo[] = [];
+        if (!querySnapshot.empty) {
+          const teacherData = querySnapshot.docs[0].data();
+          console.log("📋 Raw teacher data from Firestore:", teacherData);
 
-            // Try multiple possible data structures
-            if (teacherData.classes && Array.isArray(teacherData.classes)) {
-              console.log("📚 Classes array found:", teacherData.classes);
+          let classesData: TeacherClassInfo[] = [];
 
-              for (const className of teacherData.classes) {
-                console.log("📖 Processing class:", className);
+          // Multiple ways to extract classes and subjects
+          if (teacherData.classes && Array.isArray(teacherData.classes)) {
+            console.log("📚 Classes array found:", teacherData.classes);
 
-                // Try different possible ways subjects might be stored
-                let subjects = [];
+            classesData = teacherData.classes
+              .filter(
+                (className: string) =>
+                  className && typeof className === "string"
+              )
+              .map((className: string) => {
+                const normalizedClassName = className.trim();
 
-                if (teacherData.subjects && teacherData.subjects[className]) {
-                  subjects = teacherData.subjects[className];
+                // Extract subjects for this class
+                let subjects: string[] = [];
+
+                if (
+                  teacherData.subjects &&
+                  teacherData.subjects[normalizedClassName]
+                ) {
+                  subjects = teacherData.subjects[normalizedClassName];
                 } else if (
                   teacherData.subjects &&
                   Array.isArray(teacherData.subjects)
                 ) {
                   subjects = teacherData.subjects;
-                } else if (
-                  teacherData[className] &&
-                  teacherData[className].subjects
-                ) {
-                  subjects = teacherData[className].subjects;
+                } else if (teacherData[normalizedClassName]?.subjects) {
+                  subjects = teacherData[normalizedClassName].subjects;
+                } else if (teacherData.subject) {
+                  subjects = [teacherData.subject];
+                } else {
+                  subjects = ["General"];
                 }
 
-                console.log(`   Subjects for ${className}:`, subjects);
+                return {
+                  className: normalizedClassName,
+                  subjects: Array.isArray(subjects)
+                    ? subjects
+                        .filter((s) => s && typeof s === "string")
+                        .map(String)
+                    : ["General"],
+                };
+              })
+              .filter((c: TeacherClassInfo) => c.className);
+          } else if (
+            teacherData.teaching &&
+            Array.isArray(teacherData.teaching)
+          ) {
+            // Alternative: teaching array format
+            console.log("📚 Teaching array found:", teacherData.teaching);
 
-                classesData.push({
-                  className: String(className),
-                  subjects: Array.isArray(subjects) ? subjects.map(String) : [],
-                });
-              }
+            classesData = teacherData.teaching
+              .filter((t: any) => t && (t.classLevel || t.className))
+              .map((t: any) => {
+                const className = (t.classLevel || t.className || "")
+                  .toString()
+                  .trim();
+                let subjects: string[] = [];
+
+                if (t.subjects && Array.isArray(t.subjects)) {
+                  subjects = t.subjects.map(String);
+                } else if (
+                  teacherData.subjects &&
+                  teacherData.subjects[className]
+                ) {
+                  subjects = teacherData.subjects[className];
+                } else if (teacherData.subject) {
+                  subjects = [teacherData.subject];
+                } else {
+                  subjects = ["General"];
+                }
+
+                return {
+                  className,
+                  subjects: subjects.filter((s) => s && typeof s === "string"),
+                };
+              })
+              .filter((c: TeacherClassInfo) => c.className);
+          } else if (teacherData.className) {
+            // Single class format
+            console.log("📚 Single class found:", teacherData.className);
+
+            const className = teacherData.className.toString().trim();
+            let subjects: string[] = [];
+
+            if (teacherData.subjects && Array.isArray(teacherData.subjects)) {
+              subjects = teacherData.subjects.map(String);
+            } else if (teacherData.subject) {
+              subjects = [teacherData.subject];
             } else {
-              console.log("⚠️ No classes array found in teacher data");
-              // Try to extract classes from other fields
-              if (
-                teacherData.subjects &&
-                typeof teacherData.subjects === "object"
-              ) {
-                Object.keys(teacherData.subjects).forEach((className) => {
-                  classesData.push({
-                    className: String(className),
-                    subjects: Array.isArray(teacherData.subjects[className])
-                      ? teacherData.subjects[className].map(String)
-                      : [],
-                  });
-                });
-              }
+              subjects = ["General"];
             }
 
-            console.log("✅ Final teacherClasses:", classesData);
-            setTeacherClasses(classesData);
+            classesData = [
+              {
+                className,
+                subjects: subjects.filter((s) => s && typeof s === "string"),
+              },
+            ];
+          }
 
-            // Auto-select first class for grade management
-            if (classesData.length > 0 && !selectedClass) {
-              setSelectedClass(classesData[0].className);
-            }
-          } else {
-            console.warn("⚠️ No teacher document found for email:", user.email);
-            // Create demo data for testing
-            setTeacherClasses([
-              { className: "Class A", subjects: ["Mathematics", "Physics"] },
-              { className: "Class B", subjects: ["Biology", "Chemistry"] },
-            ]);
+          console.log("✅ Final teacherClasses:", classesData);
+          setTeacherClasses(classesData);
+
+          // Auto-select first class
+          if (classesData.length > 0 && !selectedClass) {
+            setSelectedClass(classesData[0].className);
+          }
+
+          // If no classes found, create a demo entry
+          if (classesData.length === 0) {
+            console.warn("⚠️ No valid classes found, creating demo class");
+            const demoClasses = [
+              { className: "Class A", subjects: ["Mathematics", "Science"] },
+              { className: "Class B", subjects: ["English", "History"] },
+            ];
+            setTeacherClasses(demoClasses);
             setSelectedClass("Class A");
           }
-        } catch (error) {
-          console.error("❌ Error fetching teacher data:", error);
-          // Fallback to demo data
-          setTeacherClasses([
-            { className: "Demo Class", subjects: ["Mathematics", "Science"] },
-          ]);
-          setSelectedClass("Demo Class");
+        } else {
+          console.warn("⚠️ No teacher document found for email:", user.email);
+          // Create demo data for testing
+          const demoClasses = [
+            { className: "Class A", subjects: ["Mathematics", "Science"] },
+            { className: "Class B", subjects: ["English", "History"] },
+          ];
+          setTeacherClasses(demoClasses);
+          setSelectedClass("Class A");
         }
+      } catch (error) {
+        console.error("❌ Error fetching teacher data:", error);
+        // Fallback to demo data
+        const demoClasses = [
+          { className: "Demo Class", subjects: ["Mathematics", "Science"] },
+        ];
+        setTeacherClasses(demoClasses);
+        setSelectedClass("Demo Class");
       }
     };
 
@@ -2936,11 +3042,10 @@ const TeacherDashboard: React.FC = () => {
       fetchTeacherData();
     }
   }, [user]);
-
-  // Replace the ENTIRE student filtering useEffect
+  // Replace the entire student filtering useEffect with this CORRECTED version:
   useEffect(() => {
-    console.log("🎯 ===== STUDENT FILTERING ===== ");
-    console.log("📊 Teacher classes count:", teacherClasses.length);
+    console.log("🎯 ===== CORRECTED STUDENT FILTERING ===== ");
+    console.log("📊 Teacher classes:", teacherClasses);
     console.log("👥 Students from store count:", students.length);
 
     if (teacherClasses.length === 0) {
@@ -2955,55 +3060,96 @@ const TeacherDashboard: React.FC = () => {
       return;
     }
 
-    // Get teacher class names
-    const teacherClassNames = teacherClasses.map((c) => c.className);
-    console.log("🏫 Teacher teaches:", teacherClassNames);
-    console.log("📋 Sample student from store:", students[0]);
+    console.log("🔍 Checking student classes:");
+    students.forEach((student, index) => {
+      console.log(
+        `${index + 1}. ${student.first} ${student.last}: "${student.className}"`
+      );
+    });
 
-    // Normalize class names for comparison
-    const normalizeClass = (className: string): string => {
-      return (className || "").toLowerCase().replace(/\s+/g, "").trim();
+    // Enhanced normalization function
+    const normalizeClassName = (className: string | undefined): string => {
+      if (!className) return "";
+      return className
+        .toLowerCase()
+        .replace(/\s+/g, "") // Remove all spaces
+        .replace(/[_-]/g, "") // Remove hyphens and underscores
+        .trim();
     };
 
-    const normalizedTeacherClasses = teacherClassNames.map(normalizeClass);
-    console.log("🔤 Normalized teacher classes:", normalizedTeacherClasses);
-
-    // Filter students
+    // Filter students - Students only have className, NOT classes array
     const filtered = students.filter((student) => {
       const studentClass = student.className || "";
-      const studentNormalized = normalizeClass(studentClass);
+      const studentNormalized = normalizeClassName(studentClass);
 
-      const matches = normalizedTeacherClasses.includes(studentNormalized);
-
-      if (matches) {
-        console.log(
-          `✅ ${student.first} ${student.last}: "${studentClass}" matches teacher class`
-        );
-      } else {
-        console.log(
-          `❌ ${student.first} ${student.last}: "${studentClass}" doesn't match`
-        );
+      if (!studentClass) {
+        console.log(`❌ ${student.first} ${student.last}: No class found`);
+        return false;
       }
+
+      console.log(`🔍 Checking student: ${student.first} ${student.last}`);
+      console.log(`  Original class: "${studentClass}"`);
+      console.log(`  Normalized: "${studentNormalized}"`);
+
+      // Check if student's className matches ANY teacher class
+      const matches = teacherClasses.some((teacherClass) => {
+        const teacherClassName = teacherClass.className;
+        const teacherNormalized = normalizeClassName(teacherClassName);
+
+        console.log(`  Comparing with teacher class: "${teacherClassName}"`);
+        console.log(`  Teacher normalized: "${teacherNormalized}"`);
+
+        // ONLY check for EXACT match after normalization
+        if (studentNormalized === teacherNormalized) {
+          console.log(
+            `✅ Exact match: "${studentClass}" = "${teacherClassName}"`
+          );
+          return true;
+        }
+
+        console.log(
+          `❌ No match: "${studentNormalized}" ≠ "${teacherNormalized}"`
+        );
+        return false;
+
+        console.log(`❌ No match`);
+        return false;
+      });
 
       return matches;
     });
 
-    console.log(`📈 Found ${filtered.length} matching students`);
+    console.log(
+      `📈 Found ${filtered.length} matching students out of ${students.length}`
+    );
 
     // Enhance students with fullName and subjects
     const enhanced = filtered.map((student) => {
-      // Find which teacher class this student belongs to
-      const studentNormalized = normalizeClass(student.className || "");
-      const classInfo = teacherClasses.find(
-        (cls) => normalizeClass(cls.className) === studentNormalized
-      );
+      const studentClass = student.className || "";
+      const studentNormalized = normalizeClassName(studentClass);
 
+      // Find matching teacher class - ONLY EXACT MATCHES!
+      const matchedClassInfo = teacherClasses.find((teacherClass) => {
+        const teacherNormalized = normalizeClassName(teacherClass.className);
+        return studentNormalized === teacherNormalized; // ONLY exact match
+      });
       return {
         ...student,
         fullName: `${student.first} ${student.last}`,
-        subjects: classInfo?.subjects || [],
+        subjects: matchedClassInfo?.subjects || ["General"],
+        className:
+          matchedClassInfo?.className || student.className || "Unknown Class",
       } as Student;
     });
+
+    console.log(
+      "🎉 Enhanced students:",
+      enhanced.map((s) => ({
+        name: s.fullName,
+        class: s.className,
+        subjects: s.subjects,
+      }))
+    );
 
     setClassStudents(enhanced);
   }, [students, teacherClasses]);
@@ -3014,6 +3160,7 @@ const TeacherDashboard: React.FC = () => {
       ...student,
       classId: student.className || "default-class",
       className: student.className || "Default Class",
+      classes: student.classes || [], // Ensure classes is included
     }));
   }, [classStudents]);
 
@@ -7139,6 +7286,7 @@ get-in-touch{
             justify-content: space-between;
           }
         }
+        
 
       `}</style>
     </div>
