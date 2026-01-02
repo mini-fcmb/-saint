@@ -1439,10 +1439,145 @@ const StrictQuizInterface: React.FC<{
     formatTime,
     user,
   ]);
-  // Report violation function - skip if emergency exit is active
+  const saveViolationToFirestore = useCallback(
+    async (violation: Violation) => {
+      if (!user?.uid || !studentId || !quiz.id) return;
+
+      try {
+        const monitoringId = `${quiz.id}_${studentId}`;
+        const monitoringRef = doc(db, "monitoring", monitoringId);
+
+        const violationData = {
+          id: violation.id,
+          timestamp: violation.timestamp,
+          type: violation.type,
+          description: violation.description,
+          severity: violation.severity,
+          studentId: studentId,
+          studentName: studentName,
+          studentClass: currentUserClass || "Unknown",
+          quizId: quiz.id,
+          quizName: quiz.name,
+          quizClass: quiz.targetClass || currentUserClass || "Unknown",
+          browser: navigator.userAgent.split(" ")[0] || "Unknown",
+          deviceType: /mobile/i.test(navigator.userAgent)
+            ? "Mobile"
+            : "Desktop",
+        };
+
+        // Get existing monitoring document
+        const docSnap = await getDoc(monitoringRef);
+        let existingData = docSnap.exists() ? docSnap.data() : {};
+        let existingViolations = existingData.violations || [];
+
+        // Add new violation
+        const updatedViolations = [...existingViolations, violationData];
+
+        // Update or create the monitoring document
+        await setDoc(
+          monitoringRef,
+          {
+            ...existingData,
+            studentId: studentId,
+            studentName: studentName,
+            studentClass: currentUserClass || "Unknown",
+            quizId: quiz.id,
+            quizName: quiz.name,
+            quizClass: quiz.targetClass || currentUserClass || "Unknown",
+            status: "violation",
+            progress: Math.round(
+              ((currentQuestion + 1) / quiz.questions.length) * 100
+            ),
+            timeSpent: formatTime(quiz.duration * 60 - timeLeft),
+            currentQuestion: currentQuestion + 1,
+            totalQuestions: quiz.questions.length,
+            violations: updatedViolations,
+            lastActivity: new Date(),
+            updatedAt: new Date(),
+            teacherId: null, // Will be filled by teacher query
+            studentEmail: user?.email || "",
+          },
+          { merge: true }
+        );
+
+        console.log("✅ Violation saved to Firestore:", violation.type);
+      } catch (error) {
+        console.error("❌ Error saving violation:", error);
+      }
+    },
+    [
+      user,
+      studentId,
+      quiz,
+      currentUserClass,
+      studentName,
+      currentQuestion,
+      timeLeft,
+    ]
+  );
+  // Add this function to save progress periodically
+  const saveQuizProgress = useCallback(async () => {
+    if (!user?.uid || !studentId || !quiz.id || emergencyExitActive) return;
+
+    try {
+      const monitoringId = `${quiz.id}_${studentId}`;
+      const monitoringRef = doc(db, "monitoring", monitoringId);
+
+      const progress = Math.round(
+        ((currentQuestion + 1) / quiz.questions.length) * 100
+      );
+      const timeElapsed = quiz.duration * 60 - timeLeft;
+
+      await setDoc(
+        monitoringRef,
+        {
+          studentId: studentId,
+          studentName: studentName,
+          studentClass: currentUserClass || "Unknown",
+          quizId: quiz.id,
+          quizName: quiz.name,
+          quizClass: quiz.targetClass || currentUserClass || "Unknown",
+          status: quizStarted ? "in-progress" : "not-started",
+          progress: progress,
+          timeSpent: formatTime(timeElapsed),
+          currentQuestion: currentQuestion + 1,
+          totalQuestions: quiz.questions.length,
+          violations: violations,
+          lastActivity: new Date(),
+          updatedAt: new Date(),
+          studentEmail: user?.email || "",
+        },
+        { merge: true }
+      );
+
+      console.log("📊 Quiz progress saved:", progress, "%");
+    } catch (error) {
+      console.error("❌ Error saving quiz progress:", error);
+    }
+  }, [
+    user,
+    studentId,
+    quiz,
+    currentUserClass,
+    studentName,
+    currentQuestion,
+    timeLeft,
+    quizStarted,
+    violations,
+    emergencyExitActive,
+  ]);
+
+  // Call this function periodically
+  useEffect(() => {
+    if (quizStarted && !emergencyExitActive) {
+      const interval = setInterval(saveQuizProgress, 10000); // Save every 10 seconds
+      return () => clearInterval(interval);
+    }
+  }, [quizStarted, emergencyExitActive, saveQuizProgress]);
+
   const reportViolation = useCallback(
     (type: Violation["type"], description: string) => {
-      if (emergencyExitActive) return; // Don't report violations during emergency exit
+      if (emergencyExitActive) return;
 
       const violation: Violation = {
         id: Date.now().toString(),
@@ -1452,6 +1587,10 @@ const StrictQuizInterface: React.FC<{
         severity: violationAttempts >= 2 ? "high" : "medium",
       };
 
+      // Save to Firestore FIRST
+      saveViolationToFirestore(violation);
+
+      // Then update local state
       setViolations((prev) => [...prev, violation]);
       const newAttempts = violationAttempts + 1;
       setViolationAttempts(newAttempts);
@@ -1464,9 +1603,8 @@ const StrictQuizInterface: React.FC<{
         setTimeout(() => setShowViolationWarning(false), 3000);
       }
     },
-    [violationAttempts, emergencyExitActive]
+    [violationAttempts, emergencyExitActive, saveViolationToFirestore]
   );
-
   // Timer logic
   useEffect(() => {
     if (
@@ -1535,11 +1673,16 @@ const StrictQuizInterface: React.FC<{
     setIsPaused(false);
   }, []);
 
-  // Strict mode restrictions - KEY IMPROVEMENT: Disable when emergency exit is active
   useEffect(() => {
     if (strictModeActive && quizStarted && !emergencyExitActive) {
-      const preventAllKeys = (e: KeyboardEvent) => {
-        const allowedKeys = [
+      // Allow answer selection keys (A,B,C,D and 1,2,3,4)
+      const isAnswerKey = (key: string) => {
+        return /^[a-dA-D1-4]$/.test(key);
+      };
+
+      // Allow navigation keys
+      const isNavigationKey = (key: string) => {
+        const navKeys = [
           "ArrowUp",
           "ArrowDown",
           "ArrowLeft",
@@ -1549,25 +1692,75 @@ const StrictQuizInterface: React.FC<{
           "Enter",
           " ",
         ];
+        return navKeys.includes(key);
+      };
 
-        if (!allowedKeys.includes(e.key)) {
-          e.preventDefault();
-          e.stopPropagation();
-          reportViolation("keyboard", `Key pressed: ${e.key}`);
+      const preventAllKeys = (e: KeyboardEvent) => {
+        // Allow answer selection and navigation
+        if (isAnswerKey(e.key) || isNavigationKey(e.key)) {
+          return; // Allow these keys
+        }
+
+        // Block and report suspicious keys
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Don't spam for common keys like Shift, Control, Alt
+        const commonKeys = [
+          "Shift",
+          "Control",
+          "Alt",
+          "Meta",
+          "CapsLock",
+          "NumLock",
+        ];
+        if (!commonKeys.includes(e.key)) {
+          reportViolation(
+            "keyboard",
+            `Suspicious key pressed: ${e.key} (${e.code})`
+          );
         }
       };
 
       const preventContextMenu = (e: MouseEvent) => {
         e.preventDefault();
-        reportViolation("right-click", "Right-click attempted");
+        reportViolation(
+          "right-click",
+          "Right-click attempted - context menu blocked"
+        );
       };
 
       const preventBeforeUnload = (e: BeforeUnloadEvent) => {
         e.preventDefault();
         e.returnValue =
           "Are you sure you want to leave? Your quiz will be submitted.";
-        reportViolation("tab-switch", "Tab/window switch attempted");
+        reportViolation("tab-switch", "Tab/window switch or close attempted");
         return e.returnValue;
+      };
+
+      // Add fullscreen exit detection
+      const handleFullscreenChange = () => {
+        if (
+          !document.fullscreenElement &&
+          !emergencyExitActive &&
+          quizStarted
+        ) {
+          reportViolation(
+            "fullscreen-exit",
+            "Exited fullscreen mode during quiz"
+          );
+          // Try to re-enter fullscreen
+          if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().catch((err) => {
+              console.log("Failed to re-enter fullscreen:", err);
+            });
+          }
+        }
+      };
+
+      // Add developer tools detection
+      const handleDevTools = (e: Event) => {
+        reportViolation("dev-tools", "Developer tools opened");
       };
 
       // Request fullscreen
@@ -1581,6 +1774,10 @@ const StrictQuizInterface: React.FC<{
       document.addEventListener("visibilitychange", handleVisibilityChange);
       window.addEventListener("blur", handleBlur);
       window.addEventListener("focus", handleFocus);
+      document.addEventListener("fullscreenchange", handleFullscreenChange);
+
+      // Add devtools detection (basic)
+      window.addEventListener("devtoolschange", handleDevTools);
 
       return () => {
         document.removeEventListener("keydown", preventAllKeys, true);
@@ -1592,6 +1789,11 @@ const StrictQuizInterface: React.FC<{
         );
         window.removeEventListener("blur", handleBlur);
         window.removeEventListener("focus", handleFocus);
+        document.removeEventListener(
+          "fullscreenchange",
+          handleFullscreenChange
+        );
+        window.removeEventListener("devtoolschange", handleDevTools);
       };
     }
   }, [
