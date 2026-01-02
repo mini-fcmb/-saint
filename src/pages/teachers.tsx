@@ -169,6 +169,7 @@ interface GradeSystem {
 
 // Real-time Monitoring Types
 interface EnhancedMonitoringData {
+  id?: string;
   studentId: string;
   studentName: string;
   studentClass: string;
@@ -438,32 +439,46 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
     console.log("🔄 Live monitoring active");
   }, [user, isOpen]);
 
-  // Simulate real-time monitoring data
+  // Update the useEffect that loads monitoring data in LiveMonitoringModal
   useEffect(() => {
     if (!isOpen || !user?.uid) return;
 
     const loadData = async () => {
       try {
-        // Load from Firestore
+        // Get teacher's classes first
+        const teacherClassNames = teacherClasses.map(
+          (c: TeacherClassInfo) => c.className
+        );
+
+        // Query monitoring collection
         const monitoringRef = collection(db, "monitoring");
         let q;
 
         if (selectedQuiz === "all") {
           // Get all monitoring for teacher's classes
-          const teacherClassNames = teacherClasses.map(
-            (c: TeacherClassInfo) => c.className
+          q = query(
+            monitoringRef,
+            where("quizClass", "in", teacherClassNames),
+            where("status", "in", ["in-progress", "submitted", "violation"])
           );
-          q = query(monitoringRef, where("quizClass", "in", teacherClassNames));
         } else {
-          q = query(monitoringRef, where("quizId", "==", selectedQuiz));
+          q = query(
+            monitoringRef,
+            where("quizId", "==", selectedQuiz),
+            where("status", "in", ["in-progress", "submitted", "violation"])
+          );
         }
 
         const querySnapshot = await getDocs(q);
-        const monitoringData: EnhancedMonitoringData[] = querySnapshot.docs.map(
-          (doc) => {
-            const data = doc.data();
-            // Add default values for missing properties
-            return {
+        const monitoringData: EnhancedMonitoringData[] = [];
+
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+
+          // Check if the quiz belongs to this teacher
+          const quiz = activeQuizzes.find((q) => q.id === data.quizId);
+          if (quiz) {
+            monitoringData.push({
               id: doc.id,
               studentId: data.studentId || "",
               studentName: data.studentName || "",
@@ -483,30 +498,87 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
               lastActivity: data.lastActivity?.toDate() || new Date(),
               score: data.score,
               maxScore: data.maxScore,
-            };
+            });
           }
-        );
+        });
 
         setMonitoringData(monitoringData);
+
+        if (monitoringData.length === 0) {
+          // Create sample data if no real data exists (for testing)
+          const sampleData = createSampleMonitoringData();
+          setMonitoringData(sampleData);
+        }
       } catch (error) {
         console.error("Error loading monitoring data:", error);
 
         // Use sample data temporarily
         const sampleData = createSampleMonitoringData();
         setMonitoringData(sampleData);
-
-        console.warn("⚠️ Using sample data - Firestore connection issue");
       }
     };
 
     loadData();
 
     if (autoRefresh) {
-      const interval = setInterval(loadData, 3000);
+      const interval = setInterval(loadData, 5000); // Refresh every 5 seconds
       return () => clearInterval(interval);
     }
-  }, [isOpen, autoRefresh, selectedQuiz, teacherClasses, user]);
+  }, [isOpen, autoRefresh, selectedQuiz, teacherClasses, user, activeQuizzes]);
+  // Add this useEffect for real-time updates
+  useEffect(() => {
+    if (!isOpen || !user?.uid || !teacherClasses.length) return;
 
+    const teacherClassNames = teacherClasses.map(
+      (c: TeacherClassInfo) => c.className
+    );
+
+    // Set up real-time listener
+    const monitoringRef = collection(db, "monitoring");
+    const q = query(
+      monitoringRef,
+      where("quizClass", "in", teacherClassNames),
+      where("status", "in", ["in-progress", "submitted", "violation"])
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const monitoringData: EnhancedMonitoringData[] = [];
+
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+
+        // Only include if quiz exists in activeQuizzes
+        const quizExists = activeQuizzes.some((q) => q.id === data.quizId);
+        if (quizExists) {
+          monitoringData.push({
+            id: doc.id,
+            studentId: data.studentId || "",
+            studentName: data.studentName || "",
+            studentClass: data.studentClass || "",
+            quizId: data.quizId || "",
+            quizName: data.quizName || "",
+            quizClass: data.quizClass || "",
+            status: data.status || "in-progress",
+            progress: data.progress || 0,
+            timeSpent: data.timeSpent || "00:00",
+            currentQuestion: data.currentQuestion || 0,
+            totalQuestions: data.totalQuestions || 0,
+            violations: (data.violations || []).map((v: any) => ({
+              ...v,
+              timestamp: v.timestamp?.toDate() || new Date(),
+            })),
+            lastActivity: data.lastActivity?.toDate() || new Date(),
+            score: data.score,
+            maxScore: data.maxScore,
+          });
+        }
+      });
+
+      setMonitoringData(monitoringData);
+    });
+
+    return () => unsubscribe();
+  }, [isOpen, user, teacherClasses, activeQuizzes]);
   // Helper functions
   const getStatusIcon = (status: string) => {
     switch (status) {
