@@ -185,6 +185,7 @@ interface EnhancedMonitoringData {
   lastActivity: Date;
   score?: number;
   maxScore?: number;
+  studentEmail?: string;
 }
 
 interface EnhancedViolation {
@@ -525,7 +526,6 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
       return () => clearInterval(interval);
     }
   }, [isOpen, autoRefresh, selectedQuiz, teacherClasses, user, activeQuizzes]);
-  // Add this useEffect for real-time updates
   useEffect(() => {
     if (!isOpen || !user?.uid || !teacherClasses.length) return;
 
@@ -533,51 +533,93 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
       (c: TeacherClassInfo) => c.className
     );
 
-    // Set up real-time listener
+    console.log(
+      "🎯 Setting up live monitoring for classes:",
+      teacherClassNames
+    );
+    console.log("👨‍🏫 Teacher ID:", user.uid);
+
+    // Set up real-time listener - listen to ALL monitoring for teacher's classes
     const monitoringRef = collection(db, "monitoring");
     const q = query(
       monitoringRef,
-      where("quizClass", "in", teacherClassNames),
-      where("status", "in", ["in-progress", "submitted", "violation"])
+      where("quizClass", "in", teacherClassNames)
+      // Remove status filter to see ALL students
+      // Also removed teacherId filter since student's monitoring doesn't have teacherId initially
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const monitoringData: EnhancedMonitoringData[] = [];
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        console.log(
+          "🔄 Live monitoring snapshot update:",
+          snapshot.size,
+          "documents"
+        );
 
-      snapshot.forEach((doc) => {
-        const data = doc.data();
+        const monitoringData: EnhancedMonitoringData[] = [];
 
-        // Only include if quiz exists in activeQuizzes
-        const quizExists = activeQuizzes.some((q) => q.id === data.quizId);
-        if (quizExists) {
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+
+          // Log for debugging
+          console.log("📊 Monitoring data:", {
+            id: doc.id,
+            student: data.studentName,
+            status: data.status,
+            violations: data.violations?.length || 0,
+            quiz: data.quizName,
+            class: data.quizClass,
+          });
+
+          // Convert Firestore timestamps
+          const violations = (data.violations || []).map((v: any) => ({
+            ...v,
+            timestamp: v.timestamp?.toDate
+              ? v.timestamp.toDate()
+              : v.timestamp
+              ? new Date(v.timestamp)
+              : new Date(),
+          }));
+
           monitoringData.push({
             id: doc.id,
             studentId: data.studentId || "",
-            studentName: data.studentName || "",
-            studentClass: data.studentClass || "",
+            studentName: data.studentName || "Unknown Student",
+            studentClass: data.studentClass || "Unknown Class",
             quizId: data.quizId || "",
-            quizName: data.quizName || "",
-            quizClass: data.quizClass || "",
+            quizName: data.quizName || "Unknown Quiz",
+            quizClass: data.quizClass || "Unknown Class",
             status: data.status || "in-progress",
             progress: data.progress || 0,
             timeSpent: data.timeSpent || "00:00",
             currentQuestion: data.currentQuestion || 0,
             totalQuestions: data.totalQuestions || 0,
-            violations: (data.violations || []).map((v: any) => ({
-              ...v,
-              timestamp: v.timestamp?.toDate() || new Date(),
-            })),
-            lastActivity: data.lastActivity?.toDate() || new Date(),
+            violations: violations,
+            lastActivity: data.lastActivity?.toDate
+              ? data.lastActivity.toDate()
+              : data.lastActivity
+              ? new Date(data.lastActivity)
+              : new Date(),
             score: data.score,
             maxScore: data.maxScore,
+            studentEmail: data.studentEmail || "",
           });
-        }
-      });
+        });
 
-      setMonitoringData(monitoringData);
-    });
+        console.log("✅ Final monitoring data count:", monitoringData.length);
+        setMonitoringData(monitoringData);
+      },
+      (error) => {
+        console.error("❌ Live monitoring error:", error);
+        console.error("Error details:", error.code, error.message);
+      }
+    );
 
-    return () => unsubscribe();
+    return () => {
+      console.log("🧹 Cleaning up live monitoring listener");
+      unsubscribe();
+    };
   }, [isOpen, user, teacherClasses, activeQuizzes]);
   // Helper functions
   const getStatusIcon = (status: string) => {
@@ -679,6 +721,24 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
               <div className="live-dot"></div>
               Live
             </div>
+            <button
+              className="refresh-manual-btn"
+              onClick={async () => {
+                console.log("🔄 Manual refresh triggered");
+                // Force a refresh by clearing and reloading
+                setMonitoringData([]);
+                // Add a small delay to show loading
+                await new Promise((resolve) => setTimeout(resolve, 500));
+                // Re-trigger the effect by changing a state
+                setSelectedQuiz((prev) => (prev === "all" ? "temp" : "all"));
+                setTimeout(() => {
+                  setSelectedQuiz("all");
+                }, 100);
+              }}
+            >
+              <RefreshCw size={16} />
+              Refresh Now
+            </button>
             <button
               className={`refresh-btn ${autoRefresh ? "active" : ""}`}
               onClick={() => setAutoRefresh(!autoRefresh)}
@@ -4958,6 +5018,50 @@ const TeacherDashboard: React.FC = () => {
 
       <style>{`
       /* Add these styles to your existing CSS */
+      .refresh-manual-btn {
+        background: #10b981;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        transition: all 0.2s;
+      }
+      
+      .refresh-manual-btn:hover {
+        background: #059669;
+        transform: translateY(-1px);
+      }
+      
+      .refresh-manual-btn:active {
+        transform: translateY(0);
+      }
+      
+      /* Update existing refresh-btn */
+      .refresh-btn {
+        background: #f3f4f6;
+        color: #374151;
+        border: 1px solid #e5e7eb;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        transition: all 0.2s;
+      }
+      
+      .refresh-btn.active {
+        background: #3b82f6;
+        color: white;
+        border-color: #3b82f6;
+      }
       .quiz-info-tooltip {
         position: absolute;
         bottom: 100%;
