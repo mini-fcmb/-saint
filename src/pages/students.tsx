@@ -188,7 +188,9 @@ const StudentLiveMonitoringModal: React.FC<StudentLiveMonitoringModalProps> = ({
   studentClass,
   user,
 }) => {
-  const [monitoringData, setMonitoringData] = useState<EnhancedMonitoringData[]>([]);
+  const [monitoringData, setMonitoringData] = useState<
+    EnhancedMonitoringData[]
+  >([]);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [selectedQuiz, setSelectedQuiz] = useState<string>("all");
 
@@ -1353,10 +1355,27 @@ const StrictQuizInterface: React.FC<{
       return;
 
     try {
-      // Calculate time elapsed based on quiz duration and remaining time
+      // Calculate time elapsed
       const timeElapsed = quiz.duration * 60 - timeLeft;
       const totalTime = quiz.duration * 60;
       const progress = Math.round((timeElapsed / totalTime) * 100);
+
+      // Ensure violations are properly structured
+      const formattedViolations = violations.map((v) => ({
+        id: v.id || Date.now().toString(),
+        timestamp: v.timestamp || new Date(),
+        type: v.type,
+        description: v.description,
+        severity: v.severity || "medium",
+        studentId: studentId,
+        studentName: studentName,
+        studentClass: currentUserClass || "Unknown Class",
+        quizId: quiz.id,
+        quizName: quiz.name,
+        quizClass: quiz.targetClass || currentUserClass || "Unknown Class",
+        browser: navigator.userAgent.split(" ")[0] || "Unknown",
+        deviceType: /mobile/i.test(navigator.userAgent) ? "Mobile" : "Desktop",
+      }));
 
       const monitoringData = {
         studentId: studentId,
@@ -1370,43 +1389,38 @@ const StrictQuizInterface: React.FC<{
         timeSpent: formatTime(timeElapsed),
         currentQuestion: currentQuestion + 1,
         totalQuestions: quiz.questions.length,
-        violations: violations.map((v) => ({
-          ...v,
-          timestamp: v.timestamp,
-          studentId,
-          studentName,
-          studentClass: currentUserClass || "Unknown Class",
-          quizId: quiz.id,
-          quizName: quiz.name,
-          quizClass: quiz.targetClass || currentUserClass || "Unknown Class",
-          browser: navigator.userAgent.split(" ")[0],
-          deviceType: /mobile/i.test(navigator.userAgent)
-            ? "Mobile"
-            : "Desktop",
-        })),
+        violations: formattedViolations,
         lastActivity: new Date(),
         score: isAutoSubmitting ? calculateResults() : undefined,
         maxScore: quiz.maxScore,
         isOnline: true,
-        studentEmail: user?.email,
-        lastUpdated: new Date(),
+        studentEmail: user?.email || "",
+        teacherId: null, // Will be populated by teacher's query
+        createdAt: serverTimestamp(),
+        updatedAt: new Date(),
       };
 
       // Save to Firestore
       const monitoringId = `${quiz.id}_${studentId}`;
       const monitoringRef = doc(db, "monitoring", monitoringId);
 
+      await setDoc(monitoringRef, monitoringData, { merge: true });
+
+      console.log("✅ Student monitoring data saved to Firestore");
+
+      // Also save to a separate collection for easier querying
+      const activityRef = doc(
+        collection(db, "studentActivities"),
+        monitoringId
+      );
       await setDoc(
-        monitoringRef,
+        activityRef,
         {
           ...monitoringData,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
+          timestamp: new Date(),
         },
         { merge: true }
       );
-
-      console.log("✅ Student monitoring data saved to Firestore");
     } catch (error) {
       console.error("Error saving monitoring data to Firestore:", error);
     }
@@ -1425,7 +1439,6 @@ const StrictQuizInterface: React.FC<{
     formatTime,
     user,
   ]);
-
   // Report violation function - skip if emergency exit is active
   const reportViolation = useCallback(
     (type: Violation["type"], description: string) => {
