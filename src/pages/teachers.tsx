@@ -65,6 +65,7 @@ import {
   onSnapshot,
   serverTimestamp,
   deleteDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
 
@@ -112,7 +113,6 @@ interface WorkingHoursData {
   startTime?: Date;
 }
 
-// Enhanced Grade Management Types
 interface GradeRecord {
   id: string;
   studentId: string;
@@ -136,6 +136,11 @@ interface GradeRecord {
   grade: string;
   positionInClass?: number;
   remark: string;
+  quizInfo?: {
+    totalQuizzes: number;
+    averagePercentage: number;
+    lastQuiz?: string;
+  };
 }
 
 interface GradeSystem {
@@ -817,6 +822,8 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
   const [activeSession, setActiveSession] = useState(initialActiveSession);
   const [gradeRecords, setGradeRecords] = useState<GradeRecord[]>([]);
   const [savingGrades, setSavingGrades] = useState(false);
+  const [loadingGrades, setLoadingGrades] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string>("");
 
   const { userData } = useFirebaseStore();
 
@@ -913,12 +920,17 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     return filtered;
   }, [students, selectedClass]);
 
-  // Load quiz results from student submissions for selected subject
   const loadQuizResults = useCallback(async () => {
     if (!selectedClass || !selectedSubject || !user?.uid) return;
 
     try {
-      // Load from Firestore
+      console.log("📊 Loading quiz results for:", {
+        class: selectedClass,
+        subject: selectedSubject,
+        teacher: user.uid,
+      });
+
+      // Query ALL submissions for this teacher, class, and subject
       const submissionsRef = collection(db, "studentQuizSubmissions");
       const q = query(
         submissionsRef,
@@ -928,36 +940,82 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
       );
 
       const querySnapshot = await getDocs(q);
-      const submissionsMap = new Map();
+      console.log(`📋 Found ${querySnapshot.docs.length} quiz submissions`);
+
+      // Group submissions by student to calculate averages
+      const submissionsByStudent = new Map();
 
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        submissionsMap.set(data.studentId, data);
+        const studentId = data.studentId;
+
+        if (!submissionsByStudent.has(studentId)) {
+          submissionsByStudent.set(studentId, []);
+        }
+
+        submissionsByStudent.get(studentId).push({
+          score: data.score || 0,
+          maxScore: data.maxScore || 40,
+          quizName: data.quizName,
+          submittedAt: data.submittedAt?.toDate() || new Date(),
+        });
       });
 
-      setGradeRecords((prev) =>
-        prev.map((record) => {
-          const studentSubmission = submissionsMap.get(record.studentId);
-          if (studentSubmission) {
+      console.log(
+        "📈 Student quiz data:",
+        Array.from(submissionsByStudent.entries())
+      );
+
+      // Update grade records with calculated average scores
+      setGradeRecords((prev) => {
+        return prev.map((record) => {
+          const studentSubmissions = submissionsByStudent.get(record.studentId);
+
+          if (studentSubmissions && studentSubmissions.length > 0) {
+            // Calculate average score across all quizzes
+            const totalScore = studentSubmissions.reduce(
+              (sum: number, sub: any) => sum + sub.score,
+              0
+            );
+
+            const totalMax = studentSubmissions.reduce(
+              (sum: number, sub: any) => sum + sub.maxScore,
+              0
+            );
+
+            // Calculate percentage and convert to OBJ score (out of 40)
+            const percentage = (totalScore / totalMax) * 100;
+            const objScore = Math.round(
+              (percentage / 100) * gradeSystem.maxScores.obj
+            );
+
             return {
               ...record,
-              objScore: studentSubmission.score || 0,
+              objScore: Math.min(objScore, gradeSystem.maxScores.obj), // Cap at max
+              quizInfo: {
+                totalQuizzes: studentSubmissions.length,
+                averagePercentage: Math.round(percentage),
+                lastQuiz:
+                  studentSubmissions[studentSubmissions.length - 1]?.quizName,
+              },
             };
           }
+
+          // No quiz data found for this student
           return record;
-        })
-      );
-    } catch (error) {
+        });
+      });
+
+      console.log("✅ Quiz results loaded successfully");
+    } catch (error: any) {
       console.error("❌ Error loading quiz results from Firestore:", error);
-      // Don't use localStorage - just set objScore to 0
-      setGradeRecords((prev) =>
-        prev.map((record) => ({
-          ...record,
-          objScore: 0,
-        }))
-      );
+
+      // Show error but don't crash
+      alert("Failed to load quiz results. Check your internet connection.");
+    } finally {
+      setLoadingGrades(false);
     }
-  }, [selectedClass, selectedSubject, user]);
+  }, [selectedClass, selectedSubject, user, gradeSystem.maxScores.obj]);
 
   // Calculate grade based on percentage
   const calculateGrade = (percentage: number): string => {
@@ -984,6 +1042,50 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     };
     return remarks[grade] || "Fail";
   };
+  // Add event listener for manual reload
+  // Add event listener for manual reload
+  useEffect(() => {
+    const handleReloadGrades = () => {
+      if (selectedClass && selectedSubject) {
+        console.log("🔄 Manual reload triggered");
+        // Call the grade loading logic directly
+        const event = new Event("force-reload-grades");
+        window.dispatchEvent(event);
+      }
+    };
+
+    window.addEventListener("reload-grades", handleReloadGrades);
+
+    return () => {
+      window.removeEventListener("reload-grades", handleReloadGrades);
+    };
+  }, [selectedClass, selectedSubject]);
+
+  // Then find this useEffect around line 1086 (the one that loads grades)
+  // Add this event listener to it:
+  useEffect(() => {
+    // ... existing code ...
+
+    // Add this inside the useEffect:
+    const handleForceReload = () => {
+      console.log("🔄 Force reload triggered via event");
+      loadGrades(); // This will reference the loadGrades function inside this useEffect
+    };
+
+    window.addEventListener("force-reload-grades", handleForceReload);
+
+    return () => {
+      window.removeEventListener("force-reload-grades", handleForceReload);
+    };
+  }, [
+    user,
+    selectedClass,
+    selectedSubject,
+    activeTerm,
+    activeSession,
+    isOpen,
+    filteredStudents,
+  ]);
 
   // Initialize grade records from students
   useEffect(() => {
@@ -1029,40 +1131,176 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     loadQuizResults,
   ]);
 
-  // Load grades from Firestore
-  useEffect(() => {
-    const loadGrades = async () => {
-      if (!user?.uid || !selectedClass || !selectedSubject) return;
+  // Add this debug function
+  const debugFirestoreQuery = async () => {
+    if (!user?.uid || !selectedClass || !selectedSubject) {
+      setDebugInfo("Missing user, class, or subject");
+      return;
+    }
 
-      try {
-        const gradeId = `${user.uid}_${selectedClass}_${selectedSubject}_${activeTerm}_${activeSession}`;
-        const gradeRef = doc(db, "grades", gradeId);
-        const docSnap = await getDoc(gradeRef);
+    try {
+      setDebugInfo("Running debug query...");
 
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setGradeRecords(data.grades || []);
-          console.log("Loaded grades from Firestore");
-        }
-      } catch (error) {
-        console.error("❌ Error loading grades from Firestore:", error);
-        alert(
-          "Failed to load grades from database. Please check your connection."
-        );
+      // Test the query
+      const gradesRef = collection(db, "grades");
+      const q = query(
+        gradesRef,
+        where("teacherId", "==", user.uid),
+        where("class", "==", selectedClass),
+        where("subject", "==", selectedSubject)
+      );
+
+      const querySnapshot = await getDocs(q);
+
+      const debugMessage = `Query results: ${querySnapshot.docs.length} documents found\n`;
+      console.log("📊 Debug query results:", debugMessage);
+
+      if (querySnapshot.docs.length > 0) {
+        querySnapshot.docs.forEach((doc, index) => {
+          console.log(`Document ${index + 1}:`, {
+            id: doc.id,
+            data: doc.data(),
+          });
+        });
       }
-    };
 
-    if (isOpen) {
+      setDebugInfo(`Found ${querySnapshot.docs.length} grade documents`);
+    } catch (error: any) {
+      console.error("🔍 Debug query error:", error);
+      setDebugInfo(`Error: ${error.message || error.code || "Unknown error"}`);
+    }
+  };
+  // Load grades from Firestore using query instead of direct document reference
+  // Move loadGrades function outside useEffect
+  const loadGrades = async () => {
+    setLoadingGrades(true);
+    if (!user?.uid || !selectedClass || !selectedSubject) {
+      console.log("Missing required parameters for grade loading");
+      return;
+    }
+
+    try {
+      console.log("📊 Loading grades for:", {
+        teacherId: user.uid,
+        class: selectedClass,
+        subject: selectedSubject,
+        term: activeTerm,
+        session: activeSession,
+      });
+
+      // Query grades collection instead of using composite ID
+      const gradesRef = collection(db, "grades");
+      const q = query(
+        gradesRef,
+        where("teacherId", "==", user.uid),
+        where("class", "==", selectedClass),
+        where("subject", "==", selectedSubject),
+        where("term", "==", activeTerm),
+        where("session", "==", activeSession)
+      );
+
+      const querySnapshot = await getDocs(q);
+      console.log(`📋 Found ${querySnapshot.docs.length} grade documents`);
+
+      if (!querySnapshot.empty) {
+        // Get the first matching document
+        const docSnap = querySnapshot.docs[0];
+        const data = docSnap.data();
+        console.log("📄 Grade document data:", data);
+
+        if (data.grades && Array.isArray(data.grades)) {
+          setGradeRecords(data.grades);
+          console.log("✅ Grades loaded successfully:", data.grades.length);
+        } else {
+          console.log("⚠️ No grades array found in document");
+          initializeGradeRecords();
+        }
+      } else {
+        console.log("📭 No grade document found. Initializing new records.");
+        initializeGradeRecords();
+      }
+    } catch (error: any) {
+      console.error("❌ Error loading grades from Firestore:", error);
+      if (error.code !== "not-found" && error.code !== "permission-denied") {
+        console.warn("⚠️ Could not load grades. Using empty state.");
+      }
+      initializeGradeRecords();
+    }
+  };
+
+  // Helper function to initialize grade records from students
+  const initializeGradeRecords = () => {
+    if (filteredStudents.length === 0) {
+      setGradeRecords([]);
+      return;
+    }
+
+    const initialRecords: GradeRecord[] = filteredStudents.map(
+      (student, index) => {
+        const studentId = student.id || `student-${index}`;
+        return {
+          id: `grade-${studentId}-${selectedSubject}-${selectedClass}-${activeTerm}`,
+          studentId: studentId,
+          studentName: student.fullName || `${student.first} ${student.last}`,
+          className: selectedClass,
+          subject: selectedSubject,
+          term: activeTerm,
+          session: activeSession,
+          objScore: 0,
+          caScores: {
+            ca1: 0,
+            ca2: 0,
+            ca3: 0,
+            assignment: 0,
+            project: 0,
+            practical: 0,
+          },
+          theoryScore: 0,
+          totalScore: 0,
+          percentage: 0,
+          grade: "F9",
+          remark: "Fail",
+          quizInfo: undefined,
+        };
+      }
+    );
+
+    setGradeRecords(initialRecords);
+    console.log("📝 Initialized new grade records:", initialRecords.length);
+  };
+
+  // Load grades when modal opens
+  useEffect(() => {
+    if (isOpen && selectedClass && selectedSubject) {
+      console.log("🔄 Loading grades for modal");
       loadGrades();
     }
-  }, [user, selectedClass, selectedSubject, activeTerm, activeSession, isOpen]);
+  }, [
+    user,
+    selectedClass,
+    selectedSubject,
+    activeTerm,
+    activeSession,
+    isOpen,
+    filteredStudents,
+  ]);
 
   // Auto-refresh quiz results
   useEffect(() => {
-    if (isOpen && selectedClass && selectedSubject) {
+    if (isOpen && selectedClass && selectedSubject && gradeRecords.length > 0) {
+      console.log("🔄 Setting up auto-refresh for quiz results");
+
       loadQuizResults(); // Load immediately
-      const interval = setInterval(loadQuizResults, 10000); // Change to 10 seconds
-      return () => clearInterval(interval);
+
+      const interval = setInterval(() => {
+        console.log("🔄 Auto-refreshing quiz results...");
+        loadQuizResults();
+      }, 30000); // Every 30 seconds
+
+      return () => {
+        console.log("🔄 Clearing auto-refresh interval");
+        clearInterval(interval);
+      };
     }
   }, [isOpen, selectedClass, selectedSubject, loadQuizResults]);
 
@@ -1165,25 +1403,56 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
       })
     );
   };
-
+  // In your existing handleSaveGrades function, add this line:
   const handleSaveGrades = async () => {
     if (!selectedClass || !selectedSubject) {
       alert("Please select a class and subject");
       return;
     }
 
+    if (!user?.uid) {
+      alert("User not authenticated");
+      return;
+    }
+
     setSavingGrades(true);
 
     try {
-      // Save to Firestore
-      const gradeId = `${user?.uid}_${selectedClass}_${selectedSubject}_${activeTerm}_${activeSession}`;
-      const gradeRef = doc(db, "grades", gradeId);
+      // First, check if a grade document already exists
+      const gradesRef = collection(db, "grades");
+      const q = query(
+        gradesRef,
+        where("teacherId", "==", user.uid),
+        where("class", "==", selectedClass),
+        where("subject", "==", selectedSubject),
+        where("term", "==", activeTerm),
+        where("session", "==", activeSession)
+      );
+
+      const querySnapshot = await getDocs(q);
+      let gradeDocId: string;
+
+      if (!querySnapshot.empty) {
+        // Update existing document
+        gradeDocId = querySnapshot.docs[0].id;
+      } else {
+        // Create new document ID
+        gradeDocId = `${user.uid}_${selectedClass.replace(
+          /\s+/g,
+          "_"
+        )}_${selectedSubject.replace(/\s+/g, "_")}_${activeTerm.replace(
+          /\s+/g,
+          "_"
+        )}_${activeSession.replace(/\s+/g, "_")}`;
+      }
+
+      const gradeRef = doc(db, "grades", gradeDocId);
 
       await setDoc(
         gradeRef,
         {
-          teacherId: user?.uid,
-          teacherName: userData?.fullName || "Teacher",
+          teacherId: user.uid,
+          teacherName: userData?.fullName || user?.displayName || "Teacher",
           teacherEmail: user?.email || "",
           class: selectedClass,
           subject: selectedSubject,
@@ -1191,21 +1460,133 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
           session: activeSession,
           grades: gradeRecords,
           updatedAt: new Date(),
-          createdAt: serverTimestamp(),
+          createdAt: querySnapshot.empty ? serverTimestamp() : undefined,
         },
         { merge: true }
       );
 
-      console.log("✅ Grades saved to Firestore");
+      console.log("✅ Grades saved to Firestore with ID:", gradeDocId);
+
+      // Save individual student grades
+      await saveIndividualStudentGrades();
+
+      // Save final report
+      await saveFinalGradesReport();
+
       setIsEditing(false);
-      alert("Grades saved successfully to database!");
-    } catch (error) {
+      alert("Grades saved successfully!");
+    } catch (error: any) {
       console.error("❌ Error saving grades to Firestore:", error);
-      alert(
-        "Failed to save grades. Please check your connection and try again."
-      );
-    } finally {
-      setSavingGrades(false);
+
+      // More specific error messages
+      if (error.code === "permission-denied") {
+        alert("Permission denied. Please check your Firebase rules.");
+      } else if (error.code === "unavailable") {
+        alert("Network error. Please check your internet connection.");
+      } else {
+        alert("Failed to save grades. Please try again.");
+      }
+    }
+  }; // Add this function to save individual student grades to Firestore
+  const saveIndividualStudentGrades = async () => {
+    if (!user?.uid || !selectedClass || !selectedSubject) return;
+
+    try {
+      console.log("💾 Saving individual student grades...");
+
+      const batch = writeBatch(db);
+
+      gradeRecords.forEach((record) => {
+        // Create a unique ID for each student's grade record
+        const individualGradeId = `${user.uid}_${record.studentId}_${selectedSubject}_${activeTerm}_${activeSession}`;
+        const individualGradeRef = doc(db, "studentGrades", individualGradeId);
+
+        const studentGradeData = {
+          studentId: record.studentId,
+          studentName: record.studentName,
+          teacherId: user.uid,
+          teacherName: userData?.fullName || "Teacher",
+          teacherEmail: user?.email || "",
+          class: selectedClass,
+          subject: selectedSubject,
+          term: activeTerm,
+          session: activeSession,
+          scores: {
+            obj: record.objScore,
+            ca1: record.caScores.ca1,
+            ca2: record.caScores.ca2,
+            ca3: record.caScores.ca3,
+            assignment: record.caScores.assignment,
+            project: record.caScores.project,
+            practical: record.caScores.practical,
+            theory: record.theoryScore,
+          },
+          totalScore: record.totalScore,
+          percentage: record.percentage,
+          grade: record.grade,
+          position: record.positionInClass,
+          remark: record.remark,
+          published: true,
+          publishedAt: new Date(),
+          updatedAt: new Date(),
+          createdAt: new Date(),
+        };
+
+        batch.set(individualGradeRef, studentGradeData, { merge: true });
+      });
+
+      await batch.commit();
+      console.log("✅ Individual student grades saved to Firestore");
+    } catch (error: any) {
+      console.error("❌ Error saving individual grades:", error);
+      throw error; // Re-throw to handle in the main save function
+    }
+  };
+  // Function to save a comprehensive final report
+  const saveFinalGradesReport = async () => {
+    if (!user?.uid || !selectedClass || !selectedSubject) return;
+
+    try {
+      const reportId = `${user.uid}_${selectedClass}_${selectedSubject}_${activeTerm}_${activeSession}_final_report`;
+      const reportRef = doc(db, "finalGradeReports", reportId);
+
+      const reportData = {
+        teacherId: user.uid,
+        teacherName: userData?.fullName || "Teacher",
+        class: selectedClass,
+        subject: selectedSubject,
+        term: activeTerm,
+        session: activeSession,
+        summary: {
+          totalStudents: gradeRecords.length,
+          classAverage: Math.round(
+            gradeRecords.reduce((sum, r) => sum + r.percentage, 0) /
+              gradeRecords.length
+          ),
+          passRate: Math.round(
+            (gradeRecords.filter((r) => r.grade !== "F9").length /
+              gradeRecords.length) *
+              100
+          ),
+          topStudent: gradeRecords[0]?.studentName || "N/A",
+          topScore: gradeRecords[0]?.percentage || 0,
+          gradeDistribution: Object.keys(gradeSystem.grades).reduce(
+            (acc, grade) => {
+              acc[grade] = gradeRecords.filter((r) => r.grade === grade).length;
+              return acc;
+            },
+            {} as Record<string, number>
+          ),
+        },
+        grades: gradeRecords,
+        generatedAt: new Date(),
+        exported: false,
+      };
+
+      await setDoc(reportRef, reportData, { merge: true });
+      console.log("✅ Final report saved to Firestore");
+    } catch (error: any) {
+      console.error("❌ Error saving final report:", error);
     }
   };
 
@@ -1396,10 +1777,75 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
                     <RefreshCw className="animate-spin" size={14} />
                     <span>Saving to database...</span>
                   </div>
+                ) : loadingGrades ? (
+                  <div className="loading-grades">
+                    <RefreshCw className="animate-spin" size={14} />
+                    <span>Loading grades...</span>
+                  </div>
                 ) : (
-                  <div className="online-status">
-                    <div className="online-dot"></div>
-                    <span>Connected to cloud database</span>
+                  <div
+                    className="online-status"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      <div className="online-dot"></div>
+                      <span>Connected to cloud database</span>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "4px",
+                        marginLeft: "auto",
+                      }}
+                    >
+                      <button
+                        className="retry-btn"
+                        onClick={() => debugFirestoreQuery()}
+                        style={{
+                          fontSize: "12px",
+                          padding: "4px 8px",
+                          background: "#f3f4f6",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Debug Query
+                      </button>
+                      <button
+                        className="reload-btn"
+                        onClick={() => {
+                          // Force reload grades
+                          setGradeRecords([]);
+                          setTimeout(() => {
+                            const event = new Event("reload-grades");
+                            window.dispatchEvent(event);
+                          }, 100);
+                        }}
+                        style={{
+                          fontSize: "12px",
+                          padding: "4px 8px",
+                          background: "#3b82f6",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Reload Grades
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1487,6 +1933,24 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
                         <div className="auto-score-display">
                           <span className="score-value">{record.objScore}</span>
                           <span className="auto-badge">Auto</span>
+                          {record.quizInfo && (
+                            <div className="quiz-info-tooltip">
+                              <span className="quiz-count">
+                                {record.quizInfo.totalQuizzes} quiz
+                                {record.quizInfo.totalQuizzes !== 1
+                                  ? "zes"
+                                  : ""}
+                              </span>
+                              <span className="quiz-avg">
+                                {record.quizInfo.averagePercentage}% avg
+                              </span>
+                              {record.quizInfo.lastQuiz && (
+                                <span className="quiz-last">
+                                  Last: {record.quizInfo.lastQuiz}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td>
@@ -4421,6 +4885,49 @@ const TeacherDashboard: React.FC = () => {
       />
 
       <style>{`
+      /* Add these styles to your existing CSS */
+      .quiz-info-tooltip {
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 8px;
+        font-size: 11px;
+        color: #6b7280;
+        min-width: 150px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        display: none;
+        z-index: 10;
+      }
+      
+      .auto-score-display:hover .quiz-info-tooltip {
+        display: block;
+      }
+      
+      .quiz-count, .quiz-avg, .quiz-last {
+        display: block;
+        margin-bottom: 4px;
+      }
+      
+      .quiz-count {
+        color: #1e40af;
+        font-weight: 600;
+      }
+      
+      .quiz-avg {
+        color: #059669;
+        font-weight: 600;
+      }
+      
+      .quiz-last {
+        color: #6b7280;
+        font-size: 10px;
+        border-top: 1px solid #e5e7eb;
+        padding-top: 4px;
+        margin-top: 4px;
+      }
         /* Enhanced CSS styles with new features */
         .app {
           position: relative;
