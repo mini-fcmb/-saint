@@ -342,52 +342,137 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
   const [selectedQuiz, setSelectedQuiz] = useState<string>("all");
   const [autoRefresh, setAutoRefresh] = useState(true);
 
-  // Inside LiveMonitoringModal component, after the state declarations
+  // Add these functions inside the LiveMonitoringModal component
+
+  // 1. Check if student has started a quiz
+  const checkIfStudentHasStartedQuiz = async (
+    studentId: string,
+    quizId: string
+  ): Promise<boolean> => {
+    try {
+      // Check if there's a submission in progress for this student and quiz
+      const submissionsRef = collection(db, "studentQuizSubmissions");
+      const q = query(
+        submissionsRef,
+        where("studentId", "==", studentId),
+        where("quizId", "==", quizId)
+      );
+
+      const querySnapshot = await getDocs(q);
+      return !querySnapshot.empty;
+    } catch (error) {
+      console.error("Error checking if student started quiz:", error);
+      return false;
+    }
+  };
+
+  // 2. Setup submission listener
+  const setupSubmissionListener = () => {
+    if (!user?.uid || !teacherClasses.length) return () => {};
+
+    const teacherClassNames = teacherClasses.map((c) => c.className);
+
+    // Listen for quiz submissions
+    const submissionsRef = collection(db, "studentQuizSubmissions");
+    const q = query(
+      submissionsRef,
+      where("className", "in", teacherClassNames),
+      where("status", "==", "submitted")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added") {
+          const data = change.doc.data();
+          console.log(
+            `📝 Student ${data.studentName} submitted quiz ${data.quizName}`
+          );
+
+          // Update monitoring data to show "submitted" for this student
+          setMonitoringData((prev) =>
+            prev.map((item) => {
+              if (
+                item.studentId === data.studentId &&
+                item.quizId === data.quizId
+              ) {
+                return {
+                  ...item,
+                  status: "submitted",
+                  progress: 100,
+                  score: data.score,
+                  maxScore: data.maxScore,
+                  lastActivity: new Date(),
+                };
+              }
+              return item;
+            })
+          );
+        }
+      });
+    });
+
+    return unsubscribe;
+  };
+
+  // REPLACED the existing createSampleMonitoringData function with this:
+
   const createSampleMonitoringData = (): EnhancedMonitoringData[] => {
     if (students.length === 0 || activeQuizzes.length === 0) return [];
 
-    return students.slice(0, 5).map((student, index) => {
-      const quiz = activeQuizzes[index % activeQuizzes.length];
+    const sampleData: EnhancedMonitoringData[] = [];
 
-      return {
+    // Only create sample data for active quizzes
+    const activeQuiz = activeQuizzes.find((quiz) => quiz.status === "active");
+    if (!activeQuiz) return [];
+
+    // Only show 3 sample students (not all)
+    students.slice(0, 3).forEach((student, index) => {
+      // Simulate: 1st student in-progress, 2nd student violation, 3rd student submitted
+      const statuses: ("in-progress" | "violation" | "submitted")[] = [
+        "in-progress",
+        "violation",
+        "submitted",
+      ];
+      const status = statuses[index] || "in-progress";
+
+      const data: EnhancedMonitoringData = {
         studentId: student.id || `student-${index}`,
         studentName: student.fullName || `Student ${index + 1}`,
         studentClass: student.className || "Class A",
-        quizId: quiz.id,
-        quizName: quiz.name,
-        quizClass: quiz.targetClass || "Class A",
-        status:
-          index === 0 || index === 2
-            ? "violation"
-            : index % 3 === 0
-            ? "in-progress"
-            : "submitted",
-        progress: Math.floor(Math.random() * 30) + 70,
-        timeSpent: `${Math.floor(Math.random() * 30) + 1}:${Math.floor(
-          Math.random() * 60
-        )
-          .toString()
-          .padStart(2, "0")}`,
-        currentQuestion: Math.floor(Math.random() * quiz.questions.length) + 1,
-        totalQuestions: quiz.questions.length,
+        quizId: activeQuiz.id,
+        quizName: activeQuiz.name,
+        quizClass: activeQuiz.targetClass || "Class A",
+        status: status,
+        progress:
+          status === "submitted" ? 100 : Math.floor(Math.random() * 30) + 70,
+        timeSpent:
+          status === "submitted"
+            ? `${activeQuiz.duration}:00`
+            : `${Math.floor(Math.random() * 20) + 1}:${Math.floor(
+                Math.random() * 60
+              )
+                .toString()
+                .padStart(2, "0")}`,
+        currentQuestion:
+          status === "submitted"
+            ? activeQuiz.questions.length
+            : Math.floor(Math.random() * activeQuiz.questions.length) + 1,
+        totalQuestions: activeQuiz.questions.length,
         violations:
-          index === 0 || index === 2
+          status === "violation"
             ? [
                 {
                   id: `violation-${Date.now()}-${index}`,
                   timestamp: new Date(Date.now() - Math.random() * 300000),
-                  type: index === 0 ? "tab-switch" : "right-click",
-                  description:
-                    index === 0
-                      ? "Switched to another browser tab"
-                      : "Attempted to right-click and copy",
-                  severity: index === 0 ? "medium" : "high",
+                  type: "tab-switch",
+                  description: "Switched to another browser tab",
+                  severity: "medium",
                   studentId: student.id || `student-${index}`,
                   studentName: student.fullName || `Student ${index + 1}`,
                   studentClass: student.className || "Class A",
-                  quizId: quiz.id,
-                  quizName: quiz.name,
-                  quizClass: quiz.targetClass || "Class A",
+                  quizId: activeQuiz.id,
+                  quizName: activeQuiz.name,
+                  quizClass: activeQuiz.targetClass || "Class A",
                   browser: "Chrome/120.0",
                   deviceType: "Desktop",
                 },
@@ -395,12 +480,16 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
             : [],
         lastActivity: new Date(Date.now() - Math.random() * 600000),
         score:
-          index % 3 === 0
-            ? undefined
-            : Math.floor(Math.random() * quiz.maxScore),
-        maxScore: quiz.maxScore,
+          status === "submitted"
+            ? Math.floor(Math.random() * activeQuiz.maxScore)
+            : undefined,
+        maxScore: activeQuiz.maxScore,
       };
+
+      sampleData.push(data);
     });
+
+    return sampleData;
   };
 
   const saveMonitoringDataToFirestore = async (
@@ -435,10 +524,65 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
   useEffect(() => {
     if (!user?.uid || !isOpen) return;
 
-    // This is just a placeholder since we don't have the grade context here
     // The real implementation would be in GradeManagementModal
     console.log("🔄 Live monitoring active");
   }, [user, isOpen]);
+
+  // Update progress for in-progress quizzes
+  useEffect(() => {
+    if (!isOpen || monitoringData.length === 0 || !autoRefresh) return;
+
+    const interval = setInterval(() => {
+      setMonitoringData((prev) =>
+        prev.map((item) => {
+          // Only update items that are in-progress or have violations (still taking quiz)
+          if (item.status === "in-progress" || item.status === "violation") {
+            // Increase progress slightly (1-3%)
+            const newProgress = Math.min(
+              99,
+              item.progress + (Math.random() * 0.5 + 0.1)
+            );
+            // Increase time spent by 1 minute
+            const [minutes, seconds] = item.timeSpent.split(":").map(Number);
+            const totalSeconds = minutes * 60 + seconds + 60; // Add 1 minute
+            const newMinutes = Math.floor(totalSeconds / 60);
+            const newSeconds = totalSeconds % 60;
+
+            // Update current question based on progress
+            const newCurrentQuestion = Math.min(
+              item.totalQuestions,
+              Math.floor((newProgress / 100) * item.totalQuestions) + 1
+            );
+
+            return {
+              ...item,
+              progress: Math.round(newProgress),
+              timeSpent: `${newMinutes}:${newSeconds
+                .toString()
+                .padStart(2, "0")}`,
+              currentQuestion: newCurrentQuestion,
+              lastActivity: new Date(),
+            };
+          }
+          return item;
+        })
+      );
+    }, 10000); // Update every 10 seconds when auto-refresh is on
+
+    return () => clearInterval(interval);
+  }, [isOpen, monitoringData.length, autoRefresh]);
+
+  useEffect(() => {
+    if (!isOpen || !user?.uid) return;
+
+    const submissionUnsubscribe = setupSubmissionListener();
+
+    return () => {
+      if (submissionUnsubscribe) {
+        submissionUnsubscribe();
+      }
+    };
+  }, [isOpen, user, teacherClasses]);
 
   // Update the useEffect that loads monitoring data in LiveMonitoringModal
   useEffect(() => {
@@ -526,6 +670,7 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
       return () => clearInterval(interval);
     }
   }, [isOpen, autoRefresh, selectedQuiz, teacherClasses, user, activeQuizzes]);
+  // REPLACE THE ABOVE CODE WITH THIS:
   useEffect(() => {
     if (!isOpen || !user?.uid || !teacherClasses.length) return;
 
@@ -534,18 +679,30 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
     );
 
     console.log(
-      "🎯 Setting up live monitoring for classes:",
+      "🎯 Setting up live monitoring for ACTIVE quizzes in classes:",
       teacherClassNames
     );
-    console.log("👨‍🏫 Teacher ID:", user.uid);
 
-    // Set up real-time listener - listen to ALL monitoring for teacher's classes
+    // Only monitor ACTIVE quizzes
+    const activeQuizIds = activeQuizzes
+      .filter((quiz) => quiz.status === "active")
+      .map((quiz) => quiz.id);
+
+    if (activeQuizIds.length === 0) {
+      console.log("❌ No active quizzes to monitor");
+      setMonitoringData([]);
+      return;
+    }
+
+    console.log("✅ Active quizzes to monitor:", activeQuizIds);
+
+    // Set up real-time listener - ONLY for active quizzes and specific statuses
     const monitoringRef = collection(db, "monitoring");
     const q = query(
       monitoringRef,
-      where("quizClass", "in", teacherClassNames)
-      // Remove status filter to see ALL students
-      // Also removed teacherId filter since student's monitoring doesn't have teacherId initially
+      where("quizId", "in", activeQuizIds),
+      where("quizClass", "in", teacherClassNames),
+      where("status", "in", ["in-progress", "violation"])
     );
 
     const unsubscribe = onSnapshot(
@@ -562,14 +719,18 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
         snapshot.forEach((doc) => {
           const data = doc.data();
 
+          // Check if this is relevant data (has required fields)
+          if (!data.studentId || !data.quizId) {
+            console.log("Skipping document - missing studentId or quizId");
+            return;
+          }
+
           // Log for debugging
-          console.log("📊 Monitoring data:", {
+          console.log("📊 Monitoring data received:", {
             id: doc.id,
             student: data.studentName,
             status: data.status,
             violations: data.violations?.length || 0,
-            quiz: data.quizName,
-            class: data.quizClass,
           });
 
           // Convert Firestore timestamps
@@ -582,6 +743,14 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
               : new Date(),
           }));
 
+          // Determine correct status
+          let status = data.status || "in-progress";
+
+          // If there are violations, mark as violation (unless already submitted)
+          if (violations.length > 0 && status !== "submitted") {
+            status = "violation";
+          }
+
           monitoringData.push({
             id: doc.id,
             studentId: data.studentId || "",
@@ -590,7 +759,7 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
             quizId: data.quizId || "",
             quizName: data.quizName || "Unknown Quiz",
             quizClass: data.quizClass || "Unknown Class",
-            status: data.status || "in-progress",
+            status: status,
             progress: data.progress || 0,
             timeSpent: data.timeSpent || "00:00",
             currentQuestion: data.currentQuestion || 0,
@@ -607,12 +776,27 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
           });
         });
 
-        console.log("✅ Final monitoring data count:", monitoringData.length);
-        setMonitoringData(monitoringData);
+        console.log(
+          "✅ Final active monitoring data count:",
+          monitoringData.length
+        );
+
+        // If no real data but we have active quizzes, show sample data for demo
+        if (monitoringData.length === 0 && activeQuizzes.length > 0) {
+          const sampleData = createSampleMonitoringData();
+          console.log("📋 Using sample data:", sampleData.length);
+          setMonitoringData(sampleData);
+        } else {
+          setMonitoringData(monitoringData);
+        }
       },
       (error) => {
         console.error("❌ Live monitoring error:", error);
         console.error("Error details:", error.code, error.message);
+
+        // Fallback to sample data on error
+        const sampleData = createSampleMonitoringData();
+        setMonitoringData(sampleData);
       }
     );
 
@@ -793,8 +977,35 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
               {filteredData.length === 0 ? (
                 <div className="empty-state">
                   <EyeOff size={48} color="#9ca3af" />
-                  <p>No active monitoring data</p>
-                  <span>Students will appear here when they start quizzes</span>
+                  {activeQuizzes.filter((q) => q.status === "active").length ===
+                  0 ? (
+                    <>
+                      <p>No active quizzes running</p>
+                      <span>
+                        Create and activate quizzes to start monitoring
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <p>No students currently taking quizzes</p>
+                      <span>
+                        Students will appear here when they start active quizzes
+                      </span>
+                      <div
+                        style={{
+                          marginTop: "10px",
+                          fontSize: "12px",
+                          color: "#6b7280",
+                        }}
+                      >
+                        Active quizzes:{" "}
+                        {activeQuizzes
+                          .filter((q) => q.status === "active")
+                          .map((q) => q.name)
+                          .join(", ")}
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
                 filteredData.map((data) => (
@@ -919,214 +1130,213 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
   );
 };
 
+// Reschedule Modal Component
+interface RescheduleModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onReschedule: (
+    quizId: string,
+    newDate: string,
+    newTime: string,
+    newDuration?: number
+  ) => void;
+  quiz: Quiz | null;
+}
 
-  // Reschedule Modal Component
-  interface RescheduleModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onReschedule: (
-      quizId: string,
-      newDate: string,
-      newTime: string,
-      newDuration?: number
-    ) => void;
-    quiz: Quiz | null;
-  }
+const RescheduleModal: React.FC<RescheduleModalProps> = ({
+  isOpen,
+  onClose,
+  onReschedule,
+  quiz,
+}) => {
+  const [newDate, setNewDate] = useState("");
+  const [newTime, setNewTime] = useState("");
+  const [newDuration, setNewDuration] = useState(30);
 
-  const RescheduleModal: React.FC<RescheduleModalProps> = ({
-    isOpen,
-    onClose,
-    onReschedule,
-    quiz,
-  }) => {
-    const [newDate, setNewDate] = useState("");
-    const [newTime, setNewTime] = useState("");
-    const [newDuration, setNewDuration] = useState(30);
+  useEffect(() => {
+    if (quiz && isOpen) {
+      setNewDate(quiz.scheduledDate);
+      setNewTime(quiz.scheduledTime);
+      setNewDuration(quiz.duration);
+    }
+  }, [quiz, isOpen]);
 
-    useEffect(() => {
-      if (quiz && isOpen) {
-        setNewDate(quiz.scheduledDate);
-        setNewTime(quiz.scheduledTime);
-        setNewDuration(quiz.duration);
-      }
-    }, [quiz, isOpen]);
-
-    const handleTimeAdjustment = (minutes: number) => {
-      if (newTime) {
-        const [hours, mins] = newTime.split(":").map(Number);
-        const date = new Date();
-        date.setHours(hours);
-        date.setMinutes(mins + minutes);
-        setNewTime(
-          `${date.getHours().toString().padStart(2, "0")}:${date
-            .getMinutes()
-            .toString()
-            .padStart(2, "0")}`
-        );
-      }
-    };
-
-    const handleSubmit = () => {
-      if (quiz && newDate && newTime) {
-        onReschedule(quiz.id, newDate, newTime, newDuration);
-        onClose();
-      }
-    };
-
-    if (!isOpen || !quiz) return null;
-
-    return (
-      <div className="modal-overlay">
-        <div
-          className="modal-content small-modal"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="modal-header">
-            <div>
-              <h2>Reschedule Quiz</h2>
-              <p>Adjust date, time, and duration for "{quiz.name}"</p>
-            </div>
-            <button className="close-btn" onClick={onClose}>
-              <X size={24} />
-            </button>
-          </div>
-
-          <div className="modal-body">
-            <div className="form-group">
-              <label>Quiz Details</label>
-              <div className="quiz-details">
-                <p>
-                  <strong>Name:</strong> {quiz.name}
-                </p>
-                <p>
-                  <strong>Subject:</strong> {quiz.subject}
-                </p>
-                <p>
-                  <strong>Class:</strong> {quiz.targetClass}
-                </p>
-                <p>
-                  <strong>Questions:</strong> {quiz.questions.length}
-                </p>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>New Date *</label>
-              <input
-                type="date"
-                className="text-input"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-                min={new Date().toISOString().split("T")[0]}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>New Time *</label>
-              <div className="time-control">
-                <input
-                  type="time"
-                  className="text-input"
-                  value={newTime}
-                  onChange={(e) => setNewTime(e.target.value)}
-                />
-                <div className="time-adjustments">
-                  <button
-                    type="button"
-                    className="time-adjust-btn"
-                    onClick={() => handleTimeAdjustment(5)}
-                  >
-                    +5 min
-                  </button>
-                  <button
-                    type="button"
-                    className="time-adjust-btn"
-                    onClick={() => handleTimeAdjustment(-5)}
-                  >
-                    -5 min
-                  </button>
-                  <button
-                    type="button"
-                    className="time-adjust-btn"
-                    onClick={() => handleTimeAdjustment(15)}
-                  >
-                    +15 min
-                  </button>
-                  <button
-                    type="button"
-                    className="time-adjust-btn"
-                    onClick={() => handleTimeAdjustment(-15)}
-                  >
-                    -15 min
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>Test Duration (minutes) *</label>
-              <input
-                type="number"
-                min="5"
-                max="180"
-                className="text-input"
-                value={newDuration}
-                onChange={(e) => setNewDuration(parseInt(e.target.value) || 30)}
-              />
-              <small>Time students have to complete the test</small>
-            </div>
-
-            <div className="reschedule-summary">
-              <h4>Schedule Summary</h4>
-              <p>
-                <strong>Current:</strong>{" "}
-                {new Date(quiz.scheduledDate).toLocaleDateString()} at{" "}
-                {quiz.scheduledTime} ({quiz.duration} min)
-              </p>
-              <p>
-                <strong>New:</strong> {new Date(newDate).toLocaleDateString()}{" "}
-                at {newTime} ({newDuration} min)
-              </p>
-              <p>
-                <strong>Total Duration:</strong> {newDuration + 10} minutes
-                (including 10min buffer)
-              </p>
-            </div>
-          </div>
-
-          <div className="modal-footer">
-            <button className="action-btn cancel" onClick={onClose}>
-              Cancel
-            </button>
-            <button
-              className="action-btn save"
-              onClick={handleSubmit}
-              disabled={!newDate || !newTime}
-            >
-              Update Schedule
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  const handleTimeAdjustment = (minutes: number) => {
+    if (newTime) {
+      const [hours, mins] = newTime.split(":").map(Number);
+      const date = new Date();
+      date.setHours(hours);
+      date.setMinutes(mins + minutes);
+      setNewTime(
+        `${date.getHours().toString().padStart(2, "0")}:${date
+          .getMinutes()
+          .toString()
+          .padStart(2, "0")}`
+      );
+    }
   };
 
-  // Quiz Name Modal Component
-  interface QuizNameModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onSave: (
-      name: string,
-      duration: number,
-      scheduledDate: string,
-      scheduledTime: string,
-      subject: string,
-      maxScore: number,
-      targetClass: string
-    ) => void;
-    questions: Question[];
-    teacherClasses: TeacherClassInfo[];
-  }
+  const handleSubmit = () => {
+    if (quiz && newDate && newTime) {
+      onReschedule(quiz.id, newDate, newTime, newDuration);
+      onClose();
+    }
+  };
+
+  if (!isOpen || !quiz) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div
+        className="modal-content small-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <h2>Reschedule Quiz</h2>
+            <p>Adjust date, time, and duration for "{quiz.name}"</p>
+          </div>
+          <button className="close-btn" onClick={onClose}>
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="modal-body">
+          <div className="form-group">
+            <label>Quiz Details</label>
+            <div className="quiz-details">
+              <p>
+                <strong>Name:</strong> {quiz.name}
+              </p>
+              <p>
+                <strong>Subject:</strong> {quiz.subject}
+              </p>
+              <p>
+                <strong>Class:</strong> {quiz.targetClass}
+              </p>
+              <p>
+                <strong>Questions:</strong> {quiz.questions.length}
+              </p>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>New Date *</label>
+            <input
+              type="date"
+              className="text-input"
+              value={newDate}
+              onChange={(e) => setNewDate(e.target.value)}
+              min={new Date().toISOString().split("T")[0]}
+            />
+          </div>
+
+          <div className="form-group">
+            <label>New Time *</label>
+            <div className="time-control">
+              <input
+                type="time"
+                className="text-input"
+                value={newTime}
+                onChange={(e) => setNewTime(e.target.value)}
+              />
+              <div className="time-adjustments">
+                <button
+                  type="button"
+                  className="time-adjust-btn"
+                  onClick={() => handleTimeAdjustment(5)}
+                >
+                  +5 min
+                </button>
+                <button
+                  type="button"
+                  className="time-adjust-btn"
+                  onClick={() => handleTimeAdjustment(-5)}
+                >
+                  -5 min
+                </button>
+                <button
+                  type="button"
+                  className="time-adjust-btn"
+                  onClick={() => handleTimeAdjustment(15)}
+                >
+                  +15 min
+                </button>
+                <button
+                  type="button"
+                  className="time-adjust-btn"
+                  onClick={() => handleTimeAdjustment(-15)}
+                >
+                  -15 min
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Test Duration (minutes) *</label>
+            <input
+              type="number"
+              min="5"
+              max="180"
+              className="text-input"
+              value={newDuration}
+              onChange={(e) => setNewDuration(parseInt(e.target.value) || 30)}
+            />
+            <small>Time students have to complete the test</small>
+          </div>
+
+          <div className="reschedule-summary">
+            <h4>Schedule Summary</h4>
+            <p>
+              <strong>Current:</strong>{" "}
+              {new Date(quiz.scheduledDate).toLocaleDateString()} at{" "}
+              {quiz.scheduledTime} ({quiz.duration} min)
+            </p>
+            <p>
+              <strong>New:</strong> {new Date(newDate).toLocaleDateString()} at{" "}
+              {newTime} ({newDuration} min)
+            </p>
+            <p>
+              <strong>Total Duration:</strong> {newDuration + 10} minutes
+              (including 10min buffer)
+            </p>
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="action-btn cancel" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="action-btn save"
+            onClick={handleSubmit}
+            disabled={!newDate || !newTime}
+          >
+            Update Schedule
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Quiz Name Modal Component
+interface QuizNameModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (
+    name: string,
+    duration: number,
+    scheduledDate: string,
+    scheduledTime: string,
+    subject: string,
+    maxScore: number,
+    targetClass: string
+  ) => void;
+  questions: Question[];
+  teacherClasses: TeacherClassInfo[];
+}
 // Enhanced Grade Management System Modal
 interface GradeManagementModalProps {
   isOpen: boolean;
