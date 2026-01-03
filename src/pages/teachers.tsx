@@ -919,6 +919,214 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
   );
 };
 
+
+  // Reschedule Modal Component
+  interface RescheduleModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onReschedule: (
+      quizId: string,
+      newDate: string,
+      newTime: string,
+      newDuration?: number
+    ) => void;
+    quiz: Quiz | null;
+  }
+
+  const RescheduleModal: React.FC<RescheduleModalProps> = ({
+    isOpen,
+    onClose,
+    onReschedule,
+    quiz,
+  }) => {
+    const [newDate, setNewDate] = useState("");
+    const [newTime, setNewTime] = useState("");
+    const [newDuration, setNewDuration] = useState(30);
+
+    useEffect(() => {
+      if (quiz && isOpen) {
+        setNewDate(quiz.scheduledDate);
+        setNewTime(quiz.scheduledTime);
+        setNewDuration(quiz.duration);
+      }
+    }, [quiz, isOpen]);
+
+    const handleTimeAdjustment = (minutes: number) => {
+      if (newTime) {
+        const [hours, mins] = newTime.split(":").map(Number);
+        const date = new Date();
+        date.setHours(hours);
+        date.setMinutes(mins + minutes);
+        setNewTime(
+          `${date.getHours().toString().padStart(2, "0")}:${date
+            .getMinutes()
+            .toString()
+            .padStart(2, "0")}`
+        );
+      }
+    };
+
+    const handleSubmit = () => {
+      if (quiz && newDate && newTime) {
+        onReschedule(quiz.id, newDate, newTime, newDuration);
+        onClose();
+      }
+    };
+
+    if (!isOpen || !quiz) return null;
+
+    return (
+      <div className="modal-overlay">
+        <div
+          className="modal-content small-modal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="modal-header">
+            <div>
+              <h2>Reschedule Quiz</h2>
+              <p>Adjust date, time, and duration for "{quiz.name}"</p>
+            </div>
+            <button className="close-btn" onClick={onClose}>
+              <X size={24} />
+            </button>
+          </div>
+
+          <div className="modal-body">
+            <div className="form-group">
+              <label>Quiz Details</label>
+              <div className="quiz-details">
+                <p>
+                  <strong>Name:</strong> {quiz.name}
+                </p>
+                <p>
+                  <strong>Subject:</strong> {quiz.subject}
+                </p>
+                <p>
+                  <strong>Class:</strong> {quiz.targetClass}
+                </p>
+                <p>
+                  <strong>Questions:</strong> {quiz.questions.length}
+                </p>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>New Date *</label>
+              <input
+                type="date"
+                className="text-input"
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
+                min={new Date().toISOString().split("T")[0]}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>New Time *</label>
+              <div className="time-control">
+                <input
+                  type="time"
+                  className="text-input"
+                  value={newTime}
+                  onChange={(e) => setNewTime(e.target.value)}
+                />
+                <div className="time-adjustments">
+                  <button
+                    type="button"
+                    className="time-adjust-btn"
+                    onClick={() => handleTimeAdjustment(5)}
+                  >
+                    +5 min
+                  </button>
+                  <button
+                    type="button"
+                    className="time-adjust-btn"
+                    onClick={() => handleTimeAdjustment(-5)}
+                  >
+                    -5 min
+                  </button>
+                  <button
+                    type="button"
+                    className="time-adjust-btn"
+                    onClick={() => handleTimeAdjustment(15)}
+                  >
+                    +15 min
+                  </button>
+                  <button
+                    type="button"
+                    className="time-adjust-btn"
+                    onClick={() => handleTimeAdjustment(-15)}
+                  >
+                    -15 min
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Test Duration (minutes) *</label>
+              <input
+                type="number"
+                min="5"
+                max="180"
+                className="text-input"
+                value={newDuration}
+                onChange={(e) => setNewDuration(parseInt(e.target.value) || 30)}
+              />
+              <small>Time students have to complete the test</small>
+            </div>
+
+            <div className="reschedule-summary">
+              <h4>Schedule Summary</h4>
+              <p>
+                <strong>Current:</strong>{" "}
+                {new Date(quiz.scheduledDate).toLocaleDateString()} at{" "}
+                {quiz.scheduledTime} ({quiz.duration} min)
+              </p>
+              <p>
+                <strong>New:</strong> {new Date(newDate).toLocaleDateString()}{" "}
+                at {newTime} ({newDuration} min)
+              </p>
+              <p>
+                <strong>Total Duration:</strong> {newDuration + 10} minutes
+                (including 10min buffer)
+              </p>
+            </div>
+          </div>
+
+          <div className="modal-footer">
+            <button className="action-btn cancel" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              className="action-btn save"
+              onClick={handleSubmit}
+              disabled={!newDate || !newTime}
+            >
+              Update Schedule
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Quiz Name Modal Component
+  interface QuizNameModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (
+      name: string,
+      duration: number,
+      scheduledDate: string,
+      scheduledTime: string,
+      subject: string,
+      maxScore: number,
+      targetClass: string
+    ) => void;
+    questions: Question[];
+    teacherClasses: TeacherClassInfo[];
+  }
 // Enhanced Grade Management System Modal
 interface GradeManagementModalProps {
   isOpen: boolean;
@@ -3464,6 +3672,9 @@ const TeacherDashboard: React.FC = () => {
   const [loadingGrades, setLoadingGrades] = useState(false);
   const [savingGrades, setSavingGrades] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState<string>("");
+  const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
+  const [selectedQuizForReschedule, setSelectedQuizForReschedule] =
+    useState<Quiz | null>(null);
 
   const debugStudentData = () => {
     console.log("🔍 DEBUG: Student & Teacher Data Analysis");
@@ -4215,6 +4426,75 @@ const TeacherDashboard: React.FC = () => {
     },
     [editingQuiz]
   );
+  // Reschedule handler function
+  const handleRescheduleQuiz = useCallback((quiz: Quiz) => {
+    setSelectedQuizForReschedule(quiz);
+    setRescheduleModalOpen(true);
+  }, []);
+
+  const handleUpdateSchedule = useCallback(
+    async (
+      quizId: string,
+      newDate: string,
+      newTime: string,
+      newDuration?: number
+    ) => {
+      try {
+        const quizRef = doc(db, "quizzes", quizId);
+        const newTotalDuration = (newDuration || 30) + 10;
+        const scheduledDateTime = new Date(`${newDate}T${newTime}`);
+        const now = new Date();
+        const endTime = new Date(
+          scheduledDateTime.getTime() + newTotalDuration * 60000
+        );
+
+        let newStatus: "upcoming" | "active" | "expired" = "upcoming";
+        if (now >= scheduledDateTime && now <= endTime) {
+          newStatus = "active";
+        } else if (now > endTime) {
+          newStatus = "expired";
+        }
+
+        const updateData: any = {
+          scheduledDate: newDate,
+          scheduledTime: newTime,
+          status: newStatus,
+          active: newStatus === "active",
+          updatedAt: new Date(),
+        };
+
+        if (newDuration !== undefined) {
+          updateData.duration = newDuration;
+          updateData.totalDuration = newTotalDuration;
+        }
+
+        // Update in Firestore
+        await updateDoc(quizRef, updateData);
+
+        // Update local state
+        setQuizzes((prev) =>
+          prev.map((q) =>
+            q.id === quizId
+              ? {
+                  ...q,
+                  scheduledDate: newDate,
+                  scheduledTime: newTime,
+                  duration: newDuration || q.duration,
+                  totalDuration: newTotalDuration,
+                  status: newStatus,
+                }
+              : q
+          )
+        );
+
+        alert("Quiz schedule updated successfully!");
+      } catch (error) {
+        console.error("❌ Error updating quiz schedule:", error);
+        alert("Failed to update quiz schedule. Please try again.");
+      }
+    },
+    []
+  );
   const handleSaveQuizWithName = useCallback(
     async (
       name: string,
@@ -4839,6 +5119,13 @@ const TeacherDashboard: React.FC = () => {
                           </h4>
                           <div className="test-actions">
                             <button
+                              className="reschedule-btn"
+                              onClick={() => handleRescheduleQuiz(quiz)}
+                              title="Reschedule quiz"
+                            >
+                              <Calendar size={16} />
+                            </button>
+                            <button
                               className="edit-btn"
                               onClick={() => handleEditQuiz(quiz)}
                               title="Edit quiz"
@@ -5015,9 +5302,72 @@ const TeacherDashboard: React.FC = () => {
         initialActiveTerm={activeTerm}
         initialActiveSession={activeSession}
       />
+      <RescheduleModal
+        isOpen={rescheduleModalOpen}
+        onClose={() => {
+          setRescheduleModalOpen(false);
+          setSelectedQuizForReschedule(null);
+        }}
+        onReschedule={handleUpdateSchedule}
+        quiz={selectedQuizForReschedule}
+      />
 
       <style>{`
       /* Add these styles to your existing CSS */
+      /* Reschedule button styles */
+.reschedule-btn {
+  background: none;
+  border: none;
+  color: #f59e0b;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reschedule-btn:hover {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+/* Reschedule modal styles */
+.quiz-details {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.quiz-details p {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.reschedule-summary {
+  background: #f0f9ff;
+  border-radius: 12px;
+  padding: 20px;
+  border-left: 4px solid #4299e1;
+  margin-top: 20px;
+}
+
+.reschedule-summary h4 {
+  color: #1e40af;
+  margin-bottom: 12px;
+}
+
+.reschedule-summary p {
+  margin: 8px 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+.reschedule-summary p strong {
+  color: #374151;
+  min-width: 80px;
+}
       .refresh-manual-btn {
         background: #10b981;
         color: white;
