@@ -117,14 +117,7 @@ interface GradeRecord {
   term: string;
   session: string;
   objScore: number; // Auto from quiz results
-  caScores: {
-    ca1: number;
-    ca2: number;
-    ca3: number;
-    assignment: number;
-    project: number;
-    practical: number;
-  };
+  caScore: number;
   theoryScore: number;
   totalScore: number;
   percentage: number;
@@ -138,6 +131,7 @@ interface GradeRecord {
   };
 }
 
+// Update the GradeSystem interface
 interface GradeSystem {
   grades: {
     A1: { min: number; max: number; points: number };
@@ -152,16 +146,10 @@ interface GradeSystem {
   };
   maxScores: {
     obj: number;
-    ca1: number;
-    ca2: number;
-    ca3: number;
-    assignment: number;
-    project: number;
-    practical: number;
+    ca: number;
     theory: number;
   };
 }
-
 // Real-time Monitoring Types
 interface EnhancedMonitoringData {
   id?: string;
@@ -1392,14 +1380,9 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
       F9: { min: 0, max: 39, points: 9 },
     },
     maxScores: {
-      obj: 40,
-      ca1: 10,
-      ca2: 10,
-      ca3: 10,
-      assignment: 10,
-      project: 10,
-      practical: 10,
-      theory: 60,
+      obj: 30,
+      ca: 40,
+      theory: 30,
     },
   };
 
@@ -1728,14 +1711,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
         term: activeTerm,
         session: activeSession,
         objScore: 0, // Will be populated from quiz results
-        caScores: {
-          ca1: 0,
-          ca2: 0,
-          ca3: 0,
-          assignment: 0,
-          project: 0,
-          practical: 0,
-        },
+        caScore: 0,
         theoryScore: 0,
         totalScore: 0,
         percentage: 0,
@@ -1865,10 +1841,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
 
     const initialRecords: GradeRecord[] = filteredStudents.map(
       (student, index) => {
-        // Try multiple possible ID fields
-        const studentId =
-          student.id || // This should be the primary ID
-          `student-${student.email || index}`;
+        const studentId = student.id || `student-${student.email || index}`;
 
         return {
           id: `grade-${studentId}-${selectedSubject}-${selectedClass}-${activeTerm}`,
@@ -1879,14 +1852,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
           term: activeTerm,
           session: activeSession,
           objScore: 0,
-          caScores: {
-            ca1: 0,
-            ca2: 0,
-            ca3: 0,
-            assignment: 0,
-            project: 0,
-            practical: 0,
-          },
+          caScore: 0,
           theoryScore: 0,
           totalScore: 0,
           percentage: 0,
@@ -1895,15 +1861,6 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
           quizInfo: undefined,
         };
       }
-    );
-
-    console.log("📝 Initialized new grade records:", initialRecords.length);
-    console.log(
-      "Sample student IDs:",
-      initialRecords.slice(0, 3).map((r) => ({
-        name: r.studentName,
-        id: r.studentId,
-      }))
     );
 
     setGradeRecords(initialRecords);
@@ -1951,33 +1908,37 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
   ]);
 
   // Calculate totals when scores change
-  // Calculate totals when scores change
   useEffect(() => {
     if (gradeRecords.length === 0) return;
 
     const updatedRecords = gradeRecords.map((record) => {
-      const caTotal = Object.values(record.caScores).reduce(
-        (sum, score) => sum + score,
-        0
+      // Ensure no score exceeds its maximum
+      const objScore = Math.min(record.objScore, gradeSystem.maxScores.obj);
+      const caScore = Math.min(record.caScore, gradeSystem.maxScores.ca);
+      const theoryScore = Math.min(
+        record.theoryScore,
+        gradeSystem.maxScores.theory
       );
-      const totalScore = record.objScore + caTotal + record.theoryScore;
-      const maxTotal =
-        gradeSystem.maxScores.obj +
-        gradeSystem.maxScores.ca1 +
-        gradeSystem.maxScores.ca2 +
-        gradeSystem.maxScores.ca3 +
-        gradeSystem.maxScores.assignment +
-        gradeSystem.maxScores.project +
-        gradeSystem.maxScores.practical +
-        gradeSystem.maxScores.theory;
-      const percentage = (totalScore / maxTotal) * 100;
+
+      // Calculate total (max = 100)
+      const totalScore = objScore + caScore + theoryScore;
+
+      // Validate total doesn't exceed 100
+      if (totalScore > 100) {
+        console.warn(`Total score exceeds 100 for ${record.studentName}`);
+      }
+
+      const percentage = totalScore; // Since total is out of 100
       const grade = calculateGrade(percentage);
       const remark = calculateRemark(grade);
 
       return {
         ...record,
-        totalScore: Math.round(totalScore),
-        percentage: Math.round(percentage),
+        objScore,
+        caScore,
+        theoryScore,
+        totalScore: Math.min(100, totalScore), // Cap at 100
+        percentage: Math.min(100, percentage),
         grade,
         remark,
       };
@@ -1994,70 +1955,75 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
 
     // Only update if there's actually a change
     setGradeRecords((prev) => {
-      // Check if records are different
       const hasChanged =
         JSON.stringify(prev) !== JSON.stringify(recordsWithPositions);
       return hasChanged ? recordsWithPositions : prev;
     });
-  }, [gradeRecords]); // This dependency is correct but we need to prevent unnecessary updates
+  }, [gradeRecords]);
 
+  // Already correct:
   const handleScoreChange = (
     studentId: string,
-    field:
-      | keyof Omit<
-          GradeRecord,
-          | "caScores"
-          | "id"
-          | "studentId"
-          | "studentName"
-          | "className"
-          | "subject"
-          | "term"
-          | "session"
-          | "totalScore"
-          | "percentage"
-          | "grade"
-          | "remark"
-          | "positionInClass"
-        >
-      | `caScores.${keyof GradeRecord["caScores"]}`,
+    field: "caScore" | "theoryScore",
     value: number
   ) => {
     setGradeRecords((prev) =>
       prev.map((record) => {
         if (record.studentId === studentId) {
-          if (field.startsWith("caScores.")) {
-            const caField = field.split(
-              "."
-            )[1] as keyof GradeRecord["caScores"];
-            const maxScore =
-              gradeSystem.maxScores[
-                caField as keyof typeof gradeSystem.maxScores
-              ];
-            return {
-              ...record,
-              caScores: {
-                ...record.caScores,
-                [caField]: Math.min(Math.max(0, value), maxScore),
-              },
-            };
-          } else {
-            const maxScore =
-              gradeSystem.maxScores[
-                field as keyof typeof gradeSystem.maxScores
-              ];
-            return {
-              ...record,
-              [field]: Math.min(Math.max(0, value), maxScore || 100),
-            };
+          const maxScore =
+            gradeSystem.maxScores[field === "caScore" ? "ca" : "theory"];
+          const newValue = Math.min(Math.max(0, value), maxScore);
+
+          if (value > maxScore) {
+            alert(
+              `Maximum allowed score for ${field.toUpperCase()} is ${maxScore}`
+            );
+            return record;
           }
+
+          return {
+            ...record,
+            [field]: newValue,
+          };
         }
         return record;
       })
     );
   };
+
+  const validateScores = () => {
+    let isValid = true;
+    let errorMessage = "";
+
+    gradeRecords.forEach((record) => {
+      if (record.objScore > gradeSystem.maxScores.obj) {
+        isValid = false;
+        errorMessage = `OBJ score for ${record.studentName} exceeds maximum of ${gradeSystem.maxScores.obj}`;
+      }
+      if (record.caScore > gradeSystem.maxScores.ca) {
+        isValid = false;
+        errorMessage = `CA score for ${record.studentName} exceeds maximum of ${gradeSystem.maxScores.ca}`;
+      }
+      if (record.theoryScore > gradeSystem.maxScores.theory) {
+        isValid = false;
+        errorMessage = `Theory score for ${record.studentName} exceeds maximum of ${gradeSystem.maxScores.theory}`;
+      }
+      if (record.totalScore > 100) {
+        isValid = false;
+        errorMessage = `Total score for ${record.studentName} exceeds 100`;
+      }
+    });
+
+    return { isValid, errorMessage };
+  };
   // In your existing handleSaveGrades function, add this line:
   const handleSaveGrades = async () => {
+    const validation = validateScores();
+    if (!validation.isValid) {
+      alert(`Validation Error: ${validation.errorMessage}`);
+      return;
+    }
+
     if (!selectedClass || !selectedSubject) {
       alert("Please select a class and subject");
       return;
@@ -2166,12 +2132,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
           session: activeSession,
           scores: {
             obj: record.objScore,
-            ca1: record.caScores.ca1,
-            ca2: record.caScores.ca2,
-            ca3: record.caScores.ca3,
-            assignment: record.caScores.assignment,
-            project: record.caScores.project,
-            practical: record.caScores.practical,
+            ca: record.caScore,
             theory: record.theoryScore,
           },
           totalScore: record.totalScore,
@@ -2300,15 +2261,10 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
       "S/N",
       "Student Name",
       "Class",
-      "OBJ Score",
-      "CA1",
-      "CA2",
-      "CA3",
-      "Assignment",
-      "Project",
-      "Practical",
-      "Theory Score",
-      "Total Score",
+      "OBJ Score (30)",
+      "CA Score (40)",
+      "Theory Score (30)",
+      "Total Score (100)",
       "Percentage",
       "Grade",
       "Position",
@@ -2320,12 +2276,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
       record.studentName,
       record.className,
       record.objScore,
-      record.caScores.ca1,
-      record.caScores.ca2,
-      record.caScores.ca3,
-      record.caScores.assignment,
-      record.caScores.project,
-      record.caScores.practical,
+      record.caScore,
       record.theoryScore,
       record.totalScore,
       `${record.percentage}%`,
@@ -2347,7 +2298,6 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     a.click();
     window.URL.revokeObjectURL(url);
   };
-
   if (!isOpen) return null;
 
   return (
@@ -2584,56 +2534,35 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
           {/* Grades Table */}
           {selectedClass && selectedSubject && gradeRecords.length > 0 ? (
             <div className="grades-table-container">
+              {/* Grades Table Headers - UPDATED */}
               <table className="grades-table">
                 <thead>
                   <tr>
                     <th rowSpan={2}>S/N</th>
                     <th rowSpan={2}>Student Name</th>
                     <th rowSpan={2}>Class</th>
-                    <th colSpan={7}>Continuous Assessment</th>
-                    <th colSpan={5}>Examination</th>
+                    <th colSpan={3}>Components</th>
                     <th colSpan={4}>Results</th>
                   </tr>
                   <tr>
-                    {/* CA Headers */}
+                    {/* Component Headers */}
                     <th>OBJ (Auto)</th>
-                    <th>CA1</th>
-                    <th>CA2</th>
-                    <th>CA3</th>
-                    <th>Assignment</th>
-                    <th>Project</th>
-                    <th>Practical</th>
-
-                    {/* Exam Headers */}
+                    <th>CA Score</th>
                     <th>Theory</th>
-                    <th>Total</th>
+
+                    {/* Result Headers */}
+                    <th>Total (100)</th>
                     <th>%</th>
                     <th>Grade</th>
                     <th>Position</th>
-
-                    {/* Result Headers */}
                     <th>Remark</th>
                   </tr>
                   <tr className="max-scores-row">
                     <th colSpan={3}>Max Scores</th>
                     <th>{gradeSystem.maxScores.obj}</th>
-                    <th>{gradeSystem.maxScores.ca1}</th>
-                    <th>{gradeSystem.maxScores.ca2}</th>
-                    <th>{gradeSystem.maxScores.ca3}</th>
-                    <th>{gradeSystem.maxScores.assignment}</th>
-                    <th>{gradeSystem.maxScores.project}</th>
-                    <th>{gradeSystem.maxScores.practical}</th>
+                    <th>{gradeSystem.maxScores.ca}</th>
                     <th>{gradeSystem.maxScores.theory}</th>
-                    <th>
-                      {gradeSystem.maxScores.obj +
-                        gradeSystem.maxScores.ca1 +
-                        gradeSystem.maxScores.ca2 +
-                        gradeSystem.maxScores.ca3 +
-                        gradeSystem.maxScores.assignment +
-                        gradeSystem.maxScores.project +
-                        gradeSystem.maxScores.practical +
-                        gradeSystem.maxScores.theory}
-                    </th>
+                    <th>100</th>
                     <th>100%</th>
                     <th>-</th>
                     <th>-</th>
@@ -2647,7 +2576,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
                       <td className="student-name">{record.studentName}</td>
                       <td className="class-name">{record.className}</td>
 
-                      {/* CA Scores */}
+                      {/* Component Scores */}
                       <td className="obj-score-cell">
                         <div className="auto-score-display">
                           <span className="score-value">{record.objScore}</span>
@@ -2663,139 +2592,65 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
                               <span className="quiz-avg">
                                 {record.quizInfo.averagePercentage}% avg
                               </span>
-                              {record.quizInfo.lastQuiz && (
-                                <span className="quiz-last">
-                                  Last: {record.quizInfo.lastQuiz}
-                                </span>
-                              )}
                             </div>
                           )}
                         </div>
                       </td>
+
+                      {/* CA Score Input */}
                       <td>
                         <input
                           type="number"
                           min="0"
-                          max={gradeSystem.maxScores.ca1}
-                          value={record.caScores.ca1}
-                          onChange={(e) =>
+                          max={gradeSystem.maxScores.ca}
+                          value={record.caScore}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 0;
+                            if (value > gradeSystem.maxScores.ca) {
+                              alert(
+                                `Maximum CA score is ${gradeSystem.maxScores.ca}`
+                              );
+                              return;
+                            }
                             handleScoreChange(
                               record.studentId,
-                              "caScores.ca1",
-                              parseInt(e.target.value) || 0
-                            )
-                          }
-                          disabled={!isEditing}
-                          className="score-input"
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          max={gradeSystem.maxScores.ca2}
-                          value={record.caScores.ca2}
-                          onChange={(e) =>
-                            handleScoreChange(
-                              record.studentId,
-                              "caScores.ca2",
-                              parseInt(e.target.value) || 0
-                            )
-                          }
-                          disabled={!isEditing}
-                          className="score-input"
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          max={gradeSystem.maxScores.ca3}
-                          value={record.caScores.ca3}
-                          onChange={(e) =>
-                            handleScoreChange(
-                              record.studentId,
-                              "caScores.ca3",
-                              parseInt(e.target.value) || 0
-                            )
-                          }
-                          disabled={!isEditing}
-                          className="score-input"
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          max={gradeSystem.maxScores.assignment}
-                          value={record.caScores.assignment}
-                          onChange={(e) =>
-                            handleScoreChange(
-                              record.studentId,
-                              "caScores.assignment",
-                              parseInt(e.target.value) || 0
-                            )
-                          }
-                          disabled={!isEditing}
-                          className="score-input"
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          max={gradeSystem.maxScores.project}
-                          value={record.caScores.project}
-                          onChange={(e) =>
-                            handleScoreChange(
-                              record.studentId,
-                              "caScores.project",
-                              parseInt(e.target.value) || 0
-                            )
-                          }
-                          disabled={!isEditing}
-                          className="score-input"
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min="0"
-                          max={gradeSystem.maxScores.practical}
-                          value={record.caScores.practical}
-                          onChange={(e) =>
-                            handleScoreChange(
-                              record.studentId,
-                              "caScores.practical",
-                              parseInt(e.target.value) || 0
-                            )
-                          }
+                              "caScore",
+                              value
+                            );
+                          }}
                           disabled={!isEditing}
                           className="score-input"
                         />
                       </td>
 
-                      {/* Exam Scores */}
+                      {/* Theory Score Input */}
                       <td>
                         <input
                           type="number"
                           min="0"
                           max={gradeSystem.maxScores.theory}
                           value={record.theoryScore}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 0;
+                            if (value > gradeSystem.maxScores.theory) {
+                              alert(
+                                `Maximum Theory score is ${gradeSystem.maxScores.theory}`
+                              );
+                              return;
+                            }
                             handleScoreChange(
                               record.studentId,
                               "theoryScore",
-                              parseInt(e.target.value) || 0
-                            )
-                          }
+                              value
+                            );
+                          }}
                           disabled={!isEditing}
                           className="score-input"
                         />
                       </td>
 
                       {/* Results - Auto-calculated */}
-                      <td className="total-score">{record.totalScore}</td>
+                      <td className="total-score">{record.totalScore}/100</td>
                       <td className="percentage">{record.percentage}%</td>
                       <td
                         className={`grade grade-${record.grade.toLowerCase()}`}
@@ -3275,7 +3130,7 @@ const QuizNameModal: React.FC<QuizNameModalProps> = ({
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
   const [subject, setSubject] = useState("");
-  const [maxScore, setMaxScore] = useState(40);
+  const [maxScore, setMaxScore] = useState(30);
   const [showClassModal, setShowClassModal] = useState(false);
   const [selectedClass, setSelectedClass] = useState("");
 
@@ -3285,7 +3140,7 @@ const QuizNameModal: React.FC<QuizNameModalProps> = ({
       // Reset form when modal opens
       setQuizName("");
       setDuration(30);
-      setMaxScore(40);
+      setMaxScore(30);
       setSelectedClass("");
       setShowClassModal(false);
 
@@ -3437,7 +3292,7 @@ const QuizNameModal: React.FC<QuizNameModalProps> = ({
                 max="100"
                 className="text-input"
                 value={maxScore}
-                onChange={(e) => setMaxScore(parseInt(e.target.value) || 40)}
+                onChange={(e) => setMaxScore(parseInt(e.target.value) || 30)}
               />
               <small>Total points for this quiz</small>
             </div>
