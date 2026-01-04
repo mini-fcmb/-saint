@@ -61,6 +61,7 @@ import {
   doc,
   updateDoc,
   getDoc,
+  addDoc,
   setDoc,
   onSnapshot,
   serverTimestamp,
@@ -1467,92 +1468,157 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
   }, [students, selectedClass]);
 
   // Replace the current loadQuizResults function with this:
+  // REPLACE your loadQuizResults function with this FIXED version:
   const loadQuizResults = useCallback(async () => {
     if (!selectedClass || !selectedSubject || !user?.uid) return;
 
     try {
-      console.log("📊 Loading quiz results for:", {
-        class: selectedClass,
-        subject: selectedSubject,
-        teacher: user.uid,
-      });
+      console.log("🎯 FIXED VERSION - Loading quiz results");
 
-      // Query the quizSubmissions collection
       const submissionsRef = collection(db, "quizSubmissions");
-      const q = query(
+
+      // Query 1: Get submissions with teacherId
+      const q1 = query(submissionsRef, where("teacherId", "==", user.uid));
+
+      // Query 2: Get submissions without teacherId but matching class/subject
+      const q2 = query(
         submissionsRef,
-        where("teacherId", "==", user.uid),
         where("className", "==", selectedClass),
         where("subject", "==", selectedSubject)
       );
 
-      const querySnapshot = await getDocs(q);
-      console.log(`📋 Found ${querySnapshot.docs.length} quiz submissions`);
+      const [snapshot1, snapshot2] = await Promise.all([
+        getDocs(q1),
+        getDocs(q2),
+      ]);
 
-      // Group submissions by student ID
-      const submissionsByStudent = new Map<string, any[]>();
+      console.log(
+        `📊 Results: ${snapshot1.docs.length} with teacherId, ${snapshot2.docs.length} without teacherId`
+      );
 
-      querySnapshot.forEach((doc) => {
+      // Combine results
+      const allDocs = new Map();
+
+      // Add docs from first query
+      snapshot1.docs.forEach((doc) => {
+        allDocs.set(doc.id, doc.data());
+      });
+
+      // Add docs from second query (if they don't have teacherId or it's undefined)
+      snapshot2.docs.forEach((doc) => {
         const data = doc.data();
-        const studentId = data.studentId || data.student?.id || data.userId;
-
-        if (!studentId) {
-          console.warn("⚠️ Submission missing studentId:", doc.id, data);
-          return;
+        if (!data.teacherId && !data.teacherID && !data.teacher) {
+          allDocs.set(doc.id, {
+            ...data,
+            teacherId: user.uid, // Add teacherId now
+            teacherName: user.displayName || "Teacher",
+            teacherEmail: user.email || "",
+          });
         }
+      });
+
+      console.log(`📦 Total unique submissions: ${allDocs.size}`);
+
+      // Group by student
+      const submissionsByStudent = new Map();
+
+      allDocs.forEach((data, docId) => {
+        // Try multiple student ID fields
+        const studentId =
+          data.studentId ||
+          data.studentID ||
+          data.userId ||
+          data.uid ||
+          data.student?.id ||
+          `student-${docId}`;
+
+        const studentName =
+          data.studentName ||
+          data.student ||
+          (typeof data.student === "object"
+            ? data.student.name
+            : "Unknown Student");
 
         if (!submissionsByStudent.has(studentId)) {
           submissionsByStudent.set(studentId, []);
         }
 
-        // Extract the score data
         const score = data.score || data.totalScore || data.obtainedScore || 0;
         const maxScore =
           data.maxScore ||
           data.totalPossibleScore ||
           data.maxPossibleScore ||
           100;
-        const percentage = (score / maxScore) * 100;
+        const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
 
-        submissionsByStudent.get(studentId)!.push({
+        submissionsByStudent.get(studentId).push({
           score: score,
           maxScore: maxScore,
           percentage: percentage,
           quizName: data.quizName || "Unknown Quiz",
-          studentName:
-            data.studentName || data.student?.name || "Unknown Student",
+          studentName: studentName,
           submittedAt:
-            data.submittedAt?.toDate() ||
-            data.timestamp?.toDate() ||
+            data.submittedAt?.toDate?.() ||
+            data.timestamp?.toDate?.() ||
             new Date(),
           rawData: data,
         });
       });
 
-      console.log("📈 Student quiz data grouped:", submissionsByStudent.size);
+      console.log(
+        `📈 Student quiz data grouped: ${submissionsByStudent.size} students`
+      );
 
-      // Update grade records with calculated OBJ scores
+      // Update grade records
       setGradeRecords((prev) => {
-        const updatedRecords = prev.map((record) => {
-          const studentSubmissions = submissionsByStudent.get(record.studentId);
+        return prev.map((record) => {
+          console.log(
+            `👤 Checking student: ${record.studentName} (ID: ${record.studentId})`
+          );
+
+          // Try to find submissions for this student
+          let studentSubmissions = null;
+
+          // Try by ID first
+          studentSubmissions = submissionsByStudent.get(record.studentId);
+
+          // If not found, try by name match
+          if (!studentSubmissions) {
+            for (const [sid, subs] of submissionsByStudent.entries()) {
+              const submissionStudentName = (
+                subs[0]?.studentName || ""
+              ).toLowerCase();
+              const recordName = record.studentName.toLowerCase();
+
+              if (
+                submissionStudentName === recordName ||
+                submissionStudentName.includes(recordName) ||
+                recordName.includes(submissionStudentName)
+              ) {
+                studentSubmissions = subs;
+                console.log(`✅ Found by name match: ${record.studentName}`);
+                break;
+              }
+            }
+          }
 
           if (studentSubmissions && studentSubmissions.length > 0) {
-            // Calculate average percentage across all quizzes
             const totalPercentage = studentSubmissions.reduce(
               (sum: number, sub: any) => sum + sub.percentage,
               0
             );
             const averagePercentage =
               totalPercentage / studentSubmissions.length;
-
-            // Convert percentage to OBJ score (out of 40)
             const objScore = Math.round(
               (averagePercentage / 100) * gradeSystem.maxScores.obj
             );
 
-            // Get the latest quiz date
-            const sortedSubmissions = [...studentSubmissions].sort(
-              (a, b) => b.submittedAt.getTime() - a.submittedAt.getTime()
+            console.log(
+              `📊 ${record.studentName}: ${
+                studentSubmissions.length
+              } quizzes, avg: ${averagePercentage.toFixed(
+                1
+              )}%, OBJ: ${objScore}`
             );
 
             return {
@@ -1561,27 +1627,20 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
               quizInfo: {
                 totalQuizzes: studentSubmissions.length,
                 averagePercentage: Math.round(averagePercentage),
-                lastQuiz: sortedSubmissions[0]?.quizName,
+                lastQuiz: studentSubmissions[0]?.quizName,
                 lastQuizDate:
-                  sortedSubmissions[0]?.submittedAt.toLocaleDateString(),
+                  studentSubmissions[0]?.submittedAt.toLocaleDateString(),
               },
             };
-          } else {
-            return {
-              ...record,
-              objScore: 0,
-              quizInfo: undefined,
-            };
           }
-        });
 
-        return updatedRecords;
+          return record;
+        });
       });
     } catch (error: any) {
-      console.error("❌ Error loading quiz results from Firestore:", error);
+      console.error("❌ Error loading quiz results:", error);
     }
   }, [selectedClass, selectedSubject, user, gradeSystem.maxScores.obj]);
-
   // Calculate grade based on percentage
   const calculateGrade = (percentage: number): string => {
     for (const [grade, range] of Object.entries(gradeSystem.grades)) {
