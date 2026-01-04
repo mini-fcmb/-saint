@@ -75,12 +75,6 @@ interface TeacherClassInfo {
   subjects: string[];
 }
 
-// Use FirebaseStudent as base and extend it
-interface Student extends FirebaseStudent {
-  fullName: string;
-  subjects: string[];
-}
-
 interface Question {
   id: number;
   text: string;
@@ -317,6 +311,8 @@ interface Student extends FirebaseStudent {
   fullName: string;
   subjects: string[];
   classes?: string[];
+  uid?: string;
+  userId?: string;
 }
 
 interface LiveMonitoringModalProps {
@@ -1470,6 +1466,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     return filtered;
   }, [students, selectedClass]);
 
+  // Replace the current loadQuizResults function with this:
   const loadQuizResults = useCallback(async () => {
     if (!selectedClass || !selectedSubject || !user?.uid) return;
 
@@ -1480,8 +1477,8 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
         teacher: user.uid,
       });
 
-      // Query ALL submissions for this teacher, class, and subject
-      const submissionsRef = collection(db, "studentQuizSubmissions");
+      // Query the quizSubmissions collection
+      const submissionsRef = collection(db, "quizSubmissions");
       const q = query(
         submissionsRef,
         where("teacherId", "==", user.uid),
@@ -1492,78 +1489,96 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
       const querySnapshot = await getDocs(q);
       console.log(`📋 Found ${querySnapshot.docs.length} quiz submissions`);
 
-      // Group submissions by student to calculate averages
-      const submissionsByStudent = new Map();
+      // Group submissions by student ID
+      const submissionsByStudent = new Map<string, any[]>();
 
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        const studentId = data.studentId;
+        const studentId = data.studentId || data.student?.id || data.userId;
+
+        if (!studentId) {
+          console.warn("⚠️ Submission missing studentId:", doc.id, data);
+          return;
+        }
 
         if (!submissionsByStudent.has(studentId)) {
           submissionsByStudent.set(studentId, []);
         }
 
-        submissionsByStudent.get(studentId).push({
-          score: data.score || 0,
-          maxScore: data.maxScore || 40,
-          quizName: data.quizName,
-          submittedAt: data.submittedAt?.toDate() || new Date(),
+        // Extract the score data
+        const score = data.score || data.totalScore || data.obtainedScore || 0;
+        const maxScore =
+          data.maxScore ||
+          data.totalPossibleScore ||
+          data.maxPossibleScore ||
+          100;
+        const percentage = (score / maxScore) * 100;
+
+        submissionsByStudent.get(studentId)!.push({
+          score: score,
+          maxScore: maxScore,
+          percentage: percentage,
+          quizName: data.quizName || "Unknown Quiz",
+          studentName:
+            data.studentName || data.student?.name || "Unknown Student",
+          submittedAt:
+            data.submittedAt?.toDate() ||
+            data.timestamp?.toDate() ||
+            new Date(),
+          rawData: data,
         });
       });
 
-      console.log(
-        "📈 Student quiz data:",
-        Array.from(submissionsByStudent.entries())
-      );
+      console.log("📈 Student quiz data grouped:", submissionsByStudent.size);
 
-      // Update grade records with calculated average scores
+      // Update grade records with calculated OBJ scores
       setGradeRecords((prev) => {
-        return prev.map((record) => {
+        const updatedRecords = prev.map((record) => {
           const studentSubmissions = submissionsByStudent.get(record.studentId);
 
           if (studentSubmissions && studentSubmissions.length > 0) {
-            // Calculate average score across all quizzes
-            const totalScore = studentSubmissions.reduce(
-              (sum: number, sub: any) => sum + sub.score,
+            // Calculate average percentage across all quizzes
+            const totalPercentage = studentSubmissions.reduce(
+              (sum: number, sub: any) => sum + sub.percentage,
               0
             );
+            const averagePercentage =
+              totalPercentage / studentSubmissions.length;
 
-            const totalMax = studentSubmissions.reduce(
-              (sum: number, sub: any) => sum + sub.maxScore,
-              0
-            );
-
-            // Calculate percentage and convert to OBJ score (out of 40)
-            const percentage = (totalScore / totalMax) * 100;
+            // Convert percentage to OBJ score (out of 40)
             const objScore = Math.round(
-              (percentage / 100) * gradeSystem.maxScores.obj
+              (averagePercentage / 100) * gradeSystem.maxScores.obj
+            );
+
+            // Get the latest quiz date
+            const sortedSubmissions = [...studentSubmissions].sort(
+              (a, b) => b.submittedAt.getTime() - a.submittedAt.getTime()
             );
 
             return {
               ...record,
-              objScore: Math.min(objScore, gradeSystem.maxScores.obj), // Cap at max
+              objScore: Math.min(objScore, gradeSystem.maxScores.obj),
               quizInfo: {
                 totalQuizzes: studentSubmissions.length,
-                averagePercentage: Math.round(percentage),
-                lastQuiz:
-                  studentSubmissions[studentSubmissions.length - 1]?.quizName,
+                averagePercentage: Math.round(averagePercentage),
+                lastQuiz: sortedSubmissions[0]?.quizName,
+                lastQuizDate:
+                  sortedSubmissions[0]?.submittedAt.toLocaleDateString(),
               },
             };
+          } else {
+            return {
+              ...record,
+              objScore: 0,
+              quizInfo: undefined,
+            };
           }
-
-          // No quiz data found for this student
-          return record;
         });
-      });
 
-      console.log("✅ Quiz results loaded successfully");
+        return updatedRecords;
+      });
     } catch (error: any) {
       console.error("❌ Error loading quiz results from Firestore:", error);
-
-      // Show error but don't crash
-      alert("Failed to load quiz results. Check your internet connection.");
-    } finally {
-      setLoadingGrades(false);
     }
   }, [selectedClass, selectedSubject, user, gradeSystem.maxScores.obj]);
 
@@ -1726,6 +1741,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     setLoadingGrades(true);
     if (!user?.uid || !selectedClass || !selectedSubject) {
       console.log("Missing required parameters for grade loading");
+      setLoadingGrades(false);
       return;
     }
 
@@ -1738,7 +1754,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
         session: activeSession,
       });
 
-      // Query grades collection instead of using composite ID
+      // Query grades collection
       const gradesRef = collection(db, "grades");
       const q = query(
         gradesRef,
@@ -1753,31 +1769,34 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
       console.log(`📋 Found ${querySnapshot.docs.length} grade documents`);
 
       if (!querySnapshot.empty) {
-        // Get the first matching document
         const docSnap = querySnapshot.docs[0];
         const data = docSnap.data();
-        console.log("📄 Grade document data:", data);
+        console.log("📄 Grade document data loaded");
 
         if (data.grades && Array.isArray(data.grades)) {
           setGradeRecords(data.grades);
-          console.log("✅ Grades loaded successfully:", data.grades.length);
+          console.log("✅ Grades loaded from Firestore:", data.grades.length);
+
+          // Load quiz results to update OBJ scores
+          setTimeout(() => loadQuizResults(), 500);
         } else {
           console.log("⚠️ No grades array found in document");
           initializeGradeRecords();
+          setTimeout(() => loadQuizResults(), 500);
         }
       } else {
         console.log("📭 No grade document found. Initializing new records.");
         initializeGradeRecords();
+        setTimeout(() => loadQuizResults(), 500);
       }
     } catch (error: any) {
       console.error("❌ Error loading grades from Firestore:", error);
-      if (error.code !== "not-found" && error.code !== "permission-denied") {
-        console.warn("⚠️ Could not load grades. Using empty state.");
-      }
       initializeGradeRecords();
+      setTimeout(() => loadQuizResults(), 500);
+    } finally {
+      setLoadingGrades(false);
     }
   };
-
   // Helper function to initialize grade records from students
   const initializeGradeRecords = () => {
     if (filteredStudents.length === 0) {
@@ -1787,7 +1806,11 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
 
     const initialRecords: GradeRecord[] = filteredStudents.map(
       (student, index) => {
-        const studentId = student.id || `student-${index}`;
+        // Try multiple possible ID fields
+        const studentId =
+          student.id || // This should be the primary ID
+          `student-${student.email || index}`;
+
         return {
           id: `grade-${studentId}-${selectedSubject}-${selectedClass}-${activeTerm}`,
           studentId: studentId,
@@ -1815,10 +1838,17 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
       }
     );
 
-    setGradeRecords(initialRecords);
     console.log("📝 Initialized new grade records:", initialRecords.length);
-  };
+    console.log(
+      "Sample student IDs:",
+      initialRecords.slice(0, 3).map((r) => ({
+        name: r.studentName,
+        id: r.studentId,
+      }))
+    );
 
+    setGradeRecords(initialRecords);
+  };
   // Load grades when modal opens
   useEffect(() => {
     if (isOpen && selectedClass && selectedSubject) {
@@ -1835,15 +1865,16 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     filteredStudents,
   ]);
 
-  // Auto-refresh quiz results
+  // Auto-refresh quiz results - FIXED VERSION
   useEffect(() => {
     if (isOpen && selectedClass && selectedSubject && gradeRecords.length > 0) {
       console.log("🔄 Setting up auto-refresh for quiz results");
 
-      loadQuizResults(); // Load immediately
+      // Initial load
+      loadQuizResults();
 
+      // Only set up interval if modal is open
       const interval = setInterval(() => {
-        console.log("🔄 Auto-refreshing quiz results...");
         loadQuizResults();
       }, 30000); // Every 30 seconds
 
@@ -1852,8 +1883,15 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
         clearInterval(interval);
       };
     }
-  }, [isOpen, selectedClass, selectedSubject, loadQuizResults]);
+  }, [
+    isOpen,
+    selectedClass,
+    selectedSubject,
+    gradeRecords.length,
+    loadQuizResults,
+  ]);
 
+  // Calculate totals when scores change
   // Calculate totals when scores change
   useEffect(() => {
     if (gradeRecords.length === 0) return;
@@ -1895,8 +1933,14 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
       positionInClass: index + 1,
     }));
 
-    setGradeRecords(recordsWithPositions);
-  }, [gradeRecords]);
+    // Only update if there's actually a change
+    setGradeRecords((prev) => {
+      // Check if records are different
+      const hasChanged =
+        JSON.stringify(prev) !== JSON.stringify(recordsWithPositions);
+      return hasChanged ? recordsWithPositions : prev;
+    });
+  }, [gradeRecords]); // This dependency is correct but we need to prevent unnecessary updates
 
   const handleScoreChange = (
     studentId: string,
@@ -2090,6 +2134,53 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     } catch (error: any) {
       console.error("❌ Error saving individual grades:", error);
       throw error; // Re-throw to handle in the main save function
+    }
+  };
+
+  // ADD THIS RIGHT AFTER saveFinalGradesReport function
+  const debugQuizSubmissionStructure = async () => {
+    if (!user?.uid) return;
+
+    try {
+      console.log("🔍 Debugging quizSubmission collection structure...");
+
+      const submissionsRef = collection(db, "quizSubmissions");
+      const q = query(submissionsRef, where("teacherId", "==", user.uid));
+      const querySnapshot = await getDocs(q);
+
+      console.log(
+        `Total submissions for teacher: ${querySnapshot.docs.length}`
+      );
+
+      if (querySnapshot.docs.length > 0) {
+        const sampleDoc = querySnapshot.docs[0];
+        console.log("📄 Sample submission document structure:");
+        console.log("Document ID:", sampleDoc.id);
+        console.log("Full data:", sampleDoc.data());
+
+        // Show all unique fields
+        const allFields = new Set<string>();
+        querySnapshot.docs.forEach((doc) => {
+          Object.keys(doc.data()).forEach((key) => allFields.add(key));
+        });
+        console.log("📋 All field names in collection:", Array.from(allFields));
+
+        // Show first 3 documents
+        querySnapshot.docs.slice(0, 3).forEach((doc, i) => {
+          console.log(`\n📄 Document ${i + 1}:`);
+          const data = doc.data();
+          console.log("- Student ID field:", data.studentId || "Not found");
+          console.log("- Student name field:", data.studentName || "Not found");
+          console.log("- Class field:", data.className || "Not found");
+          console.log("- Subject field:", data.subject || "Not found");
+          console.log("- Score field:", data.score || "Not found");
+          console.log("- Max score field:", data.maxScore || "Not found");
+        });
+      } else {
+        console.log("📭 No submissions found in quizSubmissions collection");
+      }
+    } catch (error) {
+      console.error("❌ Debug error:", error);
     }
   };
   // Function to save a comprehensive final report
@@ -2318,6 +2409,25 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
                   <Download size={16} />
                   Export CSV
                 </button>
+              </div>
+
+              <div className="control-group">
+                <label>Debug Tools</label>
+                <div className="action-buttons">
+                  <button
+                    className="action-btn debug"
+                    onClick={debugQuizSubmissionStructure}
+                    style={{
+                      background: "#6b7280",
+                      color: "white",
+                      fontSize: "12px",
+                      padding: "8px 12px",
+                    }}
+                  >
+                    <Info size={14} />
+                    Debug Quiz Data
+                  </button>
+                </div>
               </div>
 
               {/* Add sync indicator */}
