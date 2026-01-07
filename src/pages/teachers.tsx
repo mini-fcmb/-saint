@@ -2247,6 +2247,58 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
       setSavingGrades(false);
     }
   };
+  // Fallback function to save scores one by one (for backward compatibility)
+const saveScoresOneByOne = async () => {
+  if (!user?.uid || !selectedClass || !selectedSubject) {
+    throw new Error("Missing required data");
+  }
+
+  console.log("🔄 Fallback: Saving scores one by one to 'scores' collection");
+
+  const batch = writeBatch(db);
+  const timestamp = new Date();
+  let savedCount = 0;
+
+  for (const record of gradeRecords) {
+    const scoreId = `${record.studentId}_${selectedClass}_${selectedSubject}_${activeTerm}_${activeSession}`
+      .replace(/\s+/g, "_")
+      .replace(/\//g, "_");
+
+    const scoreRef = doc(db, "scores", scoreId);
+
+    const scoreData = {
+      id: scoreId,
+      studentId: record.studentId,
+      studentName: record.studentName,
+      classId: selectedClass,
+      className: selectedClass,
+      subjectId: selectedSubject,
+      subject: selectedSubject,
+      term: activeTerm,
+      session: activeSession,
+      obj: record.objScore,
+      ca: record.caScore,
+      theory: record.theoryScore,
+      total: record.totalScore,
+      percentage: record.percentage,
+      grade: record.grade,
+      position: record.positionInClass,
+      remark: record.remark,
+      teacherId: user.uid,
+      teacherName: user.displayName || "Teacher",
+      updatedAt: timestamp,
+      createdAt: timestamp,
+    };
+
+    batch.set(scoreRef, scoreData, { merge: true });
+    savedCount++;
+    console.log(`📝 Prepared score for ${record.studentName}`);
+  }
+
+  await batch.commit();
+  console.log(`✅ Saved ${savedCount} scores to 'scores' collection`);
+  return savedCount;
+};
   // Function to save grades to student term documents (ONE DOCUMENT PER STUDENT)
 
   // Function to save to scores collection (for backward compatibility)
@@ -9116,4 +9168,3 @@ get-in-touch{
 };
 
 export default TeacherDashboard;
-  
