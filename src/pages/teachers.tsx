@@ -302,6 +302,7 @@ interface Student extends FirebaseStudent {
   classes?: string[];
   uid?: string;
   userId?: string;
+  studentId?: string;
 }
 
 interface LiveMonitoringModalProps {
@@ -1102,10 +1103,6 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
         </div>
 
         <div className="modal-footer">
-          <button className="action-btn export-btn">
-            <Download size={16} />
-            Export Report
-          </button>
           <button className="action-btn primary" onClick={onClose}>
             Close Monitoring
           </button>
@@ -1668,6 +1665,48 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     };
   }, [selectedClass, selectedSubject]);
 
+  // ADD THIS useEffect near the top, after state declarations
+  useEffect(() => {
+    if (isOpen) {
+      console.group("🔍 Grade Management Modal Opened");
+      console.log("Teacher ID:", user?.uid);
+      console.log("User object:", user);
+      console.log("Selected Class:", selectedClass);
+      console.log("Selected Subject:", selectedSubject);
+      console.log("Grade Records:", gradeRecords.length);
+      console.groupEnd();
+    }
+  }, [isOpen, user, selectedClass, selectedSubject]);
+
+  // ADD THIS useEffect after the existing useEffects (around line 1250)
+  useEffect(() => {
+    if (!user?.uid || !isOpen) return;
+
+    console.log("👂 Setting up real-time listener for 'scores' collection");
+
+    const scoresRef = collection(db, "scores");
+    const q = query(scoresRef, where("teacherId", "==", user.uid));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        console.log("🎯 Real-time update for 'scores' collection:");
+        console.log(`   Total documents: ${snapshot.docs.length}`);
+
+        snapshot.docChanges().forEach((change) => {
+          console.log(`   Change type: ${change.type}`);
+          console.log(`   Document ID: ${change.doc.id}`);
+          console.log(`   Data:`, change.doc.data());
+        });
+      },
+      (error) => {
+        console.error("❌ Real-time listener error:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user, isOpen]);
+
   // Then find this useEffect around line 1086 (the one that loads grades)
   // Add this event listener to it:
   useEffect(() => {
@@ -1702,22 +1741,31 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
       selectedSubject &&
       filteredStudents.length > 0
     ) {
-      const initialRecords: GradeRecord[] = filteredStudents.map((student) => ({
-        id: `grade-${student.id}-${selectedSubject}-${selectedClass}-${activeTerm}`,
-        studentId: student.id,
-        studentName: student.fullName,
-        className: selectedClass,
-        subject: selectedSubject,
-        term: activeTerm,
-        session: activeSession,
-        objScore: 0, // Will be populated from quiz results
-        caScore: 0,
-        theoryScore: 0,
-        totalScore: 0,
-        percentage: 0,
-        grade: "F9",
-        remark: "Fail",
-      }));
+      const initialRecords: GradeRecord[] = filteredStudents.map((student) => {
+        // Get student ID from multiple possible fields
+        const studentId =
+          student.id ||
+          student.uid ||
+          student.userId ||
+          `student-${student.email || student.fullName}`;
+
+        return {
+          id: `grade-${studentId}-${selectedSubject}-${selectedClass}-${activeTerm}`,
+          studentId: studentId,
+          studentName: student.fullName,
+          className: selectedClass,
+          subject: selectedSubject,
+          term: activeTerm,
+          session: activeSession,
+          objScore: 0,
+          caScore: 0,
+          theoryScore: 0,
+          totalScore: 0,
+          percentage: 0,
+          grade: "F9",
+          remark: "Fail",
+        };
+      });
       setGradeRecords(initialRecords);
       loadQuizResults();
     }
@@ -1841,8 +1889,11 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
 
     const initialRecords: GradeRecord[] = filteredStudents.map(
       (student, index) => {
-        const studentId = student.id || `student-${student.email || index}`;
-
+        const studentId =
+          student.id ||
+          student.uid ||
+          student.userId ||
+          `student-${student.email || index}`;
         return {
           id: `grade-${studentId}-${selectedSubject}-${selectedClass}-${activeTerm}`,
           studentId: studentId,
@@ -1868,8 +1919,10 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
   // Load grades when modal opens
   useEffect(() => {
     if (isOpen && selectedClass && selectedSubject) {
-      console.log("🔄 Loading grades for modal");
-      loadGrades();
+      console.log(
+        "🔄 Loading grades using new single-document-per-student structure"
+      );
+      loadGradesFromStudentTerm(); // Changed from loadGrades()
     }
   }, [
     user,
@@ -1991,6 +2044,99 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     );
   };
 
+  // SINGLE SAVE FUNCTION - One document per student per term per session
+  const saveStudentTermGrades = async () => {
+    if (!user?.uid || !selectedClass || !selectedSubject) {
+      throw new Error("Missing required data");
+    }
+
+    console.log("📁 Saving ALL grades to student term documents...");
+
+    const batch = writeBatch(db);
+    const timestamp = new Date();
+    let savedCount = 0;
+
+    // Group grades by student ID
+    const gradesByStudent: Record<string, GradeRecord[]> = {};
+
+    gradeRecords.forEach((record) => {
+      if (!gradesByStudent[record.studentId]) {
+        gradesByStudent[record.studentId] = [];
+      }
+      gradesByStudent[record.studentId].push(record);
+    });
+
+    // For each student, create/update their term document
+    for (const [studentId, studentGrades] of Object.entries(gradesByStudent)) {
+      // Generate document ID: studentId_term_session
+      const studentTermDocId = `${studentId}_${activeTerm}_${activeSession}`
+        .replace(/\s+/g, "_")
+        .replace(/\//g, "_");
+
+      const studentTermRef = doc(db, "studentTermGrades", studentTermDocId);
+
+      // Get student info from first grade record
+      const studentInfo = studentGrades[0];
+
+      // Check if document already exists
+      let existingDoc;
+      try {
+        existingDoc = await getDoc(studentTermRef);
+      } catch (error) {
+        console.log("Creating new student term document");
+      }
+
+      let existingData = existingDoc?.exists() ? existingDoc.data() : {};
+      let existingSubjects = existingData.subjects || {};
+
+      // Create subjects object with ALL subjects
+      const updatedSubjects = { ...existingSubjects };
+
+      // Add/update the current subject grade
+      studentGrades.forEach((grade) => {
+        updatedSubjects[grade.subject] = {
+          objScore: grade.objScore,
+          caScore: grade.caScore,
+          theoryScore: grade.theoryScore,
+          totalScore: grade.totalScore,
+          percentage: grade.percentage,
+          grade: grade.grade,
+          positionInClass: grade.positionInClass,
+          remark: grade.remark,
+          savedAt: timestamp,
+          teacherId: user.uid,
+          teacherName: user.displayName || "Teacher",
+          className: grade.className,
+        };
+      });
+
+      // Create ONE document per student per term per session
+      const studentTermData = {
+        id: studentTermDocId,
+        studentId,
+        studentName: studentInfo.studentName,
+        className: selectedClass,
+        term: activeTerm,
+        session: activeSession,
+        subjects: updatedSubjects, // ALL subjects stored here
+        updatedAt: timestamp,
+        createdAt: existingData.createdAt || timestamp,
+        teacherId: user.uid,
+        teacherName: user.displayName || "Teacher",
+      };
+
+      batch.set(studentTermRef, studentTermData, { merge: true });
+      savedCount++;
+
+      console.log(
+        `✅ Prepared document for ${studentInfo.studentName} (ID: ${studentTermDocId})`
+      );
+    }
+
+    await batch.commit();
+    console.log(`✅ Saved ${savedCount} student term documents to Firestore`);
+    return savedCount;
+  };
   const validateScores = () => {
     let isValid = true;
     let errorMessage = "";
@@ -2017,6 +2163,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     return { isValid, errorMessage };
   };
   // In your existing handleSaveGrades function, add this line:
+
   const handleSaveGrades = async () => {
     const validation = validateScores();
     if (!validation.isValid) {
@@ -2030,133 +2177,376 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     }
 
     if (!user?.uid) {
-      alert("User not authenticated");
+      console.error("❌ User not authenticated in handleSaveGrades!");
+      console.error("User object:", user);
+      alert("Please log in again.");
       return;
     }
 
+    console.log("✅ User authenticated for save:");
+    console.log("   User ID:", user.uid);
+    console.log("   User Email:", user.email);
+    console.log("   User Display Name:", user.displayName);
+
     setSavingGrades(true);
+    try {
+      console.log("💾 Saving ALL grades to ONE document per student...");
+
+      // JUST THIS ONE FUNCTION CALL
+      const savedCount = await saveStudentTermGrades();
+
+      setIsEditing(false);
+
+      alert(
+        `✅ Grades saved successfully!\n\n` +
+          `• Class: ${selectedClass}\n` +
+          `• Subject: ${selectedSubject}\n` +
+          `• Term: ${activeTerm}\n` +
+          `• Session: ${activeSession}\n` +
+          `• Students: ${savedCount} documents saved\n\n` +
+          `📄 Document format: studentId_term_session\n` +
+          `📁 Collection: studentTermGrades\n\n` +
+          `✅ Each student now has ONE document containing ALL their subjects!`
+      );
+    } catch (error: any) {
+      console.error("❌ Error saving grades to Firestore:", error);
+      console.error("Error details:", {
+        code: error.code,
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+      });
+
+      let errorMessage = "Failed to save grades. ";
+
+      if (error.code === "permission-denied") {
+        errorMessage += "Permission denied. Please check your Firebase rules.";
+        console.error(
+          "⚠️ FIREBASE RULES ISSUE: Check if scores collection is writable"
+        );
+      } else if (error.code === "unavailable") {
+        errorMessage += "Network error. Please check your internet connection.";
+      } else if (error.message.includes("quota")) {
+        errorMessage += "Firebase quota exceeded. Please try again later.";
+      } else {
+        errorMessage += "Please try again.";
+      }
+
+      alert(errorMessage);
+
+      // Try one more time with single saves
+      try {
+        console.log("🔄 Attempting fallback save...");
+        await saveScoresOneByOne();
+        alert("✅ Scores saved using fallback method!");
+        setIsEditing(false);
+      } catch (fallbackError) {
+        console.error("❌ Fallback save also failed:", fallbackError);
+      }
+    } finally {
+      setSavingGrades(false);
+    }
+  };
+  // Function to save grades to student term documents (ONE DOCUMENT PER STUDENT)
+
+  // Function to save to scores collection (for backward compatibility)
+
+  // Function to load grades from student term documents
+  const loadGradesFromStudentTerm = async () => {
+    if (!user?.uid || !selectedClass || !selectedSubject) return;
+
+    setLoadingGrades(true);
 
     try {
-      // First, check if a grade document already exists
-      const gradesRef = collection(db, "grades");
+      console.log("📖 Loading grades from student term documents...");
+
+      // Get all student IDs
+      const studentIds = filteredStudents
+        .map((s) => s.id || s.studentId || s.userId)
+        .filter((id) => id);
+
+      let loadedGrades: GradeRecord[] = [];
+
+      if (studentIds.length > 0) {
+        // Load each student's term document
+        const promises = studentIds.map(async (studentId) => {
+          const studentTermDocId = `${studentId}_${activeTerm}_${activeSession}`
+            .replace(/\s+/g, "_")
+            .replace(/\//g, "_");
+
+          const studentTermRef = doc(db, "studentTermGrades", studentTermDocId);
+          const docSnap = await getDoc(studentTermRef);
+
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            const studentGrades = data.grades || [];
+
+            // Find grade for current subject and class
+            const subjectGrade = studentGrades.find(
+              (g: any) =>
+                g.subject === selectedSubject && g.className === selectedClass
+            );
+
+            if (subjectGrade) {
+              const student = filteredStudents.find(
+                (s) => (s.id || s.studentId || s.userId) === studentId
+              );
+
+              if (student) {
+                return {
+                  id: `grade-${studentId}-${selectedSubject}-${selectedClass}-${activeTerm}`,
+                  studentId,
+                  studentName:
+                    student.fullName || `${student.first} ${student.last}`,
+                  className: selectedClass,
+                  subject: selectedSubject,
+                  term: activeTerm,
+                  session: activeSession,
+                  objScore: subjectGrade.objScore || 0,
+                  caScore: subjectGrade.caScore || 0,
+                  theoryScore: subjectGrade.theoryScore || 0,
+                  totalScore: subjectGrade.totalScore || 0,
+                  percentage: subjectGrade.percentage || 0,
+                  grade: subjectGrade.grade || "F9",
+                  positionInClass: subjectGrade.positionInClass,
+                  remark: subjectGrade.remark || "Fail",
+                } as GradeRecord;
+              }
+            }
+          }
+          return null;
+        });
+
+        const results = await Promise.all(promises);
+        loadedGrades = results.filter((g): g is GradeRecord => g !== null);
+      }
+
+      // If we found grades, use them
+      if (loadedGrades.length > 0) {
+        console.log(
+          `✅ Loaded ${loadedGrades.length} grades from student term documents`
+        );
+
+        // Sort by position or total score
+        const sortedGrades = loadedGrades.sort(
+          (a, b) => b.totalScore - a.totalScore
+        );
+
+        // Update positions
+        const gradesWithPositions = sortedGrades.map((grade, index) => ({
+          ...grade,
+          positionInClass: index + 1,
+        }));
+
+        setGradeRecords(gradesWithPositions);
+      } else {
+        // Fallback to old method (scores collection)
+        console.log(
+          "📭 No student term documents found, falling back to scores collection"
+        );
+        await loadGradesFromScoresCollection();
+      }
+
+      // Load quiz results for OBJ scores
+      await loadQuizResults();
+    } catch (error) {
+      console.error("❌ Error loading from student term documents:", error);
+      // Fallback to old method
+      await loadGradesFromScoresCollection();
+    } finally {
+      setLoadingGrades(false);
+    }
+  };
+
+  // Fallback function to load from scores collection
+  const loadGradesFromScoresCollection = async () => {
+    if (!user?.uid || !selectedClass || !selectedSubject) return;
+
+    try {
+      const scoresRef = collection(db, "scores");
       const q = query(
-        gradesRef,
+        scoresRef,
         where("teacherId", "==", user.uid),
-        where("class", "==", selectedClass),
-        where("subject", "==", selectedSubject),
+        where("classId", "==", selectedClass),
+        where("subjectId", "==", selectedSubject),
         where("term", "==", activeTerm),
         where("session", "==", activeSession)
       );
 
       const querySnapshot = await getDocs(q);
-      let gradeDocId: string;
 
       if (!querySnapshot.empty) {
-        // Update existing document
-        gradeDocId = querySnapshot.docs[0].id;
+        const loadedGrades: GradeRecord[] = [];
+
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          const student = filteredStudents.find(
+            (s) => (s.id || s.studentId || s.userId) === data.studentId
+          );
+
+          if (student) {
+            loadedGrades.push({
+              id: doc.id,
+              studentId: data.studentId,
+              studentName: data.studentName || student.fullName,
+              className: selectedClass,
+              subject: selectedSubject,
+              term: activeTerm,
+              session: activeSession,
+              objScore: data.obj || 0,
+              caScore: data.ca || 0,
+              theoryScore: data.theory || 0,
+              totalScore: data.total || 0,
+              percentage: data.percentage || 0,
+              grade: data.grade || "F9",
+              positionInClass: data.position,
+              remark: data.remark || "Fail",
+            });
+          }
+        });
+
+        // Sort by total score
+        const sortedGrades = loadedGrades.sort(
+          (a, b) => b.totalScore - a.totalScore
+        );
+
+        // Update positions
+        const gradesWithPositions = sortedGrades.map((grade, index) => ({
+          ...grade,
+          positionInClass: index + 1,
+        }));
+
+        setGradeRecords(gradesWithPositions);
+        console.log(
+          `✅ Loaded ${loadedGrades.length} grades from scores collection`
+        );
       } else {
-        // Create new document ID
-        gradeDocId = `${user.uid}_${selectedClass.replace(
-          /\s+/g,
-          "_"
-        )}_${selectedSubject.replace(/\s+/g, "_")}_${activeTerm.replace(
-          /\s+/g,
-          "_"
-        )}_${activeSession.replace(/\s+/g, "_")}`;
+        // Initialize new records
+        initializeGradeRecords();
       }
-
-      const gradeRef = doc(db, "grades", gradeDocId);
-
-      await setDoc(
-        gradeRef,
-        {
-          teacherId: user.uid,
-          teacherName: userData?.fullName || user?.displayName || "Teacher",
-          teacherEmail: user?.email || "",
-          class: selectedClass,
-          subject: selectedSubject,
-          term: activeTerm,
-          session: activeSession,
-          grades: gradeRecords,
-          updatedAt: new Date(),
-          createdAt: querySnapshot.empty ? serverTimestamp() : undefined,
-        },
-        { merge: true }
-      );
-
-      console.log("✅ Grades saved to Firestore with ID:", gradeDocId);
-
-      // Save individual student grades
-      await saveIndividualStudentGrades();
-
-      // Save final report
-      await saveFinalGradesReport();
-
-      setIsEditing(false);
-      alert("Grades saved successfully!");
-    } catch (error: any) {
-      console.error("❌ Error saving grades to Firestore:", error);
-
-      // More specific error messages
-      if (error.code === "permission-denied") {
-        alert("Permission denied. Please check your Firebase rules.");
-      } else if (error.code === "unavailable") {
-        alert("Network error. Please check your internet connection.");
-      } else {
-        alert("Failed to save grades. Please try again.");
-      }
-    }
-  }; // Add this function to save individual student grades to Firestore
-  const saveIndividualStudentGrades = async () => {
-    if (!user?.uid || !selectedClass || !selectedSubject) return;
-
-    try {
-      console.log("💾 Saving individual student grades...");
-
-      const batch = writeBatch(db);
-
-      gradeRecords.forEach((record) => {
-        // Create a unique ID for each student's grade record
-        const individualGradeId = `${user.uid}_${record.studentId}_${selectedSubject}_${activeTerm}_${activeSession}`;
-        const individualGradeRef = doc(db, "studentGrades", individualGradeId);
-
-        const studentGradeData = {
-          studentId: record.studentId,
-          studentName: record.studentName,
-          teacherId: user.uid,
-          teacherName: userData?.fullName || "Teacher",
-          teacherEmail: user?.email || "",
-          class: selectedClass,
-          subject: selectedSubject,
-          term: activeTerm,
-          session: activeSession,
-          scores: {
-            obj: record.objScore,
-            ca: record.caScore,
-            theory: record.theoryScore,
-          },
-          totalScore: record.totalScore,
-          percentage: record.percentage,
-          grade: record.grade,
-          position: record.positionInClass,
-          remark: record.remark,
-          published: true,
-          publishedAt: new Date(),
-          updatedAt: new Date(),
-          createdAt: new Date(),
-        };
-
-        batch.set(individualGradeRef, studentGradeData, { merge: true });
-      });
-
-      await batch.commit();
-      console.log("✅ Individual student grades saved to Firestore");
-    } catch (error: any) {
-      console.error("❌ Error saving individual grades:", error);
-      throw error; // Re-throw to handle in the main save function
+    } catch (error) {
+      console.error("❌ Error loading from scores collection:", error);
+      initializeGradeRecords();
     }
   };
 
+  // Backup function to save grades collection
+
+  // Fallback function to save scores one by one
+
+  // ADD THIS FUNCTION right after saveScoresOneByOne function (around line 1090)
+  const verifySavedScores = async () => {
+    if (!user?.uid || !selectedClass || !selectedSubject) return;
+
+    try {
+      console.log("🔍 Verifying saved scores...");
+
+      const scoresRef = collection(db, "scores");
+      const q = query(
+        scoresRef,
+        where("teacherId", "==", user.uid),
+        where("classId", "==", selectedClass),
+        where("subjectId", "==", selectedSubject),
+        where("term", "==", activeTerm),
+        where("session", "==", activeSession)
+      );
+
+      const querySnapshot = await getDocs(q);
+      console.log(
+        `📊 Found ${querySnapshot.docs.length} documents in 'scores' collection`
+      );
+
+      if (querySnapshot.docs.length > 0) {
+        console.log("📄 Document details:");
+        querySnapshot.docs.forEach((doc, index) => {
+          console.log(`  ${index + 1}. ${doc.id}:`, {
+            studentName: doc.data().studentName,
+            ca: doc.data().ca,
+            theory: doc.data().theory,
+            total: doc.data().total,
+            grade: doc.data().grade,
+          });
+        });
+      } else {
+        console.log("⚠️ No documents found in 'scores' collection!");
+      }
+    } catch (error) {
+      console.error("❌ Verification failed:", error);
+    }
+  };
+  // ADD THIS FUNCTION right after verifySavedScores
+  const testDatabaseConnection = async () => {
+    console.log("🔧 Testing database connection...");
+
+    try {
+      // Test 1: Try to create a test document
+      const testRef = doc(db, "testCollection", "testDocument");
+      await setDoc(testRef, {
+        test: "Test document",
+        timestamp: new Date(),
+        teacherId: user?.uid,
+      });
+      console.log("✅ Test document created in 'testCollection'");
+
+      // Test 2: Check if we can read it back
+      const testSnap = await getDoc(testRef);
+      console.log("✅ Test document read back:", testSnap.exists());
+
+      // Test 3: Delete test document
+      await deleteDoc(testRef);
+      console.log("✅ Test document deleted");
+
+      alert("✅ Database connection test successful!");
+    } catch (error: any) {
+      console.error("❌ Database test failed:", error);
+      alert(
+        `❌ Database error: ${error.message || error.code || "Unknown error"}`
+      );
+    }
+  };
+
+  const checkForDuplicateScores = async () => {
+    if (!selectedClass || !selectedSubject || !activeTerm || !activeSession) {
+      return { hasDuplicates: false, count: 0 };
+    }
+
+    try {
+      console.log("🔍 Checking for duplicate scores...");
+
+      const scoresRef = collection(db, "scores");
+      const q = query(
+        scoresRef,
+        where("classId", "==", selectedClass),
+        where("subjectId", "==", selectedSubject),
+        where("term", "==", activeTerm),
+        where("session", "==", activeSession)
+      );
+
+      const querySnapshot = await getDocs(q);
+      const count = querySnapshot.docs.length;
+
+      console.log(`📊 Found ${count} existing score documents`);
+
+      if (count > 0) {
+        console.log(
+          "📄 Existing documents:",
+          querySnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+        );
+      }
+
+      return {
+        hasDuplicates: count > 0,
+        count,
+        documents: querySnapshot.docs,
+      };
+    } catch (error) {
+      console.error("❌ Error checking for duplicates:", error);
+      return { hasDuplicates: false, count: 0 };
+    }
+  };
   // ADD THIS RIGHT AFTER saveFinalGradesReport function
   const debugQuizSubmissionStructure = async () => {
     if (!user?.uid) return;
@@ -2201,53 +2591,6 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
       }
     } catch (error) {
       console.error("❌ Debug error:", error);
-    }
-  };
-  // Function to save a comprehensive final report
-  const saveFinalGradesReport = async () => {
-    if (!user?.uid || !selectedClass || !selectedSubject) return;
-
-    try {
-      const reportId = `${user.uid}_${selectedClass}_${selectedSubject}_${activeTerm}_${activeSession}_final_report`;
-      const reportRef = doc(db, "finalGradeReports", reportId);
-
-      const reportData = {
-        teacherId: user.uid,
-        teacherName: userData?.fullName || "Teacher",
-        class: selectedClass,
-        subject: selectedSubject,
-        term: activeTerm,
-        session: activeSession,
-        summary: {
-          totalStudents: gradeRecords.length,
-          classAverage: Math.round(
-            gradeRecords.reduce((sum, r) => sum + r.percentage, 0) /
-              gradeRecords.length
-          ),
-          passRate: Math.round(
-            (gradeRecords.filter((r) => r.grade !== "F9").length /
-              gradeRecords.length) *
-              100
-          ),
-          topStudent: gradeRecords[0]?.studentName || "N/A",
-          topScore: gradeRecords[0]?.percentage || 0,
-          gradeDistribution: Object.keys(gradeSystem.grades).reduce(
-            (acc, grade) => {
-              acc[grade] = gradeRecords.filter((r) => r.grade === grade).length;
-              return acc;
-            },
-            {} as Record<string, number>
-          ),
-        },
-        grades: gradeRecords,
-        generatedAt: new Date(),
-        exported: false,
-      };
-
-      await setDoc(reportRef, reportData, { merge: true });
-      console.log("✅ Final report saved to Firestore");
-    } catch (error: any) {
-      console.error("❌ Error saving final report:", error);
     }
   };
 
@@ -2389,54 +2732,27 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
                   {isEditing ? "Cancel Editing" : "Edit Grades"}
                 </button>
                 <button
-                  className="action-btn save"
+                  className="action-btn primary"
                   onClick={handleSaveGrades}
                   disabled={
+                    savingGrades ||
                     !isEditing ||
                     !selectedClass ||
-                    !selectedSubject ||
-                    savingGrades
+                    !selectedSubject
                   }
                 >
                   {savingGrades ? (
                     <>
                       <RefreshCw className="animate-spin" size={16} />
-                      Saving...
+                      Saving to Student Docs...
                     </>
                   ) : (
                     <>
                       <Save size={16} />
-                      Save Grades
+                      Save All Grades
                     </>
                   )}
                 </button>
-                <button
-                  className="action-btn export"
-                  onClick={handleExportCSV}
-                  disabled={!selectedClass || !selectedSubject || savingGrades}
-                >
-                  <Download size={16} />
-                  Export CSV
-                </button>
-              </div>
-
-              <div className="control-group">
-                <label>Debug Tools</label>
-                <div className="action-buttons">
-                  <button
-                    className="action-btn debug"
-                    onClick={debugQuizSubmissionStructure}
-                    style={{
-                      background: "#6b7280",
-                      color: "white",
-                      fontSize: "12px",
-                      padding: "8px 12px",
-                    }}
-                  >
-                    <Info size={14} />
-                    Debug Quiz Data
-                  </button>
-                </div>
               </div>
 
               {/* Add sync indicator */}
@@ -2470,50 +2786,6 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
                     >
                       <div className="online-dot"></div>
                       <span>Connected to cloud database</span>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "4px",
-                        marginLeft: "auto",
-                      }}
-                    >
-                      <button
-                        className="retry-btn"
-                        onClick={() => debugFirestoreQuery()}
-                        style={{
-                          fontSize: "12px",
-                          padding: "4px 8px",
-                          background: "#f3f4f6",
-                          border: "1px solid #d1d5db",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Debug Query
-                      </button>
-                      <button
-                        className="reload-btn"
-                        onClick={() => {
-                          // Force reload grades
-                          setGradeRecords([]);
-                          setTimeout(() => {
-                            const event = new Event("reload-grades");
-                            window.dispatchEvent(event);
-                          }, 100);
-                        }}
-                        style={{
-                          fontSize: "12px",
-                          padding: "4px 8px",
-                          background: "#3b82f6",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Reload Grades
-                      </button>
                     </div>
                   </div>
                 )}
@@ -2713,6 +2985,30 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
         </div>
 
         <div className="modal-footer">
+          <div
+            className="debug-section"
+            style={{
+              position: "absolute",
+              left: "20px",
+              bottom: "20px",
+            }}
+          >
+            <button
+              onClick={testDatabaseConnection}
+              style={{
+                background: "#f59e0b",
+                color: "white",
+                padding: "6px 10px",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "11px",
+                cursor: "pointer",
+                marginRight: "8px",
+              }}
+            >
+              🐛 Test DB
+            </button>
+          </div>
           <div className="footer-stats">
             <div className="stat">
               <span className="stat-label">Total Students:</span>
@@ -2731,22 +3027,44 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
               </span>
             </div>
             <div className="stat">
-              <span className="stat-label">Pass Rate:</span>
-              <span className="stat-value">
-                {gradeRecords.length > 0
-                  ? Math.round(
-                      (gradeRecords.filter((r) => r.grade !== "F9").length /
-                        gradeRecords.length) *
-                        100
-                    )
-                  : 0}
-                %
+              <span className="stat-label">Save Format:</span>
+              <span
+                className="stat-value"
+                style={{ fontSize: "12px", color: "#10b981" }}
+              >
+                {gradeRecords.length} docs in "scores"
               </span>
             </div>
           </div>
-          <button className="action-btn primary" onClick={onClose}>
-            Close
-          </button>
+
+          <div className="save-actions">
+            <button
+              className="action-btn cancel"
+              onClick={onClose}
+              disabled={savingGrades}
+            >
+              Cancel
+            </button>
+            <button
+              className="action-btn primary"
+              onClick={handleSaveGrades}
+              disabled={
+                savingGrades || !isEditing || !selectedClass || !selectedSubject
+              }
+            >
+              {savingGrades ? (
+                <>
+                  <RefreshCw className="animate-spin" size={16} />
+                  Saving to Scores...
+                </>
+              ) : (
+                <>
+                  <Save size={16} />
+                  Save All Scores
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -5548,6 +5866,67 @@ const TeacherDashboard: React.FC = () => {
 
       <style>{`
       /* Add these styles to your existing CSS */
+      /* Add to your CSS styles */
+.save-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.stat .stat-value[style*="color: #10b981"] {
+  font-weight: 600;
+  background: #d1fae5;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #a7f3d0;
+}
+
+/* Success message styling */
+.score-save-info {
+  background: #d1fae5;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: #065f46;
+}
+
+.score-save-info h5 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.score-save-info ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.score-save-info li {
+  margin-bottom: 4px;
+}
+
+/* Debug info panel */
+.debug-info-panel {
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 16px;
+  font-size: 11px;
+  color: #6b7280;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.debug-info-panel pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
       /* Reschedule button styles */
 .reschedule-btn {
   background: none;
@@ -8737,3 +9116,4 @@ get-in-touch{
 };
 
 export default TeacherDashboard;
+  
