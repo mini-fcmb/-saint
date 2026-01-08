@@ -45,6 +45,7 @@ import {
   Calculator,
   Save,
   Users2,
+  Info,
 } from "lucide-react";
 import { useFirebaseStore } from "../stores/useFirebaseStore";
 import { useLiveDate, useCalendar } from "../hooks/useDateUtils";
@@ -3083,6 +3084,789 @@ const StrictQuizInterface: React.FC<{
   );
 };
 
+// Check Results Modal Component
+interface CheckResultsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  user: any;
+  currentUserClass?: string;
+  studentName: string;
+}
+
+const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
+  isOpen,
+  onClose,
+  user,
+  currentUserClass,
+  studentName,
+}) => {
+  const [studentId, setStudentId] = useState<string>("");
+  const [term, setTerm] = useState<string>("First Term");
+  const [session, setSession] = useState<string>("2024/2025");
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<any>(null);
+  const [error, setError] = useState<string>("");
+
+  // Auto-fill student ID from user data
+  useEffect(() => {
+    if (user?.uid) {
+      setStudentId(user.uid);
+    }
+  }, [user]);
+
+  const handleCheckResults = async () => {
+    if (!studentId || !term || !session) {
+      setError("Please fill in all required fields");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setResults(null);
+
+    try {
+      // Create document ID based on the format from teacher dashboard
+      const docId = `${studentId}_${term}_${session}`
+        .replace(/\s+/g, "_")
+        .replace(/\//g, "_");
+
+      console.log("🔍 Looking for results document:", docId);
+
+      // Query Firestore for student's term results
+      const resultsRef = doc(db, "studentTermGrades", docId);
+      const docSnap = await getDoc(resultsRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        console.log("✅ Found results:", data);
+
+        // Validate that this is the correct student (extra security)
+        if (data.studentId === studentId || data.studentEmail === user?.email) {
+          setResults(data);
+        } else {
+          setError("No results found for your student ID");
+        }
+      } else {
+        // Try alternative queries if the main one fails
+        await tryAlternativeQueries();
+      }
+    } catch (error) {
+      console.error("❌ Error fetching results:", error);
+      setError("Error fetching results. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const tryAlternativeQueries = async () => {
+    try {
+      // Alternative query 1: Search by student email
+      if (user?.email) {
+        console.log("🔍 Trying alternative query by email...");
+        const resultsRef = collection(db, "studentTermGrades");
+        const q = query(
+          resultsRef,
+          where("studentEmail", "==", user.email),
+          where("term", "==", term),
+          where("session", "==", session)
+        );
+
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          const docData = querySnapshot.docs[0].data();
+          console.log("✅ Found results by email:", docData);
+          setResults(docData);
+          return;
+        }
+      }
+
+      // Alternative query 2: Search by student ID and class
+      console.log("🔍 Trying alternative query by studentId and class...");
+      const resultsRef = collection(db, "studentTermGrades");
+      const q = query(
+        resultsRef,
+        where("studentId", "==", studentId),
+        where("className", "==", currentUserClass),
+        where("term", "==", term),
+        where("session", "==", session)
+      );
+
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        const docData = querySnapshot.docs[0].data();
+        console.log("✅ Found results by studentId and class:", docData);
+        setResults(docData);
+        return;
+      }
+
+      // Alternative query 3: Check in scores collection (backward compatibility)
+      console.log("🔍 Checking in scores collection...");
+      const scoresRef = collection(db, "scores");
+      const scoresQ = query(
+        scoresRef,
+        where("studentId", "==", studentId),
+        where("term", "==", term),
+        where("session", "==", session)
+      );
+
+      const scoresSnapshot = await getDocs(scoresQ);
+
+      if (!scoresSnapshot.empty) {
+        // Combine scores by subject
+        const scoresBySubject: { [key: string]: any } = {};
+        const studentData = {
+          studentId: studentId,
+          studentName: studentName,
+          className: currentUserClass || "",
+          term: term,
+          session: session,
+          subjects: {},
+        };
+
+        scoresSnapshot.forEach((doc) => {
+          const data = doc.data();
+          studentData.studentName = data.studentName || studentName;
+
+          if (data.subject) {
+            scoresBySubject[data.subject] = {
+              objScore: data.obj || 0,
+              caScore: data.ca || 0,
+              theoryScore: data.theory || 0,
+              totalScore: data.total || 0,
+              percentage: data.percentage || 0,
+              grade: data.grade || "N/A",
+              positionInClass: data.position,
+              remark: data.remark || "N/A",
+            };
+          }
+        });
+
+        studentData.subjects = scoresBySubject;
+        setResults(studentData);
+        return;
+      }
+
+      setError("No results found for the selected term and session");
+    } catch (error) {
+      console.error("❌ Error in alternative queries:", error);
+      setError("Unable to fetch results. Please contact your teacher.");
+    }
+  };
+
+  const handleExportPDF = () => {
+    if (!results) return;
+
+    // Create a simple HTML representation for printing
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Student Results - ${results.studentName || studentName}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+            .student-info { margin-bottom: 20px; }
+            .results-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            .results-table th, .results-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            .results-table th { background-color: #f2f2f2; }
+            .subject-row { font-weight: bold; background-color: #f9f9f9; }
+            .total-row { font-weight: bold; background-color: #e8f4ff; }
+            .grade-badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+            .grade-a1 { background: #dcfce7; color: #166534; }
+            .grade-b2 { background: #bbf7d0; color: #15803d; }
+            .grade-b3 { background: #86efac; color: #15803d; }
+            .grade-c4 { background: #fef9c3; color: #854d0e; }
+            .grade-c5 { background: #fef08a; color: #854d0e; }
+            .grade-c6 { background: #fde047; color: #854d0e; }
+            .grade-d7 { background: #fed7aa; color: #9a3412; }
+            .grade-e8 { background: #fdba74; color: #9a3412; }
+            .grade-f9 { background: #fecaca; color: #991b1b; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Student Academic Results</h1>
+            <h2>${results.studentName || studentName}</h2>
+            <p>Class: ${
+              results.className || currentUserClass || "N/A"
+            } | Term: ${term} | Session: ${session}</p>
+          </div>
+          
+          <div class="student-info">
+            <p><strong>Student ID:</strong> ${studentId}</p>
+            <p><strong>Generated:</strong> ${new Date().toLocaleDateString()}</p>
+          </div>
+          
+          ${renderResultsTableHTML()}
+          
+          <script>
+            window.onload = function() {
+              window.print();
+            }
+          </script>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  };
+
+  const renderResultsTableHTML = () => {
+    if (!results || !results.subjects)
+      return "<p>No results data available</p>";
+
+    const subjects = results.subjects;
+    let html = `
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>Subject</th>
+            <th>OBJ</th>
+            <th>CA</th>
+            <th>Theory</th>
+            <th>Total</th>
+            <th>Percentage</th>
+            <th>Grade</th>
+            <th>Position</th>
+            <th>Remark</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    let overallTotal = 0;
+    let subjectCount = 0;
+
+    Object.entries(subjects).forEach(([subject, data]: [string, any]) => {
+      overallTotal += data.totalScore || 0;
+      subjectCount++;
+
+      html += `
+        <tr class="subject-row">
+          <td>${subject}</td>
+          <td>${data.objScore || 0}</td>
+          <td>${data.caScore || 0}</td>
+          <td>${data.theoryScore || 0}</td>
+          <td>${data.totalScore || 0}</td>
+          <td>${data.percentage || 0}%</td>
+          <td><span class="grade-badge grade-${(
+            data.grade || ""
+          ).toLowerCase()}">${data.grade || "N/A"}</span></td>
+          <td>${data.positionInClass || "N/A"}</td>
+          <td>${data.remark || "N/A"}</td>
+        </tr>
+      `;
+    });
+
+    const overallAverage = subjectCount > 0 ? overallTotal / subjectCount : 0;
+
+    html += `
+        <tr class="total-row">
+          <td><strong>OVERALL AVERAGE</strong></td>
+          <td colspan="3"></td>
+          <td><strong>${overallAverage.toFixed(2)}</strong></td>
+          <td><strong>${overallAverage.toFixed(2)}%</strong></td>
+          <td colspan="3"></td>
+        </tr>
+      </tbody>
+    </table>
+    `;
+
+    return html;
+  };
+
+  const renderResultsPreview = () => {
+    if (!results) return null;
+
+    const subjects = results.subjects || {};
+    const subjectCount = Object.keys(subjects).length;
+    let overallTotal = 0;
+
+    Object.values(subjects).forEach((data: any) => {
+      overallTotal += data.totalScore || 0;
+    });
+
+    const overallAverage = subjectCount > 0 ? overallTotal / subjectCount : 0;
+
+    return (
+      <div className="results-preview">
+        <div className="results-header">
+          <h3>📊 Results Found!</h3>
+          <p>
+            Showing results for {term} - {session}
+          </p>
+        </div>
+
+        <div className="student-summary">
+          <div className="summary-card">
+            <strong>Student Name:</strong>
+            <span>{results.studentName || studentName}</span>
+          </div>
+          <div className="summary-card">
+            <strong>Class:</strong>
+            <span>{results.className || currentUserClass || "N/A"}</span>
+          </div>
+          <div className="summary-card">
+            <strong>Overall Average:</strong>
+            <span className="overall-average">
+              {overallAverage.toFixed(2)}%
+            </span>
+          </div>
+        </div>
+
+        <div className="results-table-preview">
+          <h4>Subject-wise Results</h4>
+          <div className="table-container">
+            <table className="results-table">
+              <thead>
+                <tr>
+                  <th>Subject</th>
+                  <th>OBJ</th>
+                  <th>CA</th>
+                  <th>Theory</th>
+                  <th>Total</th>
+                  <th>%</th>
+                  <th>Grade</th>
+                  <th>Position</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(subjects).map(
+                  ([subject, data]: [string, any]) => (
+                    <tr key={subject} className="subject-row">
+                      <td className="subject-name">{subject}</td>
+                      <td>{data.objScore || 0}</td>
+                      <td>{data.caScore || 0}</td>
+                      <td>{data.theoryScore || 0}</td>
+                      <td className="total-score">{data.totalScore || 0}</td>
+                      <td>{data.percentage || 0}%</td>
+                      <td>
+                        <span
+                          className={`grade-badge grade-${(
+                            data.grade || ""
+                          ).toLowerCase()}`}
+                        >
+                          {data.grade || "N/A"}
+                        </span>
+                      </td>
+                      <td className="position">
+                        {data.positionInClass || "N/A"}
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="results-actions">
+          <button className="action-btn export-btn" onClick={handleExportPDF}>
+            <Download size={16} />
+            Export as PDF
+          </button>
+          <button
+            className="action-btn secondary"
+            onClick={() => {
+              setResults(null);
+              setTerm("First Term");
+              setSession("2024/2025");
+            }}
+          >
+            Check Another Result
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div
+        className="modal-content large-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <h2>📊 Check Your Results</h2>
+            <p>View your academic performance for any term</p>
+          </div>
+          <button className="close-btn" onClick={onClose}>
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="modal-body">
+          {!results ? (
+            <>
+              <div className="form-group">
+                <label>Student ID *</label>
+                <input
+                  type="text"
+                  className="text-input"
+                  value={studentId}
+                  onChange={(e) => setStudentId(e.target.value)}
+                  placeholder="Enter your student ID"
+                  readOnly={!!user?.uid}
+                  style={
+                    user?.uid
+                      ? { backgroundColor: "#f3f4f6", cursor: "not-allowed" }
+                      : {}
+                  }
+                />
+                {user?.uid && (
+                  <small style={{ color: "#6b7280", marginTop: "4px" }}>
+                    Auto-filled from your account
+                  </small>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label>Term *</label>
+                <select
+                  className="text-input"
+                  value={term}
+                  onChange={(e) => setTerm(e.target.value)}
+                >
+                  <option value="First Term">First Term</option>
+                  <option value="Second Term">Second Term</option>
+                  <option value="Third Term">Third Term</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Academic Session *</label>
+                <select
+                  className="text-input"
+                  value={session}
+                  onChange={(e) => setSession(e.target.value)}
+                >
+                  <option value="2023/2024">2023/2024</option>
+                  <option value="2024/2025">2024/2025</option>
+                  <option value="2025/2026">2025/2026</option>
+                </select>
+              </div>
+
+              {error && (
+                <div className="error-message">
+                  <AlertTriangle size={16} />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <div className="query-info">
+                <Info size={16} />
+                <p>
+                  <strong>Note:</strong> Results are fetched from your teacher's
+                  grade records. If you don't see your results, please ensure
+                  your teacher has uploaded them.
+                </p>
+              </div>
+            </>
+          ) : (
+            renderResultsPreview()
+          )}
+        </div>
+
+        <div className="modal-footer">
+          {!results ? (
+            <>
+              <button className="action-btn cancel" onClick={onClose}>
+                Cancel
+              </button>
+              <button
+                className="action-btn primary"
+                onClick={handleCheckResults}
+                disabled={loading || !studentId || !term || !session}
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="animate-spin" size={16} />
+                    Checking...
+                  </>
+                ) : (
+                  <>
+                    <Search size={16} />
+                    Check Results
+                  </>
+                )}
+              </button>
+            </>
+          ) : (
+            <button className="action-btn primary" onClick={onClose}>
+              Close
+            </button>
+          )}
+        </div>
+      </div>
+
+      <style>{`
+        .large-modal {
+          max-width: 800px;
+          max-height: 85vh;
+        }
+        
+        .animate-spin {
+          animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        
+        .form-group {
+          margin-bottom: 20px;
+        }
+        
+        .form-group label {
+          display: block;
+          margin-bottom: 8px;
+          font-weight: 600;
+          color: #374151;
+        }
+        
+        .text-input, select.text-input {
+          width: 100%;
+          padding: 12px 16px;
+          border: 2px solid #e5e7eb;
+          border-radius: 8px;
+          font-size: 14px;
+          background: white;
+          transition: border-color 0.2s;
+        }
+        
+        .text-input:focus, select.text-input:focus {
+          outline: none;
+          border-color: #4299e1;
+        }
+        
+        .text-input:read-only {
+          background-color: #f9fafb;
+          cursor: not-allowed;
+        }
+        
+        .error-message {
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+          border-radius: 8px;
+          padding: 12px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: #dc2626;
+          margin-bottom: 16px;
+        }
+        
+        .query-info {
+          background: #f0f9ff;
+          border: 1px solid #bae6fd;
+          border-radius: 8px;
+          padding: 16px;
+          display: flex;
+          gap: 12px;
+          color: #0369a1;
+        }
+        
+        .query-info p {
+          margin: 0;
+          font-size: 14px;
+          line-height: 1.4;
+        }
+        
+        /* Results Preview Styles */
+        .results-preview {
+          animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .results-header {
+          text-align: center;
+          margin-bottom: 24px;
+          padding-bottom: 16px;
+          border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .results-header h3 {
+          margin: 0 0 8px 0;
+          color: #1e40af;
+          font-size: 24px;
+        }
+        
+        .results-header p {
+          margin: 0;
+          color: #6b7280;
+        }
+        
+        .student-summary {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+        
+        .summary-card {
+          background: #f8fafc;
+          border: 2px solid #e5e7eb;
+          border-radius: 12px;
+          padding: 16px;
+          text-align: center;
+        }
+        
+        .summary-card strong {
+          display: block;
+          margin-bottom: 8px;
+          color: #6b7280;
+          font-size: 14px;
+        }
+        
+        .summary-card span {
+          display: block;
+          font-size: 18px;
+          font-weight: 600;
+          color: #1f2937;
+        }
+        
+        .summary-card .overall-average {
+          color: #10b981;
+          font-size: 22px;
+        }
+        
+        .results-table-preview {
+          margin-bottom: 24px;
+        }
+        
+        .results-table-preview h4 {
+          margin: 0 0 16px 0;
+          color: #374151;
+          font-size: 18px;
+        }
+        
+        .table-container {
+          overflow-x: auto;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+        }
+        
+        .results-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 13px;
+        }
+        
+        .results-table th {
+          background: #f9fafb;
+          padding: 12px 8px;
+          text-align: left;
+          font-weight: 600;
+          color: #374151;
+          border-bottom: 2px solid #e5e7eb;
+          white-space: nowrap;
+        }
+        
+        .results-table td {
+          padding: 12px 8px;
+          border-bottom: 1px solid #e5e7eb;
+          vertical-align: middle;
+        }
+        
+        .results-table tr:last-child td {
+          border-bottom: none;
+        }
+        
+        .results-table tr:hover {
+          background: #f9fafb;
+        }
+        
+        .subject-name {
+          font-weight: 600;
+          color: #1f2937;
+        }
+        
+        .total-score {
+          font-weight: 700;
+          color: #1e40af;
+        }
+        
+        .position {
+          font-weight: 600;
+          color: #7c3aed;
+        }
+        
+        .grade-badge {
+          padding: 4px 8px;
+          border-radius: 6px;
+          font-weight: 700;
+          font-size: 12px;
+          display: inline-block;
+          min-width: 30px;
+          text-align: center;
+        }
+        
+        .grade-a1 { background: #dcfce7; color: #166534; }
+        .grade-b2 { background: #bbf7d0; color: #15803d; }
+        .grade-b3 { background: #86efac; color: #15803d; }
+        .grade-c4 { background: #fef9c3; color: #854d0e; }
+        .grade-c5 { background: #fef08a; color: #854d0e; }
+        .grade-c6 { background: #fde047; color: #854d0e; }
+        .grade-d7 { background: #fed7aa; color: #9a3412; }
+        .grade-e8 { background: #fdba74; color: #9a3412; }
+        .grade-f9 { background: #fecaca; color: #991b1b; }
+        
+        .results-actions {
+          display: flex;
+          gap: 12px;
+          justify-content: center;
+          padding-top: 20px;
+          border-top: 1px solid #e5e7eb;
+        }
+        
+        .action-btn.export-btn {
+          background: #f59e0b;
+          color: white;
+        }
+        
+        .action-btn.export-btn:hover {
+          background: #d97706;
+        }
+        
+        .action-btn.secondary {
+          background: #6b7280;
+          color: white;
+        }
+        
+        .action-btn.secondary:hover {
+          background: #4b5563;
+        }
+        
+        @media (max-width: 768px) {
+          .student-summary {
+            grid-template-columns: 1fr;
+          }
+          
+          .results-actions {
+            flex-direction: column;
+          }
+          
+          .action-btn {
+            width: 100%;
+          }
+        }
+      `}</style>
+    </div>
+  );
+};
+
 // Main Student Dashboard Component
 const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -3104,7 +3888,7 @@ const StudentDashboard: React.FC = () => {
   const [filteredQuizzes, setFilteredQuizzes] = useState<Quiz[]>([]);
   const [studentSubjects, setStudentSubjects] = useState<string[]>([]);
   const [showLiveMonitoring, setShowLiveMonitoring] = useState(false);
-
+  const [showResultsModal, setShowResultsModal] = useState(false);
   const {
     user,
     userData,
@@ -3862,7 +4646,10 @@ const StudentDashboard: React.FC = () => {
           {sidebarOpen && (
             <div className="sidebar-footer">
               <div className="results-card">
-                <button className="check-results-btn">
+                <button
+                  className="check-results-btn"
+                  onClick={() => setShowResultsModal(true)}
+                >
                   <BarChart3 size={18} /> Check Results
                 </button>
               </div>
@@ -4225,9 +5012,31 @@ const StudentDashboard: React.FC = () => {
           user={user}
         />
       )}
+      <CheckResultsModal
+        isOpen={showResultsModal}
+        onClose={() => setShowResultsModal(false)}
+        user={user}
+        currentUserClass={currentUserClass}
+        studentName={userInfo.fullName}
+      />
 
       {/* Include all CSS styles */}
       <style>{`
+
+/* Results Card Styles */
+.results-card {
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 2px solid #4299e1;
+  margin-top: 20px;
+  transition: all 0.3s ease;
+}
       /* Results Card Styles */
       .results-card {
         background: #ffffff;
