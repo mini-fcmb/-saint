@@ -72,8 +72,11 @@ interface Student {
   last: string;
   email: string;
   progress: number;
-  classId: string;
   className: string;
+  classId?: string;
+  fullName?: string;
+  subjects?: string[];
+  isClassmate?: boolean;
 }
 
 interface Quiz {
@@ -134,6 +137,8 @@ interface EnhancedMonitoringData {
   score?: number;
   maxScore?: number;
   studentEmail?: string;
+  studentClassId?: string;
+  studentFullName?: string;
 }
 
 interface Violation {
@@ -789,13 +794,29 @@ const ClassListPanel: React.FC<{
   currentUserClass?: string;
 }> = ({ students, isOpen, toggle, loading, currentUserClass }) => {
   // Filter students by same class as current user
+  // Update the classmates filtering logic in ClassListPanel
   const classmates = useMemo(() => {
     if (!currentUserClass) return [];
-    return students.filter(
-      (student) =>
-        student.className === currentUserClass ||
-        student.classId === currentUserClass
-    );
+
+    // Use the same normalization function as teacher dashboard
+    const normalizeClassName = (className: string | undefined): string => {
+      if (!className) return "";
+      return className
+        .toLowerCase()
+        .replace(/\s+/g, "")
+        .replace(/[_-]/g, "")
+        .trim();
+    };
+
+    const normalizedCurrentClass = normalizeClassName(currentUserClass);
+
+    return students.filter((student) => {
+      const studentClassName = student.className || student.classId || "";
+      const normalizedStudentClass = normalizeClassName(studentClassName);
+
+      // Return true if classes match (case-insensitive, ignoring spaces/hyphens)
+      return normalizedStudentClass === normalizedCurrentClass;
+    });
   }, [students, currentUserClass]);
 
   return (
@@ -3903,23 +3924,46 @@ const StudentDashboard: React.FC = () => {
   // Get current student's class from userData
   const currentUserClass = userData?.className;
 
-  // Enhanced students with class information - FILTERED by same class
-  const enhancedStudents = useMemo(() => {
-    return students
-      .map((student) => ({
-        ...student,
-        classId: student.className || "default-class",
-        className: student.className || "Your Class",
-      }))
-      .filter(
-        (student) =>
-          // Only show students in the same class as current user
-          !currentUserClass ||
-          student.className === currentUserClass ||
-          student.classId === currentUserClass
-      );
-  }, [students, currentUserClass]);
+// Update the enhancedStudents memo:
+const enhancedStudents = useMemo(() => {
+  // Apply the same normalization as in teacher dashboard
+  const normalizeClassName = (className: string | undefined): string => {
+    if (!className) return "";
+    return className
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .replace(/[_-]/g, "")
+      .trim();
+  };
 
+  const normalizedCurrentClass = normalizeClassName(currentUserClass);
+
+  return students
+    .map((student) => {
+      // Type assertion to access properties that might exist on the data
+      const studentData = student as any;
+      
+      // Use classId if available, otherwise use className
+      const studentClassName = studentData.classId || student.className || "Unknown";
+      const normalizedStudentClass = normalizeClassName(studentClassName);
+      const isSameClass = normalizedStudentClass === normalizedCurrentClass;
+
+      return {
+        ...student,
+        id: student.id || `student-${student.email}`,
+        first: student.first || "",
+        last: student.last || "",
+        fullName: studentData.fullName || `${student.first} ${student.last}`,
+        email: student.email || "",
+        progress: student.progress || 0,
+        className: studentClassName,
+        classId: studentClassName, // Set classId for consistency
+        isClassmate: isSameClass,
+        subjects: studentData.subjects || [], // Add subjects if needed
+      };
+    })
+    .filter((student) => student.isClassmate);
+}, [students, currentUserClass]);
   // User info
   const [userInfo, setUserInfo] = useState({
     fullName: "Student Name",
