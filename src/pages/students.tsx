@@ -62,6 +62,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
+import logo from "../assets/logo.png";
 
 // Types
 interface Student {
@@ -3678,12 +3679,7 @@ const StudentDashboard: React.FC = () => {
       Hash: "#upcoming-classes",
     },
     { id: "inbox", label: "Inbox", icon: MessageSquare, Hash: "#" },
-    {
-      id: "classmates",
-      label: "Classmates",
-      icon: Users,
-      Hash: "#group-chats",
-    },
+
     { id: "quizzes", label: "Quizzes", icon: FileText },
   ];
 
@@ -3865,23 +3861,10 @@ const StudentDashboard: React.FC = () => {
 
           {sidebarOpen && (
             <div className="sidebar-footer">
-              <div className="create-card">
-                <div className="avatar-placeholder">{userInfo.userInitial}</div>
-                <div className="student-info">
-                  <strong>{firstName}</strong>
-                  <span>Student</span>
-                  {currentUserClass && (
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        color: "#4f46e5",
-                        marginTop: "4px",
-                      }}
-                    >
-                      Class: {currentUserClass}
-                    </span>
-                  )}
-                </div>
+              <div className="results-card">
+                <button className="check-results-btn">
+                  <BarChart3 size={18} /> Check Results
+                </button>
               </div>
               <div className="copyright">© SXaint Student</div>
             </div>
@@ -4245,6 +4228,123 @@ const StudentDashboard: React.FC = () => {
 
       {/* Include all CSS styles */}
       <style>{`
+      /* Results Card Styles */
+      .results-card {
+        background: #ffffff;
+        border-radius: 24px;
+        padding: 32px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        border: 2px solid #4299e1;
+        margin-top: 20px;
+        transition: all 0.3s ease;
+      }
+      
+      .results-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(66, 153, 225, 0.3);
+      }
+      
+      .results-logo {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+      
+      .logo-img-small {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #4299e1, #3182ce);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        font-size: 24px;
+        box-shadow: 0 4px 6px rgba(66, 153, 225, 0.3);
+      }
+      
+      .logo-text-small {
+        font-size: 20px;
+        font-weight: 700;
+        color: #4299e1;
+        letter-spacing: -0.5px;
+      }
+      
+      .results-info {
+        text-align: center;
+      }
+      
+      .results-info p {
+        font-size: 14px;
+        color: #6b7280;
+        margin: 0;
+        line-height: 1.5;
+      }
+      
+      .check-results-btn {
+        background: #4299e1;
+        color: #fff;
+        border: none;
+        border-radius: 16px;
+        padding: 14px 20px;
+        font-size: 15px;
+        font-weight: 600;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        box-shadow: 0 4px 6px -1px rgba(66, 153, 225, 0.3);
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      
+      .check-results-btn:hover {
+        background: #3182ce;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 8px -1px rgba(66, 153, 225, 0.4);
+      }
+      
+      .check-results-btn:active {
+        transform: translateY(0);
+      }
+      
+      /* Responsive adjustments */
+      @media (max-width: 1024px) {
+        .results-card {
+          padding: 24px;
+          gap: 16px;
+        }
+        
+        .logo-img-small {
+          width: 50px;
+          height: 50px;
+          font-size: 20px;
+        }
+        
+        .logo-text-small {
+          font-size: 18px;
+        }
+        
+        .check-results-btn {
+          padding: 12px 16px;
+          font-size: 14px;
+        }
+      }
+      
+      @media (max-width: 768px) {
+        .results-card {
+          padding: 20px;
+          gap: 12px;
+          margin-top: 16px;
+        }
+      }
         .app.modal-open {
           overflow: hidden;
         }
@@ -5274,7 +5374,7 @@ const StudentDashboard: React.FC = () => {
           cursor: pointer;
         }
         .copyright {
-          margin-top: 24px;
+          margin-top: 10px;
           font-size: 13px;
           color: #9ca3af;
           text-align: center;
@@ -5635,7 +5735,7 @@ const StudentDashboard: React.FC = () => {
           font-weight: 600;
         }
         .calendar-day.today.exam {
-          background: #4f46e5;
+          background: #4299e1;
           color: #fff;
         }
         .profile-card {
