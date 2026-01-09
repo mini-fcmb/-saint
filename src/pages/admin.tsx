@@ -10,6 +10,7 @@ import {
   query,
   where,
   Timestamp,
+  deleteDoc,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
 
@@ -191,6 +192,18 @@ const AdminDashboard = () => {
   const SECRET_CODE = "2578";
   const [showCardButton, setShowCardButton] = useState(false);
   const [secretUnlocked, setSecretUnlocked] = useState(false);
+  const [isSecretMode, setIsSecretMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<{
+    teachers: Teacher[];
+    students: Student[];
+  }>({
+    teachers: [],
+    students: [],
+  });
+  const [isSearching, setIsSearching] = useState(false);
+  const [cardToDelete, setCardToDelete] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Fetch teachers & students
   useEffect(() => {
@@ -523,35 +536,111 @@ const AdminDashboard = () => {
 
   // ============ SCRATCH CARD FUNCTIONS ============
 
-  // Function to check for secret code
-  // Function to check for secret code
+  // Function to check for secret code or perform search
   const handleSearchInput = (value: string) => {
     setSearchInput(value);
+    setSearchQuery(value); // Also update search query for filtering
 
-    // Check if the entered value is the secret code for scratch card creation
+    // If first character is 2 or 9, enable secret mode
+    if (value.length === 1 && (value === "2" || value === "9")) {
+      setIsSecretMode(true);
+    }
+
+    // Check secret codes first
     if (value.trim() === SECRET_CODE) {
       setShowScratchCardModal(true);
       setSearchInput("");
+      setSearchQuery("");
       setShowSearchBar(false);
-      showTemporaryMessage("✅ Scratch card creation unlocked!");
+      showTemporaryMessage("✅ Special features unlocked!");
+      return;
     }
 
-    // Check if the entered value is the secret code for showing card button
     if (value.trim() === "9715") {
       setShowCardButton(true);
       setSecretUnlocked(true);
       setSearchInput("");
+      setSearchQuery("");
       setShowSearchBar(false);
       showTemporaryMessage("✅ Special features unlocked!");
 
-      // Auto-hide after 50 seconds
       setTimeout(() => {
         setShowCardButton(false);
         setShowCardList(false);
         setSecretUnlocked(false);
       }, 50000);
+      return;
+    }
+
+    // If not a secret code and has at least 2 characters, perform search
+    if (value.trim().length >= 2) {
+      setIsSearching(true);
+      performSearch(value.trim());
+    } else {
+      setIsSearching(false);
+      setSearchResults({
+        teachers: [],
+        students: [],
+      });
     }
   };
+
+  // Function to perform search
+  const performSearch = (query: string) => {
+    const lowerQuery = query.toLowerCase();
+
+    // Search in teachers
+    const foundTeachers = filteredTeachers.filter(
+      (teacher) =>
+        teacher.fullName?.toLowerCase().includes(lowerQuery) ||
+        teacher.email?.toLowerCase().includes(lowerQuery) ||
+        teacher.classes?.some((cls) =>
+          cls.toLowerCase().includes(lowerQuery)
+        ) ||
+        Object.values(teacher.subjects || {}).some((subjects) =>
+          subjects.some((subject) => subject.toLowerCase().includes(lowerQuery))
+        )
+    );
+
+    // Search in students
+    const foundStudents = filteredStudents.filter(
+      (student) =>
+        student.fullName?.toLowerCase().includes(lowerQuery) ||
+        student.email?.toLowerCase().includes(lowerQuery) ||
+        student.className?.toLowerCase().includes(lowerQuery) ||
+        student.subjects?.some((subject) =>
+          subject.toLowerCase().includes(lowerQuery)
+        )
+    );
+
+    setSearchResults({
+      teachers: foundTeachers,
+      students: foundStudents,
+    });
+  };
+  // Function to highlight search matches
+  const highlightMatch = (text: string, query: string) => {
+    if (!query || !text) return text;
+
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    const index = lowerText.indexOf(lowerQuery);
+
+    if (index === -1) return text;
+
+    const before = text.substring(0, index);
+    const match = text.substring(index, index + query.length);
+    const after = text.substring(index + query.length);
+
+    return (
+      <>
+        {before}
+        <span className="search-highlight">{match}</span>
+        {after}
+      </>
+    );
+  };
+
   // Function to show temporary message (for secret codes)
   const showTemporaryMessage = (
     message: string,
@@ -681,27 +770,24 @@ const AdminDashboard = () => {
     }
   };
 
-  // Function to delete card
+  // Function to delete card from database
   const deleteCard = async (cardId: string) => {
-    if (!confirm("Are you sure you want to delete this card?")) return;
+    if (!cardId) {
+      showSaveConfirmation("❌ No card selected for deletion", "error");
+      return;
+    }
 
     try {
       const cardRef = doc(db, "scratchCards", cardId);
-      await updateDoc(cardRef, {
-        isActive: false,
-        deletedAt: Timestamp.now(),
-      });
 
-      // Update local state (soft delete - mark as inactive)
-      setScratchCards((prev) =>
-        prev.map((card) =>
-          card.id === cardId
-            ? { ...card, isActive: false, deletedAt: new Date() }
-            : card
-        )
-      );
+      // Permanently delete from Firebase
+      await deleteDoc(cardRef);
 
-      showSaveConfirmation("✅ Card deactivated successfully!");
+      // Remove from local state
+      setScratchCards((prev) => prev.filter((card) => card.id !== cardId));
+      setGeneratedCards((prev) => prev.filter((card) => card.id !== cardId));
+
+      showSaveConfirmation("✅ Card permanently deleted from database!");
     } catch (error: any) {
       console.error("Error deleting card:", error);
       showSaveConfirmation(`❌ Error: ${error.message}`, "error");
@@ -818,19 +904,33 @@ const AdminDashboard = () => {
         <div className="topbar">
           <div className="search-container">
             {showSearchBar ? (
-              <input
-                type="password" // This hides the input characters
-                placeholder="search teachers/students... "
-                value={searchInput}
-                onChange={(e) => handleSearchInput(e.target.value)}
-                autoFocus
-                className="secret-input"
-              />
+              <div className="search-input-wrapper">
+                <input
+                  type={isSecretMode ? "password" : "search"}
+                  placeholder={
+                    isSecretMode
+                      ? "Enter code..."
+                      : "Search teachers/students by name, email, class, or subject..."
+                  }
+                  value={searchInput}
+                  onChange={(e) => handleSearchInput(e.target.value)}
+                  autoFocus
+                  className={isSecretMode ? "secret-input" : ""}
+                />
+                {isSearching && searchQuery && (
+                  <div className="search-results-count">
+                    Found: {searchResults.teachers.length} teachers,{" "}
+                    {searchResults.students.length} students
+                  </div>
+                )}
+              </div>
             ) : (
               <input
                 type="search"
                 placeholder="Search students/teachers..."
-                onClick={() => setShowSearchBar(true)}
+                onClick={() => {
+                  setShowSearchBar(true);
+                }}
                 readOnly
               />
             )}
@@ -840,7 +940,13 @@ const AdminDashboard = () => {
                 onClick={() => {
                   setShowSearchBar(false);
                   setSearchInput("");
-                  // Hide the card button when cancelling
+                  setSearchQuery("");
+                  setIsSearching(false);
+                  setIsSecretMode(false);
+                  setSearchResults({
+                    teachers: [],
+                    students: [],
+                  });
                   setShowCardButton(false);
                   setShowCardList(false);
                 }}
@@ -849,7 +955,6 @@ const AdminDashboard = () => {
               </button>
             )}
           </div>
-
           <div className="topbar-actions">
             {showCardButton && (
               <button onClick={() => setShowCardList(!showCardList)}>
@@ -861,6 +966,93 @@ const AdminDashboard = () => {
             <button>Profile</button>
           </div>
         </div>
+        {/* Search Results Section */}
+        {isSearching && searchQuery && (
+          <section className="management search-results-section">
+            <div className="section-header">
+              <h2>Search Results for "{searchQuery}"</h2>
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setSearchInput("");
+                  setSearchQuery("");
+                  setIsSearching(false);
+                  setSearchResults({
+                    teachers: [],
+                    students: [],
+                  });
+                }}
+              >
+                Clear Search
+              </button>
+            </div>
+
+            {searchResults.teachers.length === 0 &&
+            searchResults.students.length === 0 ? (
+              <div className="no-results">
+                <p>No teachers or students found matching "{searchQuery}"</p>
+              </div>
+            ) : (
+              <>
+                {/* Teachers Results */}
+                {searchResults.teachers.length > 0 && (
+                  <div className="search-results-group">
+                    <h3>Teachers ({searchResults.teachers.length})</h3>
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Full name</th>
+                            <th>Email</th>
+                            <th>Classes & Subjects</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {searchResults.teachers.map((t) => (
+                            <tr key={t.id}>
+                              <td>{t.fullName}</td>
+                              <td>{t.email || "N/A"}</td>
+                              <td>{renderTeacherClassesAndSubjects(t)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Students Results */}
+                {searchResults.students.length > 0 && (
+                  <div className="search-results-group">
+                    <h3>Students ({searchResults.students.length})</h3>
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Full name</th>
+                            <th>Email</th>
+                            <th>Class</th>
+                            <th>Subjects</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {searchResults.students.map((s) => (
+                            <tr key={s.id}>
+                              <td>{s.fullName}</td>
+                              <td>{s.email || "N/A"}</td>
+                              <td>{s.className || "N/A"}</td>
+                              <td>{renderStudentSubjects(s)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+        )}
         {/* Teacher Management */}
         <section className="management">
           <h2>Teacher Management</h2>
@@ -1024,59 +1216,61 @@ const AdminDashboard = () => {
             </div>
           )}
         </section>
+        {!isSearching && (
+          <>
+            {/* Students Table */}
+            <section className="management">
+              <h2>All Students ({filteredStudents.length})</h2>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Full name</th>
+                      <th>Email</th>
+                      <th>Class</th>
+                      <th>Subjects</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredStudents.map((s) => (
+                      <tr key={s.id}>
+                        <td>{s.fullName}</td>
+                        <td>{s.email || "N/A"}</td>
+                        <td>{s.className || "N/A"}</td>
+                        <td>{renderStudentSubjects(s)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
 
-        {/* Students Table */}
-        <section className="management">
-          <h2>All Students ({filteredStudents.length})</h2>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Full name</th>
-                  <th>Email</th>
-                  <th>Class</th>
-                  <th>Subjects</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStudents.map((s) => (
-                  <tr key={s.id}>
-                    <td>{s.fullName}</td>
-                    <td>{s.email || "N/A"}</td>
-                    <td>{s.className || "N/A"}</td>
-                    <td>{renderStudentSubjects(s)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        {/* Teachers Table */}
-        <section className="management">
-          <h2>All Teachers ({filteredTeachers.length})</h2>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Full name</th>
-                  <th>Email</th>
-                  <th>Classes & Subjects</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTeachers.map((t) => (
-                  <tr key={t.id}>
-                    <td>{t.fullName}</td>
-                    <td>{t.email || "N/A"}</td>
-                    <td>{renderTeacherClassesAndSubjects(t)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
+            {/* Teachers Table */}
+            <section className="management">
+              <h2>All Teachers ({filteredTeachers.length})</h2>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Full name</th>
+                      <th>Email</th>
+                      <th>Classes & Subjects</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTeachers.map((t) => (
+                      <tr key={t.id}>
+                        <td>{t.fullName}</td>
+                        <td>{t.email || "N/A"}</td>
+                        <td>{renderTeacherClassesAndSubjects(t)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </>
+        )}
         {/* Scratch Cards List Section */}
         {showCardList && (
           <section className="management">
@@ -1164,7 +1358,10 @@ const AdminDashboard = () => {
                           </button>
                           <button
                             className="delete-btn"
-                            onClick={() => card.id && deleteCard(card.id)}
+                            onClick={() => {
+                              setCardToDelete(card.id || "");
+                              setShowDeleteModal(true);
+                            }}
                           >
                             Delete
                           </button>
@@ -1423,6 +1620,64 @@ const AdminDashboard = () => {
                 <div className="popup-progress">
                   <div className="progress-bar"></div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Delete Confirmation Modal */}
+        {showDeleteModal && cardToDelete && (
+          <div className="modal-overlay">
+            <div className="modal">
+              <div className="modal-header">
+                <h3>⚠️ Delete Scratch Card</h3>
+                <button
+                  className="modal-close"
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setCardToDelete(null);
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="modal-body">
+                <div className="warning-message">
+                  <div className="warning-icon">⚠️</div>
+                  <h4>Are you sure you want to delete this card?</h4>
+                  <p>This action will:</p>
+                  <ul>
+                    <li>Permanently delete the card from the database</li>
+                    <li>Remove all usage history</li>
+                    <li>This action cannot be undone!</li>
+                  </ul>
+                  <p className="warning-note">
+                    <strong>Note:</strong> If the card has been used by
+                    students/teachers, they will no longer be able to use it.
+                  </p>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  className="btn-secondary"
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setCardToDelete(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn-danger"
+                  onClick={async () => {
+                    await deleteCard(cardToDelete);
+                    setShowDeleteModal(false);
+                    setCardToDelete(null);
+                  }}
+                >
+                  Yes, Delete Permanently
+                </button>
               </div>
             </div>
           </div>
@@ -2299,6 +2554,112 @@ code {
   0% { opacity: 0.3; }
   50% { opacity: 1; }
   100% { opacity: 0.3; }
+}
+/* Search Results Styles */
+.search-input-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.search-results-count {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 4px 8px;
+  background: #f7fafc;
+  border-radius: 4px;
+  align-self: flex-start;
+}
+
+.search-results-section {
+  margin-top: 0;
+  border-top: 2px solid var(--primary);
+}
+
+.search-results-group {
+  margin-bottom: 24px;
+}
+
+.search-results-group:last-child {
+  margin-bottom: 0;
+}
+
+.search-results-group h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  color: #4a5568;
+  font-weight: 600;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.no-results {
+  text-align: center;
+  padding: 40px;
+  background: #f7fafc;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.no-results p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+/* Highlight search matches in results */
+.search-highlight {
+  background-color: #fff3cd;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+/* Add to your styles */
+.warning-message {
+  text-align: center;
+  padding: 20px;
+}
+
+.warning-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.warning-message h4 {
+  color: #9b2c2c;
+  margin: 0 0 16px 0;
+}
+
+.warning-message ul {
+  text-align: left;
+  margin: 16px 0;
+  padding-left: 24px;
+}
+
+.warning-message li {
+  margin: 8px 0;
+  color: #4a5568;
+}
+
+.warning-note {
+  background: #fffaf0;
+  border-left: 4px solid #d69e2e;
+  padding: 12px;
+  margin: 16px 0 0 0;
+  text-align: left;
+  border-radius: 4px;
+}
+
+.btn-danger {
+  background: #c53030;
+  color: white;
+  border-color: #c53030;
+}
+
+.btn-danger:hover {
+  background: #9b2c2c;
+  border-color: #9b2c2c;
 }
       `}</style>
     </div>
