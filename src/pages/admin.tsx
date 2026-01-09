@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useFirebaseStore } from "../stores/useFirebaseStore";
-import { collection, getDocs, doc, updateDoc, getDoc } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  doc,
+  updateDoc,
+  getDoc,
+  addDoc,
+  query,
+  where,
+  Timestamp,
+} from "firebase/firestore";
 import { db } from "../firebase/config";
 
 interface Teacher {
@@ -21,6 +31,17 @@ interface Student {
   [k: string]: any;
 }
 
+interface ScratchCard {
+  id?: string;
+  pin: string;
+  puk: string;
+  createdAt: Date;
+  usageCount: number;
+  maxUsage: number;
+  isActive: boolean;
+  usedBy?: string[];
+  lastUsedAt?: Date;
+}
 const ADMIN_EMAIL = "minibossfcmb@proton.me";
 
 // Desired class order: Primary5 → SS3
@@ -29,23 +50,63 @@ const CLASS_ORDER = ["P5", "P6", "JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"];
 // Subjects by class level
 const SUBJECTS_BY_LEVEL = {
   "P5-P6": [
-    "Mathematics", "English Language", "Basic Science", "Igbo Language",
-    "Basic Digital Literacy", "History", "CCA", "Social and Citizenship Education",
-    "CRS", "Prevocational Studies", "French", "Music", "PHE"
+    "Mathematics",
+    "English Language",
+    "Basic Science",
+    "Igbo Language",
+    "Basic Digital Literacy",
+    "History",
+    "CCA",
+    "Social and Citizenship Education",
+    "CRS",
+    "Prevocational Studies",
+    "French",
+    "Music",
+    "PHE",
   ],
   "JSS1-JSS3": [
-    "Mathematics", "English Language", "Basic Science", "Basic Technology",
-    "French", "Igbo Language", "Music", "CCA", "PHE", "Social Studies",
-    "Business Studies", "CRS", "Computer Studies", "History",
-    "Agricultural Science", "Civic Education", "Home Economics",
-    "Livestock Farming", "Literature", "Test of Orals"
+    "Mathematics",
+    "English Language",
+    "Basic Science",
+    "Basic Technology",
+    "French",
+    "Igbo Language",
+    "Music",
+    "CCA",
+    "PHE",
+    "Social Studies",
+    "Business Studies",
+    "CRS",
+    "Computer Studies",
+    "History",
+    "Agricultural Science",
+    "Civic Education",
+    "Home Economics",
+    "Livestock Farming",
+    "Literature",
+    "Test of Orals",
   ],
   "SS1-SS3": [
-    "Mathematics", "English Language", "Physics", "Chemistry", "Biology",
-    "Further Mathematics", "Literature", "Igbo Language", "French", "Geography",
-    "CRS", "Economics", "Marketing", "Government", "Computer Science",
-    "Civic Education", "Accounting", "Agricultural Science", "Test of Orals"
-  ]
+    "Mathematics",
+    "English Language",
+    "Physics",
+    "Chemistry",
+    "Biology",
+    "Further Mathematics",
+    "Literature",
+    "Igbo Language",
+    "French",
+    "Geography",
+    "CRS",
+    "Economics",
+    "Marketing",
+    "Government",
+    "Computer Science",
+    "Civic Education",
+    "Accounting",
+    "Agricultural Science",
+    "Test of Orals",
+  ],
 };
 
 // Helper to normalize class names from the DB
@@ -54,9 +115,12 @@ const normalizeClass = (c?: string) => {
   const s = c.toString().trim().toUpperCase().replace(/\s+/g, "");
   if (s.startsWith("P5") || s.startsWith("PRIMARY5")) return "P5";
   if (s.startsWith("P6") || s.startsWith("PRIMARY6")) return "P6";
-  if (s.startsWith("JSS1") || s.startsWith("JSS-1") || s === "JSSI") return "JSS1";
-  if (s.startsWith("JSS2") || s.startsWith("JSS-2") || s === "JSSII") return "JSS2";
-  if (s.startsWith("JSS3") || s.startsWith("JSS-3") || s === "JSSIII") return "JSS3";
+  if (s.startsWith("JSS1") || s.startsWith("JSS-1") || s === "JSSI")
+    return "JSS1";
+  if (s.startsWith("JSS2") || s.startsWith("JSS-2") || s === "JSSII")
+    return "JSS2";
+  if (s.startsWith("JSS3") || s.startsWith("JSS-3") || s === "JSSIII")
+    return "JSS3";
   if (s.includes("SS3") || s.includes("SSS3")) return "SS3";
   if (s.includes("SS2") || s.includes("SSS2")) return "SS2";
   if (s.includes("SS1") || s.includes("SSS1")) return "SS1";
@@ -72,13 +136,17 @@ const getClassLevel = (className: string): keyof typeof SUBJECTS_BY_LEVEL => {
   if (className.startsWith("SS")) return "SS1-SS3";
   return "P5-P6";
 };
+const [secretUnlocked, setSecretUnlocked] = useState(false);
 
 const AdminDashboard = () => {
-  const { updateTeacherProfile, promoteStudents, refreshStudents } = useFirebaseStore();
+  const { updateTeacherProfile, promoteStudents, refreshStudents } =
+    useFirebaseStore();
 
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
-  const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(
+    null
+  );
   const [message, setMessage] = useState("");
 
   // Teacher management state
@@ -93,14 +161,36 @@ const AdminDashboard = () => {
   const [promoteSubjects, setPromoteSubjects] = useState<string[]>([]);
 
   // UI state
-  const [expandedStudentRows, setExpandedStudentRows] = useState<Record<string, boolean>>({});
-  const [expandedTeacherRows, setExpandedTeacherRows] = useState<Record<string, boolean>>({});
+  const [expandedStudentRows, setExpandedStudentRows] = useState<
+    Record<string, boolean>
+  >({});
+  const [expandedTeacherRows, setExpandedTeacherRows] = useState<
+    Record<string, boolean>
+  >({});
   const [showSubjectModal, setShowSubjectModal] = useState(false);
-  
+
   // New state for save confirmation popup
   const [showSavePopup, setShowSavePopup] = useState(false);
   const [savePopupMessage, setSavePopupMessage] = useState("");
-  const [savePopupType, setSavePopupType] = useState<"success" | "error">("success");
+  const [savePopupType, setSavePopupType] = useState<"success" | "error">(
+    "success"
+  );
+  // Scratch card state
+  const [showSearchBar, setShowSearchBar] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const [showScratchCardModal, setShowScratchCardModal] = useState(false);
+  const [scratchCardForm, setScratchCardForm] = useState({
+    pin: "",
+    puk: "",
+    maxUsage: 3,
+  });
+  const [generatedCards, setGeneratedCards] = useState<ScratchCard[]>([]);
+  const [scratchCards, setScratchCards] = useState<ScratchCard[]>([]);
+  const [showCardList, setShowCardList] = useState(false);
+
+  // Secret code constant
+  const SECRET_CODE = "2578";
+  const [showCardButton, setShowCardButton] = useState(false);
 
   // Fetch teachers & students
   useEffect(() => {
@@ -108,7 +198,7 @@ const AdminDashboard = () => {
       const teachersSnap = await getDocs(collection(db, "teachers"));
       const teachersData = teachersSnap.docs.map((d) => {
         const raw = d.data() as any;
-        
+
         // Normalize classes
         let classes: string[] = [];
         if (Array.isArray(raw.classes)) {
@@ -116,10 +206,10 @@ const AdminDashboard = () => {
         } else if (raw.className) {
           classes = [normalizeClass(String(raw.className))];
         }
-        
+
         // Normalize subjects (could be array or object)
         let subjects: { [className: string]: string[] } = {};
-        if (raw.subjects && typeof raw.subjects === 'object') {
+        if (raw.subjects && typeof raw.subjects === "object") {
           if (Array.isArray(raw.subjects)) {
             // Old format: subjects array
             classes.forEach((cls: string) => {
@@ -135,7 +225,7 @@ const AdminDashboard = () => {
             });
           }
         }
-        
+
         return {
           id: d.id,
           ...raw,
@@ -151,7 +241,9 @@ const AdminDashboard = () => {
         const subjects = Array.isArray(raw.subjects)
           ? raw.subjects.map((s: any) => String(s))
           : [];
-        const normalizedClass = normalizeClass(raw.className || raw.class || "");
+        const normalizedClass = normalizeClass(
+          raw.className || raw.class || ""
+        );
         return {
           id: d.id,
           ...raw,
@@ -163,6 +255,9 @@ const AdminDashboard = () => {
     };
 
     fetchData();
+  }, []);
+  useEffect(() => {
+    loadScratchCards();
   }, []);
 
   // Sort by class order, then by name
@@ -203,7 +298,7 @@ const AdminDashboard = () => {
       setTeacherSubjectsByClass({});
       return;
     }
-    
+
     setSelectedTeacherId(teacherId);
     setTeacherClasses(teacher.classes || []);
     setTeacherSubjectsByClass(teacher.subjects || {});
@@ -234,10 +329,10 @@ const AdminDashboard = () => {
       const newSubjects = currentSubjects.includes(subject)
         ? currentSubjects.filter((s) => s !== subject)
         : [...currentSubjects, subject];
-      
+
       return {
         ...prev,
-        [className]: newSubjects.sort((a, b) => a.localeCompare(b))
+        [className]: newSubjects.sort((a, b) => a.localeCompare(b)),
       };
     });
   };
@@ -246,22 +341,25 @@ const AdminDashboard = () => {
     const classLevel = getClassLevel(className);
     const availableSubjects = SUBJECTS_BY_LEVEL[classLevel];
     const currentSubjects = teacherSubjectsByClass[className] || [];
-    
+
     setTeacherSubjectsByClass((prev) => ({
       ...prev,
       [className]:
         currentSubjects.length === availableSubjects.length
           ? []
-          : [...availableSubjects]
+          : [...availableSubjects],
     }));
   };
 
   // Show save confirmation popup
-  const showSaveConfirmation = (message: string, type: "success" | "error" = "success") => {
+  const showSaveConfirmation = (
+    message: string,
+    type: "success" | "error" = "success"
+  ) => {
     setSavePopupMessage(message);
     setSavePopupType(type);
     setShowSavePopup(true);
-    
+
     // Auto close after 3 seconds
     setTimeout(() => {
       setShowSavePopup(false);
@@ -288,8 +386,14 @@ const AdminDashboard = () => {
 
     // Validate each class has at least one subject
     for (const className of teacherClasses) {
-      if (!teacherSubjectsByClass[className] || teacherSubjectsByClass[className].length === 0) {
-        showSaveConfirmation(`Please select at least one subject for ${className}`, "error");
+      if (
+        !teacherSubjectsByClass[className] ||
+        teacherSubjectsByClass[className].length === 0
+      ) {
+        showSaveConfirmation(
+          `Please select at least one subject for ${className}`,
+          "error"
+        );
         return;
       }
     }
@@ -299,15 +403,21 @@ const AdminDashboard = () => {
       await updateDoc(teacherRef, {
         classes: teacherClasses,
         subjects: teacherSubjectsByClass,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       });
 
       // Update local state
-      setTeachers(prev => prev.map(t => 
-        t.id === selectedTeacherId 
-          ? { ...t, classes: teacherClasses, subjects: teacherSubjectsByClass }
-          : t
-      ));
+      setTeachers((prev) =>
+        prev.map((t) =>
+          t.id === selectedTeacherId
+            ? {
+                ...t,
+                classes: teacherClasses,
+                subjects: teacherSubjectsByClass,
+              }
+            : t
+        )
+      );
 
       showSaveConfirmation("✅ Teacher profile updated successfully!");
       refreshStudents();
@@ -334,13 +444,19 @@ const AdminDashboard = () => {
     await performPromotion(oldClass, newClass);
   };
 
-  const performPromotion = async (fromClass: string, toClass: string, selectedSubjects?: string[]) => {
+  const performPromotion = async (
+    fromClass: string,
+    toClass: string,
+    selectedSubjects?: string[]
+  ) => {
     try {
-      const studentsToPromote = students.filter(s => s.className === fromClass);
-      
+      const studentsToPromote = students.filter(
+        (s) => s.className === fromClass
+      );
+
       for (const student of studentsToPromote) {
         const studentRef = doc(db, "students", student.id);
-        
+
         // Determine new subjects based on class
         let newSubjects: string[] = [];
         if (selectedSubjects && selectedSubjects.length > 0) {
@@ -351,17 +467,19 @@ const AdminDashboard = () => {
           const classLevel = getClassLevel(toClass);
           newSubjects = [...SUBJECTS_BY_LEVEL[classLevel]];
         }
-        
+
         await updateDoc(studentRef, {
           className: toClass,
           subjects: newSubjects,
-          promotedAt: new Date()
+          promotedAt: new Date(),
         });
       }
 
       // Show success message in popup
-      showSaveConfirmation(`✅ Successfully promoted ${studentsToPromote.length} students from ${fromClass} to ${toClass}`);
-      
+      showSaveConfirmation(
+        `✅ Successfully promoted ${studentsToPromote.length} students from ${fromClass} to ${toClass}`
+      );
+
       // Refresh data
       const snap = await getDocs(collection(db, "students"));
       const data = snap.docs.map((d) => {
@@ -369,7 +487,9 @@ const AdminDashboard = () => {
         const subjects = Array.isArray(raw.subjects)
           ? raw.subjects.map((s: any) => String(s))
           : [];
-        const normalizedClass = normalizeClass(raw.className || raw.class || "");
+        const normalizedClass = normalizeClass(
+          raw.className || raw.class || ""
+        );
         return {
           id: d.id,
           ...raw,
@@ -378,7 +498,7 @@ const AdminDashboard = () => {
         } as Student;
       });
       setStudents(data);
-      
+
       // Reset promotion form
       setOldClass("");
       setNewClass("");
@@ -391,11 +511,190 @@ const AdminDashboard = () => {
 
   const handleConfirmPromotionWithSubjects = () => {
     if (promoteSubjects.length === 0) {
-      showSaveConfirmation("Please select at least one subject for SS2/SS3 students.", "error");
+      showSaveConfirmation(
+        "Please select at least one subject for SS2/SS3 students.",
+        "error"
+      );
       return;
     }
     setShowSubjectModal(false);
     performPromotion(oldClass, newClass, promoteSubjects);
+  };
+
+  // ============ SCRATCH CARD FUNCTIONS ============
+
+  // Function to check for secret code
+  // Function to check for secret code
+  const handleSearchInput = (value: string) => {
+    setSearchInput(value);
+
+    // Check if the entered value is the secret code for scratch card creation
+    if (value.trim() === SECRET_CODE) {
+      setShowScratchCardModal(true);
+      setSearchInput("");
+      setShowSearchBar(false);
+      showSaveConfirmation("✅ Scratch card creation unlocked!");
+    }
+
+    // Check if the entered value is the secret code for showing card button
+    if (value.trim() === "9715") {
+      setShowCardButton(true);
+      setSecretUnlocked(true);
+      setSearchInput("");
+      setShowSearchBar(false);
+      showSaveConfirmation("✅ Special features unlocked!");
+
+      // Auto-hide after 30 seconds
+      setTimeout(() => {
+        setShowCardButton(false);
+        setShowCardList(false);
+        setSecretUnlocked(false);
+      }, 50000);
+    }
+  };
+  // Function to generate random PIN/PUK
+  const generateRandomCode = (length: number = 12): string => {
+    const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let result = "";
+    for (let i = 0; i < length; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
+
+  // Function to create scratch card
+  const createScratchCard = async () => {
+    try {
+      // Validate inputs
+      if (!scratchCardForm.pin || !scratchCardForm.puk) {
+        showSaveConfirmation("Please enter both PIN and PUK", "error");
+        return;
+      }
+
+      // Check if PIN already exists
+      const cardsRef = collection(db, "scratchCards");
+      const q = query(cardsRef, where("pin", "==", scratchCardForm.pin));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        showSaveConfirmation(
+          "This PIN already exists. Please use a different PIN.",
+          "error"
+        );
+        return;
+      }
+
+      // Create new card
+      const newCard: ScratchCard = {
+        pin: scratchCardForm.pin,
+        puk: scratchCardForm.puk,
+        createdAt: new Date(),
+        usageCount: 0,
+        maxUsage: scratchCardForm.maxUsage,
+        isActive: true,
+        usedBy: [],
+      };
+
+      // Save to Firebase
+      const docRef = await addDoc(collection(db, "scratchCards"), newCard);
+
+      // Add to local state
+      const createdCard = { ...newCard, id: docRef.id };
+      setGeneratedCards((prev) => [...prev, createdCard]);
+      setScratchCards((prev) => [...prev, createdCard]);
+
+      // Reset form
+      setScratchCardForm({
+        pin: "",
+        puk: "",
+        maxUsage: 3,
+      });
+
+      showSaveConfirmation("✅ Scratch card created successfully!");
+    } catch (error: any) {
+      console.error("Error creating scratch card:", error);
+      showSaveConfirmation(`❌ Error: ${error.message}`, "error");
+    }
+  };
+
+  // Function to load all scratch cards
+  const loadScratchCards = async () => {
+    try {
+      const cardsSnap = await getDocs(collection(db, "scratchCards"));
+      const cardsData = cardsSnap.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          pin: data.pin,
+          puk: data.puk,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          usageCount: data.usageCount || 0,
+          maxUsage: data.maxUsage || 3,
+          isActive: data.isActive !== false,
+          usedBy: data.usedBy || [],
+          lastUsedAt: data.lastUsedAt?.toDate(),
+        } as ScratchCard;
+      });
+
+      // Sort by creation date (newest first)
+      cardsData.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+      setScratchCards(cardsData);
+    } catch (error: any) {
+      console.error("Error loading scratch cards:", error);
+      showSaveConfirmation(`❌ Error loading cards: ${error.message}`, "error");
+    }
+  };
+
+  // Function to toggle card status
+  const toggleCardStatus = async (cardId: string, currentStatus: boolean) => {
+    try {
+      const cardRef = doc(db, "scratchCards", cardId);
+      await updateDoc(cardRef, {
+        isActive: !currentStatus,
+      });
+
+      // Update local state
+      setScratchCards((prev) =>
+        prev.map((card) =>
+          card.id === cardId ? { ...card, isActive: !currentStatus } : card
+        )
+      );
+
+      showSaveConfirmation(
+        `✅ Card ${!currentStatus ? "activated" : "deactivated"} successfully!`
+      );
+    } catch (error: any) {
+      console.error("Error toggling card status:", error);
+      showSaveConfirmation(`❌ Error: ${error.message}`, "error");
+    }
+  };
+
+  // Function to delete card
+  const deleteCard = async (cardId: string) => {
+    if (!confirm("Are you sure you want to delete this card?")) return;
+
+    try {
+      const cardRef = doc(db, "scratchCards", cardId);
+      await updateDoc(cardRef, {
+        isActive: false,
+        deletedAt: Timestamp.now(),
+      });
+
+      // Update local state (soft delete - mark as inactive)
+      setScratchCards((prev) =>
+        prev.map((card) =>
+          card.id === cardId
+            ? { ...card, isActive: false, deletedAt: new Date() }
+            : card
+        )
+      );
+
+      showSaveConfirmation("✅ Card deactivated successfully!");
+    } catch (error: any) {
+      console.error("Error deleting card:", error);
+      showSaveConfirmation(`❌ Error: ${error.message}`, "error");
+    }
   };
 
   // Render helpers
@@ -403,17 +702,24 @@ const AdminDashboard = () => {
     const classes = teacher.classes || [];
     const subjects = teacher.subjects || {};
     const expanded = !!expandedTeacherRows[teacher.id];
-    
+
     return (
       <div className="teacher-classes-cell">
-        <button className="mini-toggle" onClick={() => setExpandedTeacherRows(prev => ({
-          ...prev,
-          [teacher.id]: !prev[teacher.id]
-        }))}>
-          <span>{classes.length} class{classes.length !== 1 ? 'es' : ''}</span>
+        <button
+          className="mini-toggle"
+          onClick={() =>
+            setExpandedTeacherRows((prev) => ({
+              ...prev,
+              [teacher.id]: !prev[teacher.id],
+            }))
+          }
+        >
+          <span>
+            {classes.length} class{classes.length !== 1 ? "es" : ""}
+          </span>
           <span className="chev">{expanded ? "▾" : "▸"}</span>
         </button>
-        
+
         {expanded && (
           <div className="teacher-details">
             {classes.map((className) => (
@@ -421,9 +727,12 @@ const AdminDashboard = () => {
                 <strong>{className}:</strong>
                 <div className="subject-chips">
                   {(subjects[className] || []).map((subject) => (
-                    <span key={subject} className="chip">{subject}</span>
+                    <span key={subject} className="chip">
+                      {subject}
+                    </span>
                   ))}
-                  {(!subjects[className] || subjects[className].length === 0) && (
+                  {(!subjects[className] ||
+                    subjects[className].length === 0) && (
                     <span className="muted">No subjects</span>
                   )}
                 </div>
@@ -438,17 +747,24 @@ const AdminDashboard = () => {
   const renderStudentSubjects = (student: Student) => {
     const subjects = student.subjects || [];
     const expanded = !!expandedStudentRows[student.id];
-    
+
     return (
       <div className="subjects-cell">
-        <button className="mini-toggle" onClick={() => setExpandedStudentRows(prev => ({
-          ...prev,
-          [student.id]: !prev[student.id]
-        }))}>
-          <span>{subjects.length} subject{subjects.length !== 1 ? 's' : ''}</span>
+        <button
+          className="mini-toggle"
+          onClick={() =>
+            setExpandedStudentRows((prev) => ({
+              ...prev,
+              [student.id]: !prev[student.id],
+            }))
+          }
+        >
+          <span>
+            {subjects.length} subject{subjects.length !== 1 ? "s" : ""}
+          </span>
           <span className="chev">{expanded ? "▾" : "▸"}</span>
         </button>
-        
+
         {expanded && (
           <ul className="subjects-list">
             {subjects.map((subject) => (
@@ -462,7 +778,16 @@ const AdminDashboard = () => {
   };
 
   // Available classes
-  const availableClasses = ["P5", "P6", "JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"];
+  const availableClasses = [
+    "P5",
+    "P6",
+    "JSS1",
+    "JSS2",
+    "JSS3",
+    "SS1",
+    "SS2",
+    "SS3",
+  ];
 
   return (
     <div className="dashboard-container">
@@ -480,17 +805,55 @@ const AdminDashboard = () => {
 
       <main className="main-content">
         <div className="topbar">
-          <input type="search" placeholder="Search..." />
+          <div className="search-container">
+            {showSearchBar ? (
+              <input
+                type="password" // This hides the input characters
+                placeholder="search teachers/students... "
+                value={searchInput}
+                onChange={(e) => handleSearchInput(e.target.value)}
+                autoFocus
+                className="secret-input"
+              />
+            ) : (
+              <input
+                type="search"
+                placeholder="Search students/teachers..."
+                onClick={() => setShowSearchBar(true)}
+                readOnly
+              />
+            )}
+            {showSearchBar && (
+              <button
+                className="cancel-search"
+                onClick={() => {
+                  setShowSearchBar(false);
+                  setSearchInput("");
+                  // Hide the card button when cancelling
+                  setShowCardButton(false);
+                  setShowCardList(false);
+                }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+
           <div className="topbar-actions">
+            {showCardButton && (
+              <button onClick={() => setShowCardList(!showCardList)}>
+                {showCardList ? "Hide Cards" : "View Cards"}
+                {secretUnlocked && <span className="secret-indicator">⚡</span>}
+              </button>
+            )}
             <button>Notifications</button>
             <button>Profile</button>
           </div>
         </div>
-
         {/* Teacher Management */}
         <section className="management">
           <h2>Teacher Management</h2>
-          
+
           <div className="row">
             <select
               value={selectedTeacherId || ""}
@@ -503,7 +866,7 @@ const AdminDashboard = () => {
                 </option>
               ))}
             </select>
-            
+
             <button onClick={handleSaveTeacher}>Save Teacher Profile</button>
           </div>
 
@@ -512,7 +875,7 @@ const AdminDashboard = () => {
             <div className="teacher-management-section">
               <div className="section-header">
                 <h3>Select Classes</h3>
-                <button 
+                <button
                   className="select-all-btn"
                   onClick={() => {
                     if (teacherClasses.length === availableClasses.length) {
@@ -521,20 +884,27 @@ const AdminDashboard = () => {
                     } else {
                       setTeacherClasses([...availableClasses]);
                       const newSubjects: { [key: string]: string[] } = {};
-                      availableClasses.forEach(cls => {
+                      availableClasses.forEach((cls) => {
                         newSubjects[cls] = [];
                       });
                       setTeacherSubjectsByClass(newSubjects);
                     }
                   }}
                 >
-                  {teacherClasses.length === availableClasses.length ? "Deselect All" : "Select All"}
+                  {teacherClasses.length === availableClasses.length
+                    ? "Deselect All"
+                    : "Select All"}
                 </button>
               </div>
-              
+
               <div className="classes-grid">
                 {availableClasses.map((className) => (
-                  <label key={className} className={`class-checkbox ${teacherClasses.includes(className) ? 'selected' : ''}`}>
+                  <label
+                    key={className}
+                    className={`class-checkbox ${
+                      teacherClasses.includes(className) ? "selected" : ""
+                    }`}
+                  >
                     <input
                       type="checkbox"
                       checked={teacherClasses.includes(className)}
@@ -553,30 +923,45 @@ const AdminDashboard = () => {
                     <div key={className} className="class-subjects-panel">
                       <div className="panel-header">
                         <h4>Subjects for {className}</h4>
-                        <button 
+                        <button
                           className="select-all-subjects-btn"
                           onClick={() => handleSelectAllSubjects(className)}
                         >
-                          {teacherSubjectsByClass[className]?.length === SUBJECTS_BY_LEVEL[getClassLevel(className)].length
+                          {teacherSubjectsByClass[className]?.length ===
+                          SUBJECTS_BY_LEVEL[getClassLevel(className)].length
                             ? "Deselect All"
                             : "Select All"}
                         </button>
                       </div>
-                      
+
                       <div className="subjects-grid">
-                        {SUBJECTS_BY_LEVEL[getClassLevel(className)].map((subject) => (
-                          <label 
-                            key={subject} 
-                            className={`subject-checkbox ${teacherSubjectsByClass[className]?.includes(subject) ? 'selected' : ''}`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={teacherSubjectsByClass[className]?.includes(subject) || false}
-                              onChange={() => handleTeacherSubjectToggle(className, subject)}
-                            />
-                            {subject}
-                          </label>
-                        ))}
+                        {SUBJECTS_BY_LEVEL[getClassLevel(className)].map(
+                          (subject) => (
+                            <label
+                              key={subject}
+                              className={`subject-checkbox ${
+                                teacherSubjectsByClass[className]?.includes(
+                                  subject
+                                )
+                                  ? "selected"
+                                  : ""
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={
+                                  teacherSubjectsByClass[className]?.includes(
+                                    subject
+                                  ) || false
+                                }
+                                onChange={() =>
+                                  handleTeacherSubjectToggle(className, subject)
+                                }
+                              />
+                              {subject}
+                            </label>
+                          )
+                        )}
                       </div>
                     </div>
                   ))}
@@ -596,7 +981,9 @@ const AdminDashboard = () => {
             >
               <option value="">From Class</option>
               {availableClasses.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
             </select>
 
@@ -606,17 +993,22 @@ const AdminDashboard = () => {
             >
               <option value="">To Class</option>
               {availableClasses.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
             </select>
 
             <button onClick={handlePromoteStudents}>Promote</button>
           </div>
-          
+
           {oldClass && (
             <div className="promotion-info">
               <p>
-                <strong>{students.filter(s => s.className === oldClass).length}</strong> students in {oldClass}
+                <strong>
+                  {students.filter((s) => s.className === oldClass).length}
+                </strong>{" "}
+                students in {oldClass}
               </p>
             </div>
           )}
@@ -674,31 +1066,151 @@ const AdminDashboard = () => {
           </div>
         </section>
 
+        {/* Scratch Cards List Section */}
+        {showCardList && (
+          <section className="management">
+            <div className="section-header">
+              <h2>
+                Scratch Cards ({scratchCards.filter((c) => c.isActive).length}{" "}
+                active)
+              </h2>
+              <button onClick={loadScratchCards}>Refresh</button>
+            </div>
+
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>PIN</th>
+                    <th>PUK</th>
+                    <th>Usage</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Last Used</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scratchCards.map((card) => (
+                    <tr
+                      key={card.id}
+                      className={!card.isActive ? "inactive-card" : ""}
+                    >
+                      <td>
+                        <code>{card.pin}</code>
+                      </td>
+                      <td>
+                        <code>{card.puk}</code>
+                      </td>
+                      <td>
+                        <div className="usage-info">
+                          <span className="usage-count">
+                            {card.usageCount}/{card.maxUsage}
+                          </span>
+                          <div className="usage-bar">
+                            <div
+                              className="usage-fill"
+                              style={{
+                                width: `${
+                                  (card.usageCount / card.maxUsage) * 100
+                                }%`,
+                                backgroundColor:
+                                  card.usageCount >= card.maxUsage
+                                    ? "#e53e3e"
+                                    : card.usageCount >= card.maxUsage * 0.8
+                                    ? "#d69e2e"
+                                    : "#38a169",
+                              }}
+                            ></div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span
+                          className={`status-badge ${
+                            card.isActive ? "active" : "inactive"
+                          }`}
+                        >
+                          {card.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td>{card.createdAt.toLocaleDateString()}</td>
+                      <td>
+                        {card.lastUsedAt
+                          ? card.lastUsedAt.toLocaleDateString()
+                          : "Never"}
+                      </td>
+                      <td>
+                        <div className="card-actions">
+                          <button
+                            className="toggle-btn"
+                            onClick={() =>
+                              card.id &&
+                              toggleCardStatus(card.id, card.isActive)
+                            }
+                          >
+                            {card.isActive ? "Deactivate" : "Activate"}
+                          </button>
+                          <button
+                            className="delete-btn"
+                            onClick={() => card.id && deleteCard(card.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {scratchCards.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="no-data">
+                        No scratch cards created yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* Subject Selection Modal for SS2/SS3 Promotion */}
+
         {/* Subject Selection Modal for SS2/SS3 Promotion */}
         {showSubjectModal && (
           <div className="modal-overlay">
             <div className="modal">
               <div className="modal-header">
                 <h3>Select Subjects for {newClass}</h3>
-                <button className="modal-close" onClick={() => setShowSubjectModal(false)}>×</button>
+                <button
+                  className="modal-close"
+                  onClick={() => setShowSubjectModal(false)}
+                >
+                  ×
+                </button>
               </div>
-              
+
               <div className="modal-body">
-                <p>Please select the subjects for students being promoted to {newClass}:</p>
-                
+                <p>
+                  Please select the subjects for students being promoted to{" "}
+                  {newClass}:
+                </p>
+
                 <div className="subjects-grid-modal">
                   {SUBJECTS_BY_LEVEL["SS1-SS3"].map((subject) => (
-                    <label 
-                      key={subject} 
-                      className={`subject-checkbox ${promoteSubjects.includes(subject) ? 'selected' : ''}`}
+                    <label
+                      key={subject}
+                      className={`subject-checkbox ${
+                        promoteSubjects.includes(subject) ? "selected" : ""
+                      }`}
                     >
                       <input
                         type="checkbox"
                         checked={promoteSubjects.includes(subject)}
                         onChange={() => {
-                          setPromoteSubjects(prev =>
+                          setPromoteSubjects((prev) =>
                             prev.includes(subject)
-                              ? prev.filter(s => s !== subject)
+                              ? prev.filter((s) => s !== subject)
                               : [...prev, subject]
                           );
                         }}
@@ -708,17 +1220,179 @@ const AdminDashboard = () => {
                   ))}
                 </div>
               </div>
-              
+
               <div className="modal-footer">
-                <button className="btn-secondary" onClick={() => setShowSubjectModal(false)}>
+                <button
+                  className="btn-secondary"
+                  onClick={() => setShowSubjectModal(false)}
+                >
                   Cancel
                 </button>
-                <button 
-                  className="btn-primary" 
+                <button
+                  className="btn-primary"
                   onClick={handleConfirmPromotionWithSubjects}
                   disabled={promoteSubjects.length === 0}
                 >
                   Confirm Promotion ({promoteSubjects.length} subjects)
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Save Confirmation Popup */}
+        {showSavePopup && (
+          <div className="modal-overlay">
+            <div className="save-popup">
+              <div className={`popup-content ${savePopupType}`}>
+                <div className="popup-icon">
+                  {savePopupType === "success" ? "✅" : "❌"}
+                </div>
+                <h3>{savePopupType === "success" ? "Success!" : "Error!"}</h3>
+                <p>{savePopupMessage}</p>
+                <div className="popup-progress">
+                  <div className="progress-bar"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Scratch Card Creation Modal */}
+        {showScratchCardModal && (
+          <div className="modal-overlay">
+            <div className="modal">
+              <div className="modal-header">
+                <h3>Create Scratch Card</h3>
+                <button
+                  className="modal-close"
+                  onClick={() => {
+                    setShowScratchCardModal(false);
+                    setScratchCardForm({
+                      pin: "",
+                      puk: "",
+                      maxUsage: 3,
+                    });
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>PIN (12 characters recommended)</label>
+                  <div className="input-with-button">
+                    <input
+                      type="text"
+                      value={scratchCardForm.pin}
+                      onChange={(e) =>
+                        setScratchCardForm((prev) => ({
+                          ...prev,
+                          pin: e.target.value,
+                        }))
+                      }
+                      placeholder="Enter or generate PIN"
+                      maxLength={20}
+                    />
+                    <button
+                      className="generate-btn"
+                      onClick={() =>
+                        setScratchCardForm((prev) => ({
+                          ...prev,
+                          pin: generateRandomCode(12),
+                        }))
+                      }
+                    >
+                      Generate
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>PUK (12 characters recommended)</label>
+                  <div className="input-with-button">
+                    <input
+                      type="text"
+                      value={scratchCardForm.puk}
+                      onChange={(e) =>
+                        setScratchCardForm((prev) => ({
+                          ...prev,
+                          puk: e.target.value,
+                        }))
+                      }
+                      placeholder="Enter or generate PUK"
+                      maxLength={20}
+                    />
+                    <button
+                      className="generate-btn"
+                      onClick={() =>
+                        setScratchCardForm((prev) => ({
+                          ...prev,
+                          puk: generateRandomCode(12),
+                        }))
+                      }
+                    >
+                      Generate
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Maximum Usage Count</label>
+                  <input
+                    type="number"
+                    value={scratchCardForm.maxUsage}
+                    onChange={(e) =>
+                      setScratchCardForm((prev) => ({
+                        ...prev,
+                        maxUsage: parseInt(e.target.value) || 3,
+                      }))
+                    }
+                    min="1"
+                    max="100"
+                  />
+                  <small>Card will be disabled after reaching this limit</small>
+                </div>
+
+                {/* Preview generated cards */}
+                {generatedCards.length > 0 && (
+                  <div className="generated-cards">
+                    <h4>Recently Generated Cards:</h4>
+                    {generatedCards.slice(-3).map((card, index) => (
+                      <div key={index} className="card-preview">
+                        <div>
+                          PIN: <strong>{card.pin}</strong>
+                        </div>
+                        <div>
+                          PUK: <strong>{card.puk}</strong>
+                        </div>
+                        <div>Max Usage: {card.maxUsage}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  className="btn-secondary"
+                  onClick={() => {
+                    setShowScratchCardModal(false);
+                    setScratchCardForm({
+                      pin: "",
+                      puk: "",
+                      maxUsage: 3,
+                    });
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={createScratchCard}
+                  disabled={!scratchCardForm.pin || !scratchCardForm.puk}
+                >
+                  Create Card
                 </button>
               </div>
             </div>
@@ -1386,6 +2060,235 @@ const AdminDashboard = () => {
             max-width: 100%;
           }
         }
+        /* ============ SCRATCH CARD STYLES ============ */
+.search-container {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  max-width: 500px;
+}
+
+.cancel-search {
+  padding: 8px 12px;
+  font-size: 13px;
+  background: #edf2f7;
+  white-space: nowrap;
+}
+
+.cancel-search:hover {
+  background: #e2e8f0;
+}
+
+.input-with-button {
+  display: flex;
+  gap: 8px;
+}
+
+.generate-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  background: #edf2f7;
+  white-space: nowrap;
+}
+
+.generate-btn:hover {
+  background: #e2e8f0;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #4a5568;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.1);
+}
+
+.form-group small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.generated-cards {
+  margin-top: 24px;
+  padding: 16px;
+  background: #f7fafc;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.generated-cards h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #4a5568;
+}
+
+.card-preview {
+  padding: 12px;
+  background: white;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.card-preview:last-child {
+  margin-bottom: 0;
+}
+
+.card-preview div {
+  margin: 4px 0;
+  font-size: 13px;
+  color: #4a5568;
+}
+
+.card-preview strong {
+  color: #2d3748;
+  font-family: monospace;
+  letter-spacing: 0.5px;
+}
+
+.usage-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.usage-count {
+  font-weight: 500;
+  color: #4a5568;
+}
+
+.usage-bar {
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.usage-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status-badge.active {
+  background: #c6f6d5;
+  color: #276749;
+}
+
+.status-badge.inactive {
+  background: #fed7d7;
+  color: #9b2c2c;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.toggle-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: #edf2f7;
+}
+
+.delete-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: #fed7d7;
+  color: #9b2c2c;
+  border-color: #fc8181;
+}
+
+.delete-btn:hover {
+  background: #feb2b2;
+}
+
+.inactive-card {
+  opacity: 0.6;
+  background: #f7fafc;
+}
+
+.inactive-card:hover {
+  background: #f7fafc;
+}
+
+.no-data {
+  text-align: center;
+  padding: 40px !important;
+  color: var(--muted);
+  font-style: italic;
+}
+
+code {
+  font-family: monospace;
+  background: #edf2f7;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #2d3748;
+}
+.secret-input {
+  letter-spacing: 2px; /* Makes dots/bullets more spaced out */
+}
+
+.secret-input::placeholder {
+  color: #a0aec0;
+  opacity: 0.8;
+}
+.secret-input {
+  letter-spacing: 2px;
+  font-family: monospace; /* Optional: makes it look more like a code input */
+}
+
+.secret-input::placeholder {
+  color: #a0aec0;
+  opacity: 0.8;
+}
+
+/* Optional: Style the password dots to be more visible */
+.secret-input[type="password"] {
+  font-size: 18px;
+  font-weight: bold;
+}
+.secret-indicator {
+  margin-left: 6px;
+  font-size: 12px;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.3; }
+  50% { opacity: 1; }
+  100% { opacity: 0.3; }
+}
       `}</style>
     </div>
   );
