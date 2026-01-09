@@ -12,7 +12,10 @@ import {
   Timestamp,
   deleteDoc,
 } from "firebase/firestore";
-import { db } from "../firebase/config";
+import { signOut } from "firebase/auth";
+
+import { db, auth } from "../firebase/config";
+import logo from "../assets/logo.png";
 
 interface Teacher {
   id: string;
@@ -678,6 +681,32 @@ const AdminDashboard = () => {
     }
     return result;
   };
+  // Add this function with your other handler functions
+  const handleLogout = async () => {
+    try {
+      // If using Firebase Auth
+      await signOut(auth);
+
+      // If using a store/context for auth
+      // const { logout } = useFirebaseStore(); // If you have this
+      // logout();
+
+      // Clear any local storage
+      localStorage.removeItem("user");
+      localStorage.removeItem("token");
+
+      // Show success message
+      showSaveConfirmation("✅ Logged out successfully!");
+
+      // Redirect to login page after a short delay
+      setTimeout(() => {
+        window.location.href = "/login"; // Or your login route
+      }, 1500);
+    } catch (error: any) {
+      console.error("Error logging out:", error);
+      showSaveConfirmation(`❌ Error logging out: ${error.message}`, "error");
+    }
+  };
 
   // Function to create scratch card
   const createScratchCard = async () => {
@@ -910,24 +939,17 @@ const AdminDashboard = () => {
           <div className="logo-container">
             {/* Replace this div with your logo */}
             <div className="logo-placeholder">
-              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-                <circle cx="20" cy="20" r="20" fill="#4299e1" />
-                <path
-                  d="M12 20L18 26L28 14"
-                  stroke="white"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M12 20L18 26L28 14"
-                  stroke="white"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              {!sidebarCollapsed && <span className="logo-text">EduAdmin</span>}
+              <img
+                src={logo}
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                  border: "2px solid #4299e1",
+                }}
+              />
+              {!sidebarCollapsed && <span className="logo-text">SXaint</span>}
             </div>
           </div>
           <button
@@ -1240,12 +1262,11 @@ const AdminDashboard = () => {
                       </button>
 
                       <div className="dropdown-divider"></div>
-
                       <button
                         className="dropdown-item logout-item"
                         onClick={() => {
-                          // Add your logout logic here
-                          showSaveConfirmation("Logged out successfully!");
+                          // Call the logout function
+                          handleLogout();
                           setShowProfileDropdown(false);
                         }}
                       >
@@ -2294,7 +2315,7 @@ const AdminDashboard = () => {
         
         .sidebar-toggle {
           background: none;
-          border: 1px solid var(--border);
+          border: none;
           border-radius: 6px;
           width: 32px;
           height: 32px;
