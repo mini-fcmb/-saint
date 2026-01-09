@@ -136,7 +136,6 @@ const getClassLevel = (className: string): keyof typeof SUBJECTS_BY_LEVEL => {
   if (className.startsWith("SS")) return "SS1-SS3";
   return "P5-P6";
 };
-const [secretUnlocked, setSecretUnlocked] = useState(false);
 
 const AdminDashboard = () => {
   const { updateTeacherProfile, promoteStudents, refreshStudents } =
@@ -191,6 +190,7 @@ const AdminDashboard = () => {
   // Secret code constant
   const SECRET_CODE = "2578";
   const [showCardButton, setShowCardButton] = useState(false);
+  const [secretUnlocked, setSecretUnlocked] = useState(false);
 
   // Fetch teachers & students
   useEffect(() => {
@@ -533,7 +533,7 @@ const AdminDashboard = () => {
       setShowScratchCardModal(true);
       setSearchInput("");
       setShowSearchBar(false);
-      showSaveConfirmation("✅ Scratch card creation unlocked!");
+      showTemporaryMessage("✅ Scratch card creation unlocked!");
     }
 
     // Check if the entered value is the secret code for showing card button
@@ -542,15 +542,26 @@ const AdminDashboard = () => {
       setSecretUnlocked(true);
       setSearchInput("");
       setShowSearchBar(false);
-      showSaveConfirmation("✅ Special features unlocked!");
+      showTemporaryMessage("✅ Special features unlocked!");
 
-      // Auto-hide after 30 seconds
+      // Auto-hide after 50 seconds
       setTimeout(() => {
         setShowCardButton(false);
         setShowCardList(false);
         setSecretUnlocked(false);
       }, 50000);
     }
+  };
+  // Function to show temporary message (for secret codes)
+  const showTemporaryMessage = (
+    message: string,
+    type: "success" | "error" = "success",
+    duration: number = 2000
+  ) => {
+    setSavePopupMessage(message);
+    setSavePopupType(type);
+    setShowSavePopup(true);
+    setTimeout(() => setShowSavePopup(false), duration);
   };
   // Function to generate random PIN/PUK
   const generateRandomCode = (length: number = 12): string => {
