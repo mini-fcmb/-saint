@@ -3127,6 +3127,19 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
   const [error, setError] = useState<string>("");
+  const [scratchCard, setScratchCard] = useState({
+    pin: "",
+    puk: "",
+  });
+  const [cardValidation, setCardValidation] = useState<{
+    isValid: boolean;
+    isActive: boolean;
+    usageCount: number;
+    maxUsage: number;
+    message: string;
+  } | null>(null);
+  const [verifyingCard, setVerifyingCard] = useState(false);
+  const [cardValidated, setCardValidated] = useState(false);
 
   // Auto-fill student ID from user data
   useEffect(() => {
@@ -3134,11 +3147,272 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
       setStudentId(user.uid);
     }
   }, [user]);
+  const validateScratchCard = async (): Promise<boolean> => {
+    if (!scratchCard.pin || !scratchCard.puk) {
+      setError("Please enter both PIN and PUK");
+      return false;
+    }
+
+    setVerifyingCard(true);
+    setError("");
+
+    try {
+      // Query Firestore for scratch card
+      const cardsRef = collection(db, "scratchCards");
+      const q = query(
+        cardsRef,
+        where("pin", "==", scratchCard.pin),
+        where("puk", "==", scratchCard.puk)
+      );
+
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        setCardValidation({
+          isValid: false,
+          isActive: false,
+          usageCount: 0,
+          maxUsage: 0,
+          message: "Invalid scratch card. Please check your PIN and PUK.",
+        });
+        setError("Invalid scratch card. Please check your PIN and PUK.");
+        setVerifyingCard(false);
+        return false;
+      }
+
+      const cardDoc = querySnapshot.docs[0];
+      const cardData = cardDoc.data();
+      const cardId = cardDoc.id;
+
+      console.log("🔍 Card validation check:", {
+        cardId,
+        usageCount: cardData.usageCount || 0,
+        maxUsage: cardData.maxUsage || 3,
+        isActive: cardData.isActive !== false, // Default to true if undefined
+      });
+
+      // Check if card is active (default to true if undefined)
+      const isActive = cardData.isActive !== false;
+      if (!isActive) {
+        setCardValidation({
+          isValid: false,
+          isActive: false,
+          usageCount: cardData.usageCount || 0,
+          maxUsage: cardData.maxUsage || 3,
+          message: "This scratch card has been deactivated.",
+        });
+        setError("This scratch card has been deactivated.");
+        setVerifyingCard(false);
+        return false;
+      }
+
+      // Check usage count (3 times TOTAL, not per student)
+      const usageCount = cardData.usageCount || 0;
+      const maxUsage = cardData.maxUsage || 3;
+
+      if (usageCount >= maxUsage) {
+        setCardValidation({
+          isValid: false,
+          isActive: true,
+          usageCount,
+          maxUsage,
+          message:
+            "Card usage limit reached (3 uses). Please purchase a new card.",
+        });
+        setError(
+          "Card usage limit reached (3 uses). Please purchase a new card."
+        );
+        setVerifyingCard(false);
+        return false;
+      }
+
+      // ✅ Card is valid - increment usage count
+      // ✅ REMOVED the check for student already using the card
+      // ✅ Students can share cards, only limit is total usage count
+
+      const updatedUsageCount = usageCount + 1;
+
+      console.log("✅ Card is valid, updating usage:", {
+        oldUsage: usageCount,
+        newUsage: updatedUsageCount,
+        maxUsage,
+      });
+
+      await updateDoc(doc(db, "scratchCards", cardId), {
+        usageCount: updatedUsageCount,
+        // No longer tracking usedBy array since cards are shared
+        lastUsedAt: new Date(),
+        lastUsedBy: user?.email || studentId, // Optional: just for reference
+        updatedAt: new Date(),
+      });
+
+      setCardValidation({
+        isValid: true,
+        isActive: true,
+        usageCount: updatedUsageCount,
+        maxUsage,
+        message: `Scratch card validated! This is use ${updatedUsageCount} of ${maxUsage}.`,
+      });
+
+      setCardValidated(true);
+      setVerifyingCard(false);
+      return true;
+    } catch (error) {
+      console.error("Error validating scratch card:", error);
+      setError("Error validating scratch card. Please try again.");
+      setVerifyingCard(false);
+      return false;
+    }
+  };
+  // ADD THIS FUNCTION - It was missing
+  const handleExportPDF = () => {
+    if (!results) return;
+
+    // Create a simple HTML representation for printing
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Student Results - ${results.studentName || studentName}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+            .student-info { margin-bottom: 20px; }
+            .results-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            .results-table th, .results-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            .results-table th { background-color: #f2f2f2; }
+            .subject-row { font-weight: bold; background-color: #f9f9f9; }
+            .total-row { font-weight: bold; background-color: #e8f4ff; }
+            .grade-badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+            .grade-a1 { background: #dcfce7; color: #166534; }
+            .grade-b2 { background: #bbf7d0; color: #15803d; }
+            .grade-b3 { background: #86efac; color: #15803d; }
+            .grade-c4 { background: #fef9c3; color: #854d0e; }
+            .grade-c5 { background: #fef08a; color: #854d0e; }
+            .grade-c6 { background: #fde047; color: #854d0e; }
+            .grade-d7 { background: #fed7aa; color: #9a3412; }
+            .grade-e8 { background: #fdba74; color: #9a3412; }
+            .grade-f9 { background: #fecaca; color: #991b1b; }
+            .card-info { 
+              background: #f8f9fa; 
+              border-left: 4px solid #4299e1; 
+              padding: 15px; 
+              margin: 20px 0;
+              border-radius: 4px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Student Academic Results</h1>
+            <h2>${results.studentName || studentName}</h2>
+            <p>Class: ${
+              results.className || currentUserClass || "N/A"
+            } | Term: ${term} | Session: ${session}</p>
+            <div class="card-info">
+              <p><strong>Scratch Card Used:</strong> ${scratchCard.pin}</p>
+              <p><strong>Validated:</strong> ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</p>
+            </div>
+          </div>
+          
+          <div class="student-info">
+            <p><strong>Student ID:</strong> ${studentId}</p>
+            <p><strong>Generated:</strong> ${new Date().toLocaleDateString()}</p>
+          </div>
+          
+          ${renderResultsTableHTML()}
+          
+          <script>
+            window.onload = function() {
+              window.print();
+            }
+          </script>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  };
+
+  // ADD THIS FUNCTION - It was also missing
+  const renderResultsTableHTML = () => {
+    if (!results || !results.subjects)
+      return "<p>No results data available</p>";
+
+    const subjects = results.subjects;
+    let html = `
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>Subject</th>
+            <th>OBJ</th>
+            <th>CA</th>
+            <th>Theory</th>
+            <th>Total</th>
+            <th>Percentage</th>
+            <th>Grade</th>
+            <th>Position</th>
+            <th>Remark</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    let overallTotal = 0;
+    let subjectCount = 0;
+
+    Object.entries(subjects).forEach(([subject, data]: [string, any]) => {
+      overallTotal += data.totalScore || 0;
+      subjectCount++;
+
+      html += `
+        <tr class="subject-row">
+          <td>${subject}</td>
+          <td>${data.objScore || 0}</td>
+          <td>${data.caScore || 0}</td>
+          <td>${data.theoryScore || 0}</td>
+          <td>${data.totalScore || 0}</td>
+          <td>${data.percentage || 0}%</td>
+          <td><span class="grade-badge grade-${(
+            data.grade || ""
+          ).toLowerCase()}">${data.grade || "N/A"}</span></td>
+          <td>${data.positionInClass || "N/A"}</td>
+          <td>${data.remark || "N/A"}</td>
+        </tr>
+      `;
+    });
+
+    const overallAverage = subjectCount > 0 ? overallTotal / subjectCount : 0;
+
+    html += `
+        <tr class="total-row">
+          <td><strong>OVERALL AVERAGE</strong></td>
+          <td colspan="3"></td>
+          <td><strong>${overallAverage.toFixed(2)}</strong></td>
+          <td><strong>${overallAverage.toFixed(2)}%</strong></td>
+          <td colspan="3"></td>
+        </tr>
+      </tbody>
+    </table>
+    `;
+
+    return html;
+  };
 
   const handleCheckResults = async () => {
     if (!studentId || !term || !session) {
       setError("Please fill in all required fields");
       return;
+    }
+
+    // First validate scratch card if not already validated
+    if (!cardValidated) {
+      const isValid = await validateScratchCard();
+      if (!isValid) {
+        return;
+      }
     }
 
     setLoading(true);
@@ -3276,130 +3550,6 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
     }
   };
 
-  const handleExportPDF = () => {
-    if (!results) return;
-
-    // Create a simple HTML representation for printing
-    const printWindow = window.open("", "_blank");
-    if (printWindow) {
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Student Results - ${results.studentName || studentName}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-            .student-info { margin-bottom: 20px; }
-            .results-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            .results-table th, .results-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            .results-table th { background-color: #f2f2f2; }
-            .subject-row { font-weight: bold; background-color: #f9f9f9; }
-            .total-row { font-weight: bold; background-color: #e8f4ff; }
-            .grade-badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-            .grade-a1 { background: #dcfce7; color: #166534; }
-            .grade-b2 { background: #bbf7d0; color: #15803d; }
-            .grade-b3 { background: #86efac; color: #15803d; }
-            .grade-c4 { background: #fef9c3; color: #854d0e; }
-            .grade-c5 { background: #fef08a; color: #854d0e; }
-            .grade-c6 { background: #fde047; color: #854d0e; }
-            .grade-d7 { background: #fed7aa; color: #9a3412; }
-            .grade-e8 { background: #fdba74; color: #9a3412; }
-            .grade-f9 { background: #fecaca; color: #991b1b; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>Student Academic Results</h1>
-            <h2>${results.studentName || studentName}</h2>
-            <p>Class: ${
-              results.className || currentUserClass || "N/A"
-            } | Term: ${term} | Session: ${session}</p>
-          </div>
-          
-          <div class="student-info">
-            <p><strong>Student ID:</strong> ${studentId}</p>
-            <p><strong>Generated:</strong> ${new Date().toLocaleDateString()}</p>
-          </div>
-          
-          ${renderResultsTableHTML()}
-          
-          <script>
-            window.onload = function() {
-              window.print();
-            }
-          </script>
-        </body>
-        </html>
-      `);
-      printWindow.document.close();
-    }
-  };
-
-  const renderResultsTableHTML = () => {
-    if (!results || !results.subjects)
-      return "<p>No results data available</p>";
-
-    const subjects = results.subjects;
-    let html = `
-      <table class="results-table">
-        <thead>
-          <tr>
-            <th>Subject</th>
-            <th>OBJ</th>
-            <th>CA</th>
-            <th>Theory</th>
-            <th>Total</th>
-            <th>Percentage</th>
-            <th>Grade</th>
-            <th>Position</th>
-            <th>Remark</th>
-          </tr>
-        </thead>
-        <tbody>
-    `;
-
-    let overallTotal = 0;
-    let subjectCount = 0;
-
-    Object.entries(subjects).forEach(([subject, data]: [string, any]) => {
-      overallTotal += data.totalScore || 0;
-      subjectCount++;
-
-      html += `
-        <tr class="subject-row">
-          <td>${subject}</td>
-          <td>${data.objScore || 0}</td>
-          <td>${data.caScore || 0}</td>
-          <td>${data.theoryScore || 0}</td>
-          <td>${data.totalScore || 0}</td>
-          <td>${data.percentage || 0}%</td>
-          <td><span class="grade-badge grade-${(
-            data.grade || ""
-          ).toLowerCase()}">${data.grade || "N/A"}</span></td>
-          <td>${data.positionInClass || "N/A"}</td>
-          <td>${data.remark || "N/A"}</td>
-        </tr>
-      `;
-    });
-
-    const overallAverage = subjectCount > 0 ? overallTotal / subjectCount : 0;
-
-    html += `
-        <tr class="total-row">
-          <td><strong>OVERALL AVERAGE</strong></td>
-          <td colspan="3"></td>
-          <td><strong>${overallAverage.toFixed(2)}</strong></td>
-          <td><strong>${overallAverage.toFixed(2)}%</strong></td>
-          <td colspan="3"></td>
-        </tr>
-      </tbody>
-    </table>
-    `;
-
-    return html;
-  };
-
   const renderResultsPreview = () => {
     if (!results) return null;
 
@@ -3420,6 +3570,24 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
           <p>
             Showing results for {term} - {session}
           </p>
+          {cardValidation && (
+            <div
+              className={`card-status ${
+                cardValidation.isValid ? "valid" : "invalid"
+              }`}
+            >
+              <div className="card-status-content">
+                <span className="card-status-icon">
+                  {cardValidation.isValid ? "✅" : "❌"}
+                </span>
+                <span className="card-status-text">
+                  Scratch Card:{" "}
+                  {cardValidation.isValid ? "Validated" : "Invalid"}(
+                  {cardValidation.usageCount}/{cardValidation.maxUsage} uses)
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="student-summary">
@@ -3436,6 +3604,10 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
             <span className="overall-average">
               {overallAverage.toFixed(2)}%
             </span>
+          </div>
+          <div className="summary-card">
+            <strong>Scratch Card:</strong>
+            <span className="card-pin">{scratchCard.pin}</span>
           </div>
         </div>
 
@@ -3494,6 +3666,9 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
             className="action-btn secondary"
             onClick={() => {
               setResults(null);
+              setCardValidated(false);
+              setCardValidation(null);
+              setScratchCard({ pin: "", puk: "" });
               setTerm("First Term");
               setSession("2024/2025");
             }}
@@ -3526,69 +3701,174 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
         <div className="modal-body">
           {!results ? (
             <>
-              <div className="form-group">
-                <label>Student ID *</label>
-                <input
-                  type="text"
-                  className="text-input"
-                  value={studentId}
-                  onChange={(e) => setStudentId(e.target.value)}
-                  placeholder="Enter your student ID"
-                  readOnly={!!user?.uid}
-                  style={
-                    user?.uid
-                      ? { backgroundColor: "#f3f4f6", cursor: "not-allowed" }
-                      : {}
-                  }
-                />
-                {user?.uid && (
-                  <small style={{ color: "#6b7280", marginTop: "4px" }}>
-                    Auto-filled from your account
-                  </small>
-                )}
-              </div>
+              {/* Scratch Card Section */}
+              {!cardValidated ? (
+                <div className="scratch-card-section">
+                  <div className="section-title">
+                    <Lock size={20} />
+                    <h3>Scratch Card Validation Required</h3>
+                  </div>
+                  <p className="section-description">
+                    Enter your scratch card PIN and PUK to access your results.
+                    Each card can be used up to 3 times.
+                  </p>
 
-              <div className="form-group">
-                <label>Term *</label>
-                <select
-                  className="text-input"
-                  value={term}
-                  onChange={(e) => setTerm(e.target.value)}
-                >
-                  <option value="First Term">First Term</option>
-                  <option value="Second Term">Second Term</option>
-                  <option value="Third Term">Third Term</option>
-                </select>
-              </div>
+                  <div className="card-inputs-grid">
+                    <div className="form-group">
+                      <label>PIN *</label>
+                      <input
+                        type="text"
+                        className="text-input"
+                        value={scratchCard.pin}
+                        onChange={(e) =>
+                          setScratchCard({
+                            ...scratchCard,
+                            pin: e.target.value,
+                          })
+                        }
+                        placeholder="Enter scratch card PIN"
+                        maxLength={20}
+                        disabled={verifyingCard}
+                      />
+                    </div>
 
-              <div className="form-group">
-                <label>Academic Session *</label>
-                <select
-                  className="text-input"
-                  value={session}
-                  onChange={(e) => setSession(e.target.value)}
-                >
-                  <option value="2023/2024">2023/2024</option>
-                  <option value="2024/2025">2024/2025</option>
-                  <option value="2025/2026">2025/2026</option>
-                </select>
-              </div>
+                    <div className="form-group">
+                      <label>PUK *</label>
+                      <input
+                        type="text"
+                        className="text-input"
+                        value={scratchCard.puk}
+                        onChange={(e) =>
+                          setScratchCard({
+                            ...scratchCard,
+                            puk: e.target.value,
+                          })
+                        }
+                        placeholder="Enter scratch card PUK"
+                        maxLength={20}
+                        disabled={verifyingCard}
+                      />
+                    </div>
+                  </div>
 
-              {error && (
-                <div className="error-message">
-                  <AlertTriangle size={16} />
-                  <span>{error}</span>
+                  {cardValidation && !cardValidation.isValid && (
+                    <div className="card-error-message">
+                      <AlertTriangle size={16} />
+                      <span>{cardValidation.message}</span>
+                    </div>
+                  )}
+
+                  {cardValidation && cardValidation.isValid && (
+                    <div className="card-success-message">
+                      <CheckCircle size={16} />
+                      <span>{cardValidation.message}</span>
+                      <small>
+                        Usage: {cardValidation.usageCount}/
+                        {cardValidation.maxUsage}
+                      </small>
+                    </div>
+                  )}
+
+                  <div className="card-help">
+                    <Info size={16} />
+                    <p>
+                      <strong>Note:</strong> Scratch cards can be purchased from
+                      the school admin. If you don't have a card or your card
+                      has expired, please contact your teacher.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="card-validated-section">
+                  <div className="validation-success">
+                    <CheckCircle size={24} color="#10b981" />
+                    <div>
+                      <h4>Scratch Card Validated Successfully!</h4>
+                      <p>
+                        Card PIN: <strong>{scratchCard.pin}</strong> • Usage:{" "}
+                        {cardValidation?.usageCount}/{cardValidation?.maxUsage}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 
-              <div className="query-info">
-                <Info size={16} />
-                <p>
-                  <strong>Note:</strong> Results are fetched from your teacher's
-                  grade records. If you don't see your results, please ensure
-                  your teacher has uploaded them.
-                </p>
-              </div>
+              {/* Results Query Section (only shown after card validation) */}
+              {cardValidated && (
+                <div className="results-query-section">
+                  <div className="section-title">
+                    <Search size={20} />
+                    <h3>Select Term & Session</h3>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Student ID *</label>
+                    <input
+                      type="text"
+                      className="text-input"
+                      value={studentId}
+                      onChange={(e) => setStudentId(e.target.value)}
+                      placeholder="Enter your student ID"
+                      readOnly={!!user?.uid}
+                      style={
+                        user?.uid
+                          ? {
+                              backgroundColor: "#f3f4f6",
+                              cursor: "not-allowed",
+                            }
+                          : {}
+                      }
+                    />
+                    {user?.uid && (
+                      <small style={{ color: "#6b7280", marginTop: "4px" }}>
+                        Auto-filled from your account
+                      </small>
+                    )}
+                  </div>
+
+                  <div className="form-group">
+                    <label>Term *</label>
+                    <select
+                      className="text-input"
+                      value={term}
+                      onChange={(e) => setTerm(e.target.value)}
+                    >
+                      <option value="First Term">First Term</option>
+                      <option value="Second Term">Second Term</option>
+                      <option value="Third Term">Third Term</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Academic Session *</label>
+                    <select
+                      className="text-input"
+                      value={session}
+                      onChange={(e) => setSession(e.target.value)}
+                    >
+                      <option value="2023/2024">2023/2024</option>
+                      <option value="2024/2025">2024/2025</option>
+                      <option value="2025/2026">2025/2026</option>
+                    </select>
+                  </div>
+
+                  {error && !error.includes("scratch card") && (
+                    <div className="error-message">
+                      <AlertTriangle size={16} />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <div className="query-info">
+                    <Info size={16} />
+                    <p>
+                      <strong>Note:</strong> Results are fetched from your
+                      teacher's grade records. If you don't see your results,
+                      please ensure your teacher has uploaded them.
+                    </p>
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             renderResultsPreview()
@@ -3601,23 +3881,45 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
               <button className="action-btn cancel" onClick={onClose}>
                 Cancel
               </button>
-              <button
-                className="action-btn primary"
-                onClick={handleCheckResults}
-                disabled={loading || !studentId || !term || !session}
-              >
-                {loading ? (
-                  <>
-                    <RefreshCw className="animate-spin" size={16} />
-                    Checking...
-                  </>
-                ) : (
-                  <>
-                    <Search size={16} />
-                    Check Results
-                  </>
-                )}
-              </button>
+              {!cardValidated ? (
+                <button
+                  className="action-btn primary"
+                  onClick={validateScratchCard}
+                  disabled={
+                    verifyingCard || !scratchCard.pin || !scratchCard.puk
+                  }
+                >
+                  {verifyingCard ? (
+                    <>
+                      <RefreshCw className="animate-spin" size={16} />
+                      Validating...
+                    </>
+                  ) : (
+                    <>
+                      <Lock size={16} />
+                      Validate Card
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  className="action-btn primary"
+                  onClick={handleCheckResults}
+                  disabled={loading || !studentId || !term || !session}
+                >
+                  {loading ? (
+                    <>
+                      <RefreshCw className="animate-spin" size={16} />
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      <Search size={16} />
+                      Check Results
+                    </>
+                  )}
+                </button>
+              )}
             </>
           ) : (
             <button className="action-btn primary" onClick={onClose}>
@@ -3640,6 +3942,47 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        
+        /* Scratch Card Section Styles */
+        .scratch-card-section,
+        .card-validated-section,
+        .results-query-section {
+          margin-bottom: 24px;
+          padding-bottom: 24px;
+          border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .section-title {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 12px;
+        }
+        
+        .section-title h3 {
+          margin: 0;
+          font-size: 18px;
+          color: #1f2937;
+        }
+        
+        .section-description {
+          color: #6b7280;
+          margin-bottom: 20px;
+          font-size: 14px;
+        }
+        
+        .card-inputs-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+          margin-bottom: 20px;
+        }
+        
+        @media (max-width: 768px) {
+          .card-inputs-grid {
+            grid-template-columns: 1fr;
+          }
         }
         
         .form-group {
@@ -3673,6 +4016,77 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
           cursor: not-allowed;
         }
         
+        .text-input:disabled {
+          background-color: #f3f4f6;
+          cursor: not-allowed;
+        }
+        
+        .card-error-message {
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+          border-radius: 8px;
+          padding: 12px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: #dc2626;
+          margin-bottom: 16px;
+        }
+        
+        .card-success-message {
+          background: #d1fae5;
+          border: 1px solid #a7f3d0;
+          border-radius: 8px;
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          color: #065f46;
+          margin-bottom: 16px;
+        }
+        
+        .card-success-message small {
+          font-size: 12px;
+          opacity: 0.8;
+        }
+        
+        .validation-success {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          background: #d1fae5;
+          border-radius: 12px;
+          padding: 20px;
+          border: 2px solid #10b981;
+        }
+        
+        .validation-success h4 {
+          margin: 0 0 4px 0;
+          color: #065f46;
+        }
+        
+        .validation-success p {
+          margin: 0;
+          color: #047857;
+          font-size: 14px;
+        }
+        
+        .card-help {
+          background: #f0f9ff;
+          border: 1px solid #bae6fd;
+          border-radius: 8px;
+          padding: 16px;
+          display: flex;
+          gap: 12px;
+          color: #0369a1;
+          font-size: 14px;
+        }
+        
+        .card-help p {
+          margin: 0;
+          line-height: 1.4;
+        }
+        
         .error-message {
           background: #fef2f2;
           border: 1px solid #fecaca;
@@ -3699,6 +4113,32 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
           margin: 0;
           font-size: 14px;
           line-height: 1.4;
+        }
+        
+        /* Card Status in Results Preview */
+        .card-status {
+          margin: 12px 0;
+          padding: 12px;
+          border-radius: 8px;
+          font-size: 14px;
+        }
+        
+        .card-status.valid {
+          background: #d1fae5;
+          border: 1px solid #a7f3d0;
+          color: #065f46;
+        }
+        
+        .card-status.invalid {
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+          color: #dc2626;
+        }
+        
+        .card-status-content {
+          display: flex;
+          align-items: center;
+          gap: 8px;
         }
         
         /* Results Preview Styles */
@@ -3761,6 +4201,13 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
         .summary-card .overall-average {
           color: #10b981;
           font-size: 22px;
+        }
+        
+        .summary-card .card-pin {
+          color: #3b82f6;
+          font-family: monospace;
+          font-size: 16px;
+          letter-spacing: 1px;
         }
         
         .results-table-preview {
@@ -3870,6 +4317,29 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
           background: #4b5563;
         }
         
+        .action-btn.cancel {
+          background: #6b7280;
+          color: white;
+        }
+        
+        .action-btn.cancel:hover {
+          background: #4b5563;
+        }
+        
+        .action-btn.primary {
+          background: #4299e1;
+          color: white;
+        }
+        
+        .action-btn.primary:hover {
+          background: #3182ce;
+        }
+        
+        .action-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        
         @media (max-width: 768px) {
           .student-summary {
             grid-template-columns: 1fr;
@@ -3924,46 +4394,47 @@ const StudentDashboard: React.FC = () => {
   // Get current student's class from userData
   const currentUserClass = userData?.className;
 
-// Update the enhancedStudents memo:
-const enhancedStudents = useMemo(() => {
-  // Apply the same normalization as in teacher dashboard
-  const normalizeClassName = (className: string | undefined): string => {
-    if (!className) return "";
-    return className
-      .toLowerCase()
-      .replace(/\s+/g, "")
-      .replace(/[_-]/g, "")
-      .trim();
-  };
+  // Update the enhancedStudents memo:
+  const enhancedStudents = useMemo(() => {
+    // Apply the same normalization as in teacher dashboard
+    const normalizeClassName = (className: string | undefined): string => {
+      if (!className) return "";
+      return className
+        .toLowerCase()
+        .replace(/\s+/g, "")
+        .replace(/[_-]/g, "")
+        .trim();
+    };
 
-  const normalizedCurrentClass = normalizeClassName(currentUserClass);
+    const normalizedCurrentClass = normalizeClassName(currentUserClass);
 
-  return students
-    .map((student) => {
-      // Type assertion to access properties that might exist on the data
-      const studentData = student as any;
-      
-      // Use classId if available, otherwise use className
-      const studentClassName = studentData.classId || student.className || "Unknown";
-      const normalizedStudentClass = normalizeClassName(studentClassName);
-      const isSameClass = normalizedStudentClass === normalizedCurrentClass;
+    return students
+      .map((student) => {
+        // Type assertion to access properties that might exist on the data
+        const studentData = student as any;
 
-      return {
-        ...student,
-        id: student.id || `student-${student.email}`,
-        first: student.first || "",
-        last: student.last || "",
-        fullName: studentData.fullName || `${student.first} ${student.last}`,
-        email: student.email || "",
-        progress: student.progress || 0,
-        className: studentClassName,
-        classId: studentClassName, // Set classId for consistency
-        isClassmate: isSameClass,
-        subjects: studentData.subjects || [], // Add subjects if needed
-      };
-    })
-    .filter((student) => student.isClassmate);
-}, [students, currentUserClass]);
+        // Use classId if available, otherwise use className
+        const studentClassName =
+          studentData.classId || student.className || "Unknown";
+        const normalizedStudentClass = normalizeClassName(studentClassName);
+        const isSameClass = normalizedStudentClass === normalizedCurrentClass;
+
+        return {
+          ...student,
+          id: student.id || `student-${student.email}`,
+          first: student.first || "",
+          last: student.last || "",
+          fullName: studentData.fullName || `${student.first} ${student.last}`,
+          email: student.email || "",
+          progress: student.progress || 0,
+          className: studentClassName,
+          classId: studentClassName, // Set classId for consistency
+          isClassmate: isSameClass,
+          subjects: studentData.subjects || [], // Add subjects if needed
+        };
+      })
+      .filter((student) => student.isClassmate);
+  }, [students, currentUserClass]);
   // User info
   const [userInfo, setUserInfo] = useState({
     fullName: "Student Name",
