@@ -205,6 +205,22 @@ const AdminDashboard = () => {
   const [cardToDelete, setCardToDelete] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  // Add this useEffect to close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const dropdown = document.querySelector(".profile-dropdown-container");
+      if (dropdown && !dropdown.contains(event.target as Node)) {
+        setShowProfileDropdown(false);
+      }
+    };
+
+    if (showProfileDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showProfileDropdown]);
 
   // Fetch teachers & students
   useEffect(() => {
@@ -1093,23 +1109,180 @@ const AdminDashboard = () => {
                 <span className="notification-count">3</span>
               </button>
 
-              <button className="action-btn">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <circle
-                    cx="12"
-                    cy="6"
-                    r="4"
-                    stroke="#718096"
-                    strokeWidth="2"
-                  />
-                  <path
-                    d="M20 17.5C20 19.985 20 22 12 22C4 22 4 19.985 4 17.5C4 15.015 8.582 13 12 13C15.418 13 20 15.015 20 17.5Z"
-                    stroke="#718096"
-                    strokeWidth="2"
-                  />
-                </svg>
-                <span>Profile</span>
-              </button>
+              <div className="profile-dropdown-container">
+                <button
+                  className="action-btn"
+                  onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <circle
+                      cx="12"
+                      cy="6"
+                      r="4"
+                      stroke="#718096"
+                      strokeWidth="2"
+                    />
+                    <path
+                      d="M20 17.5C20 19.985 20 22 12 22C4 22 4 19.985 4 17.5C4 15.015 8.582 13 12 13C15.418 13 20 15.015 20 17.5Z"
+                      stroke="#718096"
+                      strokeWidth="2"
+                    />
+                  </svg>
+                  <span>Profile</span>
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    style={{ marginLeft: "4px", transition: "transform 0.2s" }}
+                    className={showProfileDropdown ? "dropdown-open" : ""}
+                  >
+                    <path
+                      d="M6 9L12 15L18 9"
+                      stroke="#718096"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+
+                {showProfileDropdown && (
+                  <div className="profile-dropdown">
+                    <div className="dropdown-header">
+                      <div className="dropdown-avatar">AD</div>
+                      <div>
+                        <div className="dropdown-name">Administrator</div>
+                        <div className="dropdown-email">{ADMIN_EMAIL}</div>
+                        <div className="dropdown-role">Super Admin</div>
+                      </div>
+                    </div>
+
+                    <div className="dropdown-divider"></div>
+
+                    <div className="dropdown-menu">
+                      <button className="dropdown-item">
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                        >
+                          <path
+                            d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12Z"
+                            stroke="#4a5568"
+                            strokeWidth="2"
+                          />
+                          <path
+                            d="M4 20V18C4 15.79 5.79 14 8 14H16C18.21 14 20 15.79 20 18V20"
+                            stroke="#4a5568"
+                            strokeWidth="2"
+                          />
+                        </svg>
+                        <span>My Profile</span>
+                      </button>
+
+                      <button className="dropdown-item">
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                        >
+                          <path
+                            d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z"
+                            stroke="#4a5568"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <path
+                            d="M19.4 15C21.176 12.479 21.176 8.52101 19.4 6C17.624 3.479 14.376 3.479 12.6 6"
+                            stroke="#4a5568"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <path
+                            d="M4.6 15C2.824 12.479 2.824 8.52101 4.6 6C6.376 3.479 9.624 3.479 11.4 6"
+                            stroke="#4a5568"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                        <span>Settings</span>
+                      </button>
+
+                      <button className="dropdown-item">
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                        >
+                          <path
+                            d="M12 15V3M12 15L8 11M12 15L16 11"
+                            stroke="#4a5568"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <path
+                            d="M2 17L2 21H22V17"
+                            stroke="#4a5568"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                        <span>Activity Log</span>
+                      </button>
+
+                      <div className="dropdown-divider"></div>
+
+                      <button
+                        className="dropdown-item logout-item"
+                        onClick={() => {
+                          // Add your logout logic here
+                          showSaveConfirmation("Logged out successfully!");
+                          setShowProfileDropdown(false);
+                        }}
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                        >
+                          <path
+                            d="M9 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H9"
+                            stroke="#e53e3e"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <path
+                            d="M16 17L21 12L16 7"
+                            stroke="#e53e3e"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <path
+                            d="M21 12H9"
+                            stroke="#e53e3e"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                        <span>Logout</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {showCardButton && (
                 <button
@@ -3354,6 +3527,191 @@ const AdminDashboard = () => {
             padding: 8px;
           }
         }
+        /* Profile Dropdown Styles */
+.profile-dropdown-container {
+  position: relative;
+}
+
+.profile-dropdown-container .action-btn {
+  position: relative;
+  padding-right: 12px;
+}
+
+.dropdown-open {
+  transform: rotate(180deg);
+}
+
+.profile-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  background: var(--card-bg);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  animation: dropdownSlideIn 0.2s ease;
+  overflow: hidden;
+}
+
+@keyframes dropdownSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-header {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--primary-light);
+}
+
+.dropdown-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.dropdown-name {
+  font-weight: 600;
+  font-size: 16px;
+  color: #2d3748;
+  margin-bottom: 4px;
+}
+
+.dropdown-email {
+  font-size: 13px;
+  color: var(--primary);
+  margin-bottom: 2px;
+  word-break: break-all;
+}
+
+.dropdown-role {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--bg);
+  padding: 2px 8px;
+  border-radius: 12px;
+  display: inline-block;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0;
+}
+
+.dropdown-menu {
+  padding: 8px 0;
+}
+
+.dropdown-item {
+  width: 100%;
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #4a5568;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+  text-align: left;
+}
+
+.dropdown-item:hover {
+  background: var(--bg);
+  color: var(--primary);
+}
+
+.dropdown-item:hover svg path {
+  stroke: var(--primary);
+}
+
+.dropdown-item.logout-item {
+  color: #e53e3e;
+}
+
+.dropdown-item.logout-item:hover {
+  background: rgba(229, 62, 62, 0.1);
+  color: #c53030;
+}
+
+.dropdown-item.logout-item:hover svg path {
+  stroke: #c53030;
+}
+
+/* Close dropdown when clicking outside */
+.profile-dropdown-container:focus-within .profile-dropdown {
+  display: block;
+}
+
+/* Mobile dropdown styles */
+@media (max-width: 768px) {
+  .profile-dropdown {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: mobileDropdownSlideUp 0.3s ease;
+  }
+  
+  @keyframes mobileDropdownSlideUp {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  
+  .dropdown-header {
+    padding: 16px;
+  }
+  
+  .dropdown-menu {
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+}
+
+/* Close button for mobile dropdown */
+@media (max-width: 768px) {
+  .dropdown-close-mobile {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--muted);
+    cursor: pointer;
+    z-index: 1001;
+    padding: 8px;
+  }
+}
       `}</style>
     </div>
   );
