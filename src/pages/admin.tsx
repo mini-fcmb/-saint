@@ -204,6 +204,7 @@ const AdminDashboard = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [cardToDelete, setCardToDelete] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Fetch teachers & students
   useEffect(() => {
@@ -888,84 +889,380 @@ const AdminDashboard = () => {
 
   return (
     <div className="dashboard-container">
-      <aside className="sidebar">
-        <h2>Admin Panel</h2>
+      <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
+        <div className="sidebar-header">
+          <div className="logo-container">
+            {/* Replace this div with your logo */}
+            <div className="logo-placeholder">
+              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                <circle cx="20" cy="20" r="20" fill="#4299e1" />
+                <path
+                  d="M12 20L18 26L28 14"
+                  stroke="white"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M12 20L18 26L28 14"
+                  stroke="white"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              {!sidebarCollapsed && <span className="logo-text">EduAdmin</span>}
+            </div>
+          </div>
+          <button
+            className="sidebar-toggle"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          >
+            {sidebarCollapsed ? "▶" : "◀"}
+          </button>
+        </div>
+
         <nav>
           <ul>
-            <li>Dashboard</li>
-            <li>Teachers</li>
-            <li>Students</li>
-            <li>Reports</li>
+            <li className="active">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
+              </svg>
+              {!sidebarCollapsed && <span>Dashboard</span>}
+            </li>
+            <li>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+              </svg>
+              {!sidebarCollapsed && <span>Teachers</span>}
+            </li>
+            <li>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+              </svg>
+              {!sidebarCollapsed && <span>Students</span>}
+            </li>
+            <li>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" />
+              </svg>
+              {!sidebarCollapsed && <span>Reports</span>}
+            </li>
+            <li>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" />
+              </svg>
+              {!sidebarCollapsed && <span>Settings</span>}
+            </li>
           </ul>
         </nav>
+
+        {!sidebarCollapsed && (
+          <div className="sidebar-footer">
+            <div className="user-info">
+              <div className="user-avatar">AD</div>
+              <div>
+                <div className="user-name">Administrator</div>
+                <div className="user-role">Super Admin</div>
+              </div>
+            </div>
+          </div>
+        )}
       </aside>
 
-      <main className="main-content">
+      <main className={`main-content ${sidebarCollapsed ? "expanded" : ""}`}>
         <div className="topbar">
-          <div className="search-container">
-            {showSearchBar ? (
-              <div className="search-input-wrapper">
-                <input
-                  type={isSecretMode ? "password" : "search"}
-                  placeholder={
-                    isSecretMode
-                      ? "Enter code..."
-                      : "Search teachers/students by name, email, class, or subject..."
-                  }
-                  value={searchInput}
-                  onChange={(e) => handleSearchInput(e.target.value)}
-                  autoFocus
-                  className={isSecretMode ? "secret-input" : ""}
-                />
-                {isSearching && searchQuery && (
-                  <div className="search-results-count">
-                    Found: {searchResults.teachers.length} teachers,{" "}
-                    {searchResults.students.length} students
-                  </div>
-                )}
-              </div>
-            ) : (
-              <input
-                type="search"
-                placeholder="Search students/teachers..."
-                onClick={() => {
-                  setShowSearchBar(true);
-                }}
-                readOnly
-              />
-            )}
-            {showSearchBar && (
-              <button
-                className="cancel-search"
-                onClick={() => {
-                  setShowSearchBar(false);
-                  setSearchInput("");
-                  setSearchQuery("");
-                  setIsSearching(false);
-                  setIsSecretMode(false);
-                  setSearchResults({
-                    teachers: [],
-                    students: [],
-                  });
-                  setShowCardButton(false);
-                  setShowCardList(false);
-                }}
-              >
-                Cancel
-              </button>
-            )}
+          <div className="page-title">
+            <h1>Admin Dashboard</h1>
+            <p className="breadcrumb">Home / Dashboard</p>
           </div>
-          <div className="topbar-actions">
-            {showCardButton && (
-              <button onClick={() => setShowCardList(!showCardList)}>
-                {showCardList ? "Hide Cards" : "View Cards"}
-                {secretUnlocked && <span className="secret-indicator">⚡</span>}
+
+          <div className="topbar-right">
+            <div className="search-container">
+              {showSearchBar ? (
+                <div className="search-input-wrapper">
+                  <input
+                    type={isSecretMode ? "password" : "search"}
+                    placeholder={
+                      isSecretMode
+                        ? "Enter code..."
+                        : "Search teachers/students ..."
+                    }
+                    value={searchInput}
+                    onChange={(e) => handleSearchInput(e.target.value)}
+                    autoFocus
+                    className={isSecretMode ? "secret-input" : ""}
+                  />
+                  {isSearching && searchQuery && (
+                    <div className="search-results-count">
+                      Found: {searchResults.teachers.length} teachers,{" "}
+                      {searchResults.students.length} students
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  className="search-trigger"
+                  onClick={() => setShowSearchBar(true)}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z"
+                      stroke="#718096"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M21 21L16.65 16.65"
+                      stroke="#718096"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span>Search students/teachers...</span>
+                </div>
+              )}
+              {showSearchBar && (
+                <button
+                  className="cancel-search"
+                  onClick={() => {
+                    setShowSearchBar(false);
+                    setSearchInput("");
+                    setSearchQuery("");
+                    setIsSearching(false);
+                    setIsSecretMode(false);
+                    setSearchResults({
+                      teachers: [],
+                      students: [],
+                    });
+                    setShowCardButton(false);
+                    setShowCardList(false);
+                  }}
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+
+            <div className="topbar-actions">
+              <button className="action-btn notification-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M18 8C18 6.4087 17.3679 4.88258 16.2426 3.75736C15.1174 2.63214 13.5913 2 12 2C10.4087 2 8.88258 2.63214 7.75736 3.75736C6.63214 4.88258 6 6.4087 6 8C6 15 3 17 3 17H21C21 17 18 15 18 8Z"
+                    stroke="#718096"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M13.73 21C13.5542 21.3031 13.3019 21.5547 12.9982 21.7295C12.6946 21.9044 12.3504 21.9965 12 21.9965C11.6496 21.9965 11.3054 21.9044 11.0018 21.7295C10.6982 21.5547 10.4458 21.3031 10.27 21"
+                    stroke="#718096"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <circle cx="17" cy="5" r="4" fill="#e53e3e" />
+                </svg>
+                <span className="notification-count">3</span>
               </button>
-            )}
-            <button>Notifications</button>
-            <button>Profile</button>
+
+              <button className="action-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <circle
+                    cx="12"
+                    cy="6"
+                    r="4"
+                    stroke="#718096"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M20 17.5C20 19.985 20 22 12 22C4 22 4 19.985 4 17.5C4 15.015 8.582 13 12 13C15.418 13 20 15.015 20 17.5Z"
+                    stroke="#718096"
+                    strokeWidth="2"
+                  />
+                </svg>
+                <span>Profile</span>
+              </button>
+
+              {showCardButton && (
+                <button
+                  className="action-btn special-btn"
+                  onClick={() => setShowCardList(!showCardList)}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <rect
+                      x="2"
+                      y="7"
+                      width="20"
+                      height="14"
+                      rx="2"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
+                    <path
+                      d="M7 7V5.5C7 4.11929 8.11929 3 9.5 3H14.5C15.8807 3 17 4.11929 17 5.5V7"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
+                    <path
+                      d="M12 11V17"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M15 14H9"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <span>{showCardList ? "Hide Cards" : "View Cards"}</span>
+                  {secretUnlocked && (
+                    <span className="secret-indicator">⚡</span>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Stats Cards */}
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div
+              className="stat-icon"
+              style={{ backgroundColor: "rgba(66, 153, 225, 0.1)" }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="#4299e1">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+              </svg>
+            </div>
+            <div className="stat-content">
+              <h3>{filteredTeachers.length}</h3>
+              <p>Total Teachers</p>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div
+              className="stat-icon"
+              style={{ backgroundColor: "rgba(56, 161, 105, 0.1)" }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="#38a169">
+                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+              </svg>
+            </div>
+            <div className="stat-content">
+              <h3>{filteredStudents.length}</h3>
+              <p>Total Students</p>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div
+              className="stat-icon"
+              style={{ backgroundColor: "rgba(214, 158, 46, 0.1)" }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="#d69e2e">
+                <path
+                  d="M4 6H20V16H4V6Z"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M22 10L18 10"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M6 10L2 10"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M12 20V16"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M10 16H14"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <div className="stat-content">
+              <h3>{scratchCards.filter((c) => c.isActive).length}</h3>
+              <p>Active Cards</p>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div
+              className="stat-icon"
+              style={{ backgroundColor: "rgba(229, 62, 62, 0.1)" }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="#e53e3e">
+                <path
+                  d="M12 2L2 7L12 12L22 7L12 2Z"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M2 17L12 22L22 17"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M2 12L12 17L22 12"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <div className="stat-content">
+              <h3>{availableClasses.length}</h3>
+              <p>Classes</p>
+            </div>
+          </div>
+        </div>
+
         {/* Search Results Section */}
         {isSearching && searchQuery && (
           <section className="management search-results-section">
@@ -1053,174 +1350,216 @@ const AdminDashboard = () => {
             )}
           </section>
         )}
+
         {/* Teacher Management */}
-        <section className="management">
-          <h2>Teacher Management</h2>
+        <div className="content-grid">
+          <section className="management">
+            <div className="section-header">
+              <h2>Teacher Management</h2>
+              <span className="section-subtitle">
+                Assign classes and subjects to teachers
+              </span>
+            </div>
 
-          <div className="row">
-            <select
-              value={selectedTeacherId || ""}
-              onChange={(e) => handleSelectTeacher(e.target.value)}
-            >
-              <option value="">Select Teacher</option>
-              {filteredTeachers.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.fullName}
-                </option>
-              ))}
-            </select>
-
-            <button onClick={handleSaveTeacher}>Save Teacher Profile</button>
-          </div>
-
-          {/* Teacher Classes Selection - Only show when teacher is selected */}
-          {selectedTeacherId && (
-            <div className="teacher-management-section">
-              <div className="section-header">
-                <h3>Select Classes</h3>
-                <button
-                  className="select-all-btn"
-                  onClick={() => {
-                    if (teacherClasses.length === availableClasses.length) {
-                      setTeacherClasses([]);
-                      setTeacherSubjectsByClass({});
-                    } else {
-                      setTeacherClasses([...availableClasses]);
-                      const newSubjects: { [key: string]: string[] } = {};
-                      availableClasses.forEach((cls) => {
-                        newSubjects[cls] = [];
-                      });
-                      setTeacherSubjectsByClass(newSubjects);
-                    }
-                  }}
-                >
-                  {teacherClasses.length === availableClasses.length
-                    ? "Deselect All"
-                    : "Select All"}
-                </button>
-              </div>
-
-              <div className="classes-grid">
-                {availableClasses.map((className) => (
-                  <label
-                    key={className}
-                    className={`class-checkbox ${
-                      teacherClasses.includes(className) ? "selected" : ""
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={teacherClasses.includes(className)}
-                      onChange={() => handleTeacherClassToggle(className)}
-                    />
-                    {className}
-                  </label>
+            <div className="row">
+              <select
+                value={selectedTeacherId || ""}
+                onChange={(e) => handleSelectTeacher(e.target.value)}
+              >
+                <option value="">Select Teacher</option>
+                {filteredTeachers.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.fullName}
+                  </option>
                 ))}
-              </div>
+              </select>
 
-              {/* Subjects for each selected class */}
-              {teacherClasses.length > 0 && (
-                <div className="subjects-management">
-                  <h3>Subjects per Class</h3>
-                  {teacherClasses.map((className) => (
-                    <div key={className} className="class-subjects-panel">
-                      <div className="panel-header">
-                        <h4>Subjects for {className}</h4>
-                        <button
-                          className="select-all-subjects-btn"
-                          onClick={() => handleSelectAllSubjects(className)}
-                        >
-                          {teacherSubjectsByClass[className]?.length ===
-                          SUBJECTS_BY_LEVEL[getClassLevel(className)].length
-                            ? "Deselect All"
-                            : "Select All"}
-                        </button>
-                      </div>
+              <button className="btn-primary" onClick={handleSaveTeacher}>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M17 3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.89 21 5 21H19C20.1 21 21 20.1 21 19V7L17 3ZM12 19C10.34 19 9 17.66 9 16C9 14.34 10.34 13 12 13C13.66 13 15 14.34 15 16C15 17.66 13.66 19 12 19ZM15 9H5V5H15V9Z" />
+                </svg>
+                Save Teacher Profile
+              </button>
+            </div>
 
-                      <div className="subjects-grid">
-                        {SUBJECTS_BY_LEVEL[getClassLevel(className)].map(
-                          (subject) => (
-                            <label
-                              key={subject}
-                              className={`subject-checkbox ${
-                                teacherSubjectsByClass[className]?.includes(
-                                  subject
-                                )
-                                  ? "selected"
-                                  : ""
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={
-                                  teacherSubjectsByClass[className]?.includes(
-                                    subject
-                                  ) || false
-                                }
-                                onChange={() =>
-                                  handleTeacherSubjectToggle(className, subject)
-                                }
-                              />
-                              {subject}
-                            </label>
-                          )
-                        )}
-                      </div>
-                    </div>
+            {/* Teacher Classes Selection - Only show when teacher is selected */}
+            {selectedTeacherId && (
+              <div className="teacher-management-section">
+                <div className="section-header">
+                  <h3>Select Classes</h3>
+                  <button
+                    className="select-all-btn"
+                    onClick={() => {
+                      if (teacherClasses.length === availableClasses.length) {
+                        setTeacherClasses([]);
+                        setTeacherSubjectsByClass({});
+                      } else {
+                        setTeacherClasses([...availableClasses]);
+                        const newSubjects: { [key: string]: string[] } = {};
+                        availableClasses.forEach((cls) => {
+                          newSubjects[cls] = [];
+                        });
+                        setTeacherSubjectsByClass(newSubjects);
+                      }
+                    }}
+                  >
+                    {teacherClasses.length === availableClasses.length
+                      ? "Deselect All"
+                      : "Select All"}
+                  </button>
+                </div>
+
+                <div className="classes-grid">
+                  {availableClasses.map((className) => (
+                    <label
+                      key={className}
+                      className={`class-checkbox ${
+                        teacherClasses.includes(className) ? "selected" : ""
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={teacherClasses.includes(className)}
+                        onChange={() => handleTeacherClassToggle(className)}
+                      />
+                      {className}
+                    </label>
                   ))}
                 </div>
-              )}
+
+                {/* Subjects for each selected class */}
+                {teacherClasses.length > 0 && (
+                  <div className="subjects-management">
+                    <h3>Subjects per Class</h3>
+                    {teacherClasses.map((className) => (
+                      <div key={className} className="class-subjects-panel">
+                        <div className="panel-header">
+                          <h4>Subjects for {className}</h4>
+                          <button
+                            className="select-all-subjects-btn"
+                            onClick={() => handleSelectAllSubjects(className)}
+                          >
+                            {teacherSubjectsByClass[className]?.length ===
+                            SUBJECTS_BY_LEVEL[getClassLevel(className)].length
+                              ? "Deselect All"
+                              : "Select All"}
+                          </button>
+                        </div>
+
+                        <div className="subjects-grid">
+                          {SUBJECTS_BY_LEVEL[getClassLevel(className)].map(
+                            (subject) => (
+                              <label
+                                key={subject}
+                                className={`subject-checkbox ${
+                                  teacherSubjectsByClass[className]?.includes(
+                                    subject
+                                  )
+                                    ? "selected"
+                                    : ""
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    teacherSubjectsByClass[className]?.includes(
+                                      subject
+                                    ) || false
+                                  }
+                                  onChange={() =>
+                                    handleTeacherSubjectToggle(
+                                      className,
+                                      subject
+                                    )
+                                  }
+                                />
+                                {subject}
+                              </label>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* Promote Students */}
+          <section className="management">
+            <div className="section-header">
+              <h2>Promote Students</h2>
+              <span className="section-subtitle">
+                Move students to next class
+              </span>
             </div>
-          )}
-        </section>
+            <div className="row">
+              <select
+                value={oldClass}
+                onChange={(e) => setOldClass(e.target.value)}
+              >
+                <option value="">From Class</option>
+                {availableClasses.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
 
-        {/* Promote Students */}
-        <section className="management">
-          <h2>Promote Students</h2>
-          <div className="row">
-            <select
-              value={oldClass}
-              onChange={(e) => setOldClass(e.target.value)}
-            >
-              <option value="">From Class</option>
-              {availableClasses.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              <select
+                value={newClass}
+                onChange={(e) => setNewClass(e.target.value)}
+              >
+                <option value="">To Class</option>
+                {availableClasses.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
 
-            <select
-              value={newClass}
-              onChange={(e) => setNewClass(e.target.value)}
-            >
-              <option value="">To Class</option>
-              {availableClasses.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-
-            <button onClick={handlePromoteStudents}>Promote</button>
-          </div>
-
-          {oldClass && (
-            <div className="promotion-info">
-              <p>
-                <strong>
-                  {students.filter((s) => s.className === oldClass).length}
-                </strong>{" "}
-                students in {oldClass}
-              </p>
+              <button className="btn-primary" onClick={handlePromoteStudents}>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M16 6L18.29 8.29L13.41 13.17L9.41 9.17L2 16.59L3.41 18L9.41 12L13.41 16L19.71 9.71L22 12V6H16Z" />
+                </svg>
+                Promote
+              </button>
             </div>
-          )}
-        </section>
+
+            {oldClass && (
+              <div className="promotion-info">
+                <p>
+                  <strong>
+                    {students.filter((s) => s.className === oldClass).length}
+                  </strong>{" "}
+                  students in {oldClass}
+                </p>
+              </div>
+            )}
+          </section>
+        </div>
+
         {!isSearching && (
-          <>
+          <div className="content-grid full-width">
             {/* Students Table */}
             <section className="management">
-              <h2>All Students ({filteredStudents.length})</h2>
+              <div className="section-header">
+                <h2>All Students ({filteredStudents.length})</h2>
+                <span className="section-subtitle">
+                  Manage student information
+                </span>
+              </div>
               <div className="table-wrap">
                 <table>
                   <thead>
@@ -1234,9 +1573,18 @@ const AdminDashboard = () => {
                   <tbody>
                     {filteredStudents.map((s) => (
                       <tr key={s.id}>
-                        <td>{s.fullName}</td>
+                        <td>
+                          <div className="user-cell">
+                            <div className="user-avatar-small">S</div>
+                            <span>{s.fullName}</span>
+                          </div>
+                        </td>
                         <td>{s.email || "N/A"}</td>
-                        <td>{s.className || "N/A"}</td>
+                        <td>
+                          <span className="class-badge">
+                            {s.className || "N/A"}
+                          </span>
+                        </td>
                         <td>{renderStudentSubjects(s)}</td>
                       </tr>
                     ))}
@@ -1247,7 +1595,12 @@ const AdminDashboard = () => {
 
             {/* Teachers Table */}
             <section className="management">
-              <h2>All Teachers ({filteredTeachers.length})</h2>
+              <div className="section-header">
+                <h2>All Teachers ({filteredTeachers.length})</h2>
+                <span className="section-subtitle">
+                  Manage teacher information
+                </span>
+              </div>
               <div className="table-wrap">
                 <table>
                   <thead>
@@ -1260,7 +1613,12 @@ const AdminDashboard = () => {
                   <tbody>
                     {filteredTeachers.map((t) => (
                       <tr key={t.id}>
-                        <td>{t.fullName}</td>
+                        <td>
+                          <div className="user-cell">
+                            <div className="user-avatar-small">T</div>
+                            <span>{t.fullName}</span>
+                          </div>
+                        </td>
                         <td>{t.email || "N/A"}</td>
                         <td>{renderTeacherClassesAndSubjects(t)}</td>
                       </tr>
@@ -1269,7 +1627,7 @@ const AdminDashboard = () => {
                 </table>
               </div>
             </section>
-          </>
+          </div>
         )}
         {/* Scratch Cards List Section */}
         {showCardList && (
@@ -1372,7 +1730,17 @@ const AdminDashboard = () => {
                   {scratchCards.length === 0 && (
                     <tr>
                       <td colSpan={7} className="no-data">
-                        No scratch cards created yet.
+                        <div className="empty-state">
+                          <svg
+                            width="64"
+                            height="64"
+                            viewBox="0 0 24 24"
+                            fill="#718096"
+                          >
+                            <path d="M20 4H4C2.9 4 2 4.9 2 6V18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V6C22 4.9 21.1 4 20 4ZM20 18H4V12H20V18ZM20 8H4V6H20V8Z" />
+                          </svg>
+                          <p>No scratch cards created yet.</p>
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -1381,8 +1749,6 @@ const AdminDashboard = () => {
             </div>
           </section>
         )}
-
-        {/* Subject Selection Modal for SS2/SS3 Promotion */}
 
         {/* Subject Selection Modal for SS2/SS3 Promotion */}
         {showSubjectModal && (
@@ -1607,23 +1973,6 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* Save Confirmation Popup */}
-        {showSavePopup && (
-          <div className="modal-overlay">
-            <div className="save-popup">
-              <div className={`popup-content ${savePopupType}`}>
-                <div className="popup-icon">
-                  {savePopupType === "success" ? "✅" : "❌"}
-                </div>
-                <h3>{savePopupType === "success" ? "Success!" : "Error!"}</h3>
-                <p>{savePopupMessage}</p>
-                <div className="popup-progress">
-                  <div className="progress-bar"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
         {/* Delete Confirmation Modal */}
         {showDeleteModal && cardToDelete && (
           <div className="modal-overlay">
@@ -1686,40 +2035,112 @@ const AdminDashboard = () => {
 
       <style>{`
         :root { 
-          --primary: #2b6cb0; 
+          --primary: #4299e1; 
+          --primary-light: rgba(66, 153, 225, 0.1);
+          --primary-hover: #3182ce;
           --success: #38a169;
+          --success-light: rgba(56, 161, 105, 0.1);
           --danger: #e53e3e;
+          --danger-light: rgba(229, 62, 62, 0.1);
           --warning: #d69e2e;
+          --warning-light: rgba(214, 158, 46, 0.1);
           --muted: #718096;
-          --bg: #f7f8fc;
+          --bg: #f7fafc;
           --border: #e2e8f0;
           --card-bg: #ffffff;
+          --sidebar-width: 260px;
+          --sidebar-collapsed: 80px;
+          --topbar-height: 70px;
         }
         
         * {
           box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+        }
+        
+        body {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          background-color: var(--bg);
+          color: #2d3748;
         }
         
         .dashboard-container { 
           display: flex; 
-          height: 100vh; 
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+          min-height: 100vh;
           background: var(--bg);
         }
         
+        /* Sidebar Styles */
         .sidebar { 
-          width: 250px; 
-          background: var(--card-bg); 
-          padding: 24px; 
+          width: var(--sidebar-width);
+          background: var(--card-bg);
           border-right: 1px solid var(--border);
-          box-shadow: 2px 0 8px rgba(0,0,0,0.05);
+          display: flex;
+          flex-direction: column;
+          transition: width 0.3s ease;
+          position: fixed;
+          height: 100vh;
+          z-index: 100;
+          box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
         }
         
-        .sidebar h2 { 
-          margin: 0 0 24px 0; 
-          font-size: 20px; 
-          color: #2d3748;
+        .sidebar.collapsed {
+          width: var(--sidebar-collapsed);
+        }
+        
+        .sidebar-header {
+          padding: 20px 16px;
+          border-bottom: 1px solid var(--border);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          height: var(--topbar-height);
+        }
+        
+        .logo-container {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        
+        .logo-placeholder {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 8px;
+          border-radius: 8px;
+          background: var(--primary-light);
+        }
+        
+        .logo-text {
+          font-size: 18px;
           font-weight: 600;
+          color: var(--primary);
+        }
+        
+        .sidebar-toggle {
+          background: none;
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          color: var(--muted);
+          transition: all 0.2s;
+        }
+        
+        .sidebar-toggle:hover {
+          background: var(--primary-light);
+          color: var(--primary);
+        }
+        
+        .sidebar nav {
+          flex: 1;
+          padding: 20px 0;
         }
         
         .sidebar ul { 
@@ -1729,127 +2150,316 @@ const AdminDashboard = () => {
         }
         
         .sidebar li { 
-          padding: 12px 16px; 
+          padding: 12px 20px; 
           color: #4a5568;
           cursor: pointer;
-          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
           transition: all 0.2s;
-          margin-bottom: 4px;
+          margin: 4px 8px;
+          border-radius: 8px;
           font-weight: 500;
         }
         
         .sidebar li:hover {
-          background: #edf2f7;
+          background: var(--primary-light);
           color: var(--primary);
         }
         
-        .main-content { 
-          flex: 1; 
-          padding: 24px; 
-          overflow: auto; 
+        .sidebar li.active {
+          background: var(--primary);
+          color: white;
         }
         
-        .topbar { 
-          display: flex; 
-          justify-content: space-between; 
-          align-items: center;
-          margin-bottom: 24px; 
-          gap: 16px; 
+        .sidebar li.active svg {
+          fill: white;
         }
         
-        .topbar input { 
-          flex: 1;
-          padding: 10px 16px; 
-          border-radius: 8px; 
-          border: 1px solid var(--border);
-          font-size: 14px;
-          max-width: 400px;
+        .sidebar-footer {
+          padding: 20px 16px;
+          border-top: 1px solid var(--border);
         }
         
-        .topbar input:focus {
-          outline: none;
-          border-color: var(--primary);
-          box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.1);
-        }
-        
-        .topbar-actions {
+        .user-info {
           display: flex;
+          align-items: center;
           gap: 12px;
         }
         
-        button {
-          padding: 10px 20px;
-          border-radius: 8px;
-          border: 1px solid var(--border);
-          background: var(--card-bg);
-          cursor: pointer;
-          font-size: 14px;
-          font-weight: 500;
-          transition: all 0.2s;
-          color: #4a5568;
-        }
-        
-        button:hover {
-          background: #f7fafc;
-          border-color: #cbd5e0;
-          transform: translateY(-1px);
-        }
-        
-        .btn-primary {
+        .user-avatar {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
           background: var(--primary);
           color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 600;
+        }
+        
+        .user-name {
+          font-weight: 600;
+          font-size: 14px;
+          color: #2d3748;
+        }
+        
+        .user-role {
+          font-size: 12px;
+          color: var(--muted);
+        }
+        
+        /* Main Content Styles */
+        .main-content { 
+          flex: 1; 
+          padding: 24px; 
+          margin-left: var(--sidebar-width);
+          transition: margin-left 0.3s ease;
+        }
+        
+        .main-content.expanded {
+          margin-left: var(--sidebar-collapsed);
+        }
+        
+        /* Topbar Styles */
+        .topbar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 30px;
+          padding-bottom: 20px;
+          border-bottom: 1px solid var(--border);
+        }
+        
+        .topbar-right {
+          display: flex;
+          align-items: center;
+          gap: 20px;
+        }
+        
+        .page-title h1 {
+          font-size: 24px;
+          font-weight: 700;
+          color: #2d3748;
+          margin-bottom: 4px;
+        }
+        
+        .breadcrumb {
+          font-size: 14px;
+          color: var(--muted);
+        }
+        
+        /* Search Styles */
+        .search-container {
+          position: relative;
+          min-width: 300px;
+        }
+        
+        .search-trigger {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 16px;
+          background: var(--card-bg);
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          cursor: pointer;
+          color: var(--muted);
+          transition: all 0.2s;
+        }
+        
+        .search-trigger:hover {
           border-color: var(--primary);
         }
         
-        .btn-primary:hover {
-          background: #2c5282;
-          border-color: #2c5282;
+        .search-input-wrapper {
+          position: relative;
         }
         
-        .btn-secondary {
-          background: #edf2f7;
-          color: #4a5568;
-          border-color: #cbd5e0;
+        .search-input-wrapper input {
+          width: 100%;
+          padding: 12px 16px;
+          border: 2px solid var(--primary);
+          border-radius: 8px;
+          font-size: 14px;
+          background: var(--card-bg);
+          transition: all 0.2s;
         }
         
-        .btn-secondary:hover {
-          background: #e2e8f0;
+        .search-input-wrapper input:focus {
+          outline: none;
+          box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
         }
         
-        .btn-primary:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-          transform: none;
+        .cancel-search {
+          position: absolute;
+          right: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          background: var(--primary);
+          color: white;
+          border: none;
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-size: 12px;
+          cursor: pointer;
+          transition: background-color 0.5s;
         }
         
+        .cancel-search:hover {
+          background: var(--primary-hover);
+          transform: translateY(-45%) !important; 
+        }
+        
+        /* Topbar Actions */
+        .topbar-actions {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+        
+        .action-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 16px;
+          background: var(--card-bg);
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          color: var(--muted);
+          transition: all 0.2s;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+        }
+        
+        .action-btn:hover {
+          border-color: var(--primary);
+          color: var(--primary);
+        }
+        
+        .notification-btn {
+          position: relative;
+        }
+        
+        .notification-count {
+          position: absolute;
+          top: -8px;
+          right: -8px;
+          background: var(--danger);
+          color: white;
+          font-size: 10px;
+          padding: 2px 6px;
+          border-radius: 10px;
+          min-width: 18px;
+          text-align: center;
+        }
+        
+        .special-btn {
+          background: var(--primary-light);
+          color: var(--primary);
+          border-color: rgba(66, 153, 225, 0.3);
+        }
+        
+        .secret-indicator {
+          animation: pulse 2s infinite;
+          font-size: 12px;
+        }
+        
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+          gap: 20px;
+          margin-bottom: 30px;
+        }
+        
+        .stat-card {
+          background: var(--card-bg);
+          border-radius: 12px;
+          padding: 24px;
+          border: 1px solid var(--border);
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .stat-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+        }
+        
+        .stat-icon {
+          width: 56px;
+          height: 56px;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .stat-content h3 {
+          font-size: 28px;
+          font-weight: 700;
+          color: #2d3748;
+          margin-bottom: 4px;
+        }
+        
+        .stat-content p {
+          font-size: 14px;
+          color: var(--muted);
+        }
+        
+        /* Content Grid */
+        .content-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 24px;
+          margin-bottom: 24px;
+        }
+        
+        .content-grid.full-width {
+          grid-template-columns: 1fr;
+        }
+        
+        /* Management Sections */
         .management { 
           background: var(--card-bg); 
           padding: 24px; 
           border-radius: 12px; 
-          margin-bottom: 24px; 
           border: 1px solid var(--border);
-          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+          transition: box-shadow 0.2s;
+        }
+        
+        .management:hover {
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         }
         
         .management h2 {
-          margin: 0 0 20px 0;
+          margin: 0 0 4px 0;
           font-size: 18px;
           color: #2d3748;
           font-weight: 600;
         }
         
-        .management h3 {
-          margin: 0 0 16px 0;
-          font-size: 16px;
-          color: #4a5568;
-          font-weight: 600;
+        .section-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 20px;
         }
         
-        .management h4 {
-          margin: 0;
-          font-size: 15px;
-          color: #4a5568;
-          font-weight: 600;
+        .section-subtitle {
+          font-size: 14px;
+          color: var(--muted);
         }
         
         .row { 
@@ -1861,43 +2471,98 @@ const AdminDashboard = () => {
         }
         
         select { 
-          padding: 10px 16px; 
+          padding: 12px 16px; 
           border-radius: 8px; 
           border: 1px solid var(--border);
           background: var(--card-bg);
           font-size: 14px;
           min-width: 200px;
           color: #4a5568;
+          transition: border-color 0.2s;
         }
         
         select:focus {
           outline: none;
           border-color: var(--primary);
-          box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.1);
+          box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
         }
         
+        /* Buttons */
+        button {
+          padding: 12px 20px;
+          border-radius: 8px;
+          border: none;
+          background: var(--card-bg);
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          transition: all 0.2s;
+          color: #4a5568;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          border: 1px solid var(--border);
+        }
+        
+        button:hover {
+          transform: translateY(-1px);
+        }
+        
+        .btn-primary {
+          background: var(--primary);
+          color: white;
+          border-color: var(--primary);
+        }
+        
+        .btn-primary:hover {
+          background: var(--primary-hover);
+          border-color: var(--primary-hover);
+        }
+        
+        .btn-secondary {
+          background: var(--card-bg);
+          color: #4a5568;
+          border-color: var(--border);
+        }
+        
+        .btn-secondary:hover {
+          background: #f7fafc;
+        }
+        
+        .btn-danger {
+          background: var(--danger);
+          color: white;
+          border-color: var(--danger);
+        }
+        
+        .btn-danger:hover {
+          background: #c53030;
+          border-color: #c53030;
+        }
+        
+        .btn-primary:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          transform: none;
+        }
+        
+        /* Teacher Management */
         .teacher-management-section {
           margin-top: 20px;
           padding-top: 20px;
           border-top: 1px solid var(--border);
         }
         
-        .section-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 16px;
-        }
-        
         .select-all-btn, .select-all-subjects-btn {
           padding: 8px 16px;
           font-size: 13px;
-          background: #edf2f7;
+          background: var(--primary-light);
+          color: var(--primary);
           border: none;
         }
         
         .select-all-btn:hover, .select-all-subjects-btn:hover {
-          background: #e2e8f0;
+          background: rgba(66, 153, 225, 0.2);
         }
         
         .classes-grid {
@@ -1917,16 +2582,16 @@ const AdminDashboard = () => {
           cursor: pointer;
           transition: all 0.2s;
           font-weight: 500;
+          justify-content: center;
         }
         
         .class-checkbox:hover {
-          border-color: #cbd5e0;
-          background: #f7fafc;
+          border-color: var(--primary);
         }
         
         .class-checkbox.selected {
           border-color: var(--primary);
-          background: rgba(43, 108, 176, 0.1);
+          background: var(--primary-light);
           color: var(--primary);
         }
         
@@ -1939,10 +2604,10 @@ const AdminDashboard = () => {
         }
         
         .class-subjects-panel {
-          background: #f7fafc;
+          background: var(--bg);
           border: 1px solid var(--border);
           border-radius: 8px;
-          padding: 16px;
+          padding: 20px;
           margin-bottom: 16px;
         }
         
@@ -1959,25 +2624,13 @@ const AdminDashboard = () => {
           gap: 12px;
         }
         
-        .subjects-grid-modal {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-          gap: 12px;
-          max-height: 400px;
-          overflow-y: auto;
-          padding: 16px;
-          background: #f7fafc;
-          border-radius: 8px;
-          margin: 16px 0;
-        }
-        
         .subject-checkbox {
           display: flex;
           align-items: center;
           gap: 8px;
-          padding: 10px 12px;
+          padding: 12px;
           border: 1px solid var(--border);
-          border-radius: 6px;
+          border-radius: 8px;
           cursor: pointer;
           transition: all 0.2s;
           font-size: 14px;
@@ -1985,23 +2638,18 @@ const AdminDashboard = () => {
         }
         
         .subject-checkbox:hover {
-          border-color: #cbd5e0;
-          background: #f7fafc;
+          border-color: var(--primary);
         }
         
         .subject-checkbox.selected {
           border-color: var(--primary);
-          background: rgba(43, 108, 176, 0.1);
+          background: var(--primary-light);
           color: var(--primary);
         }
         
-        .subject-checkbox input {
-          margin: 0;
-        }
-        
         .promotion-info {
-          background: #f0fff4;
-          border: 1px solid #c6f6d5;
+          background: var(--success-light);
+          border: 1px solid rgba(56, 161, 105, 0.3);
           border-radius: 8px;
           padding: 16px;
           margin-top: 16px;
@@ -2012,10 +2660,12 @@ const AdminDashboard = () => {
           color: #276749;
         }
         
+        /* Tables */
         .table-wrap { 
           overflow: auto; 
           border: 1px solid var(--border);
           border-radius: 8px;
+          margin-top: 16px;
         }
         
         table { 
@@ -2027,22 +2677,52 @@ const AdminDashboard = () => {
           border-bottom: 1px solid var(--border); 
           padding: 16px; 
           text-align: left; 
-          vertical-align: top; 
+          vertical-align: middle; 
         }
         
         th { 
-          background: #f7fafc; 
+          background: var(--bg); 
           font-weight: 600; 
           color: #4a5568;
-          font-size: 14px;
+          font-size: 12px;
           text-transform: uppercase;
           letter-spacing: 0.05em;
+          white-space: nowrap;
         }
         
         tr:hover {
-          background: #f7fafc;
+          background: var(--bg);
         }
         
+        .user-cell {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        
+        .user-avatar-small {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: var(--primary-light);
+          color: var(--primary);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 600;
+          font-size: 12px;
+        }
+        
+        .class-badge {
+          padding: 4px 12px;
+          background: var(--primary-light);
+          color: var(--primary);
+          border-radius: 16px;
+          font-size: 12px;
+          font-weight: 500;
+        }
+        
+        /* Teacher and Student Details */
         .teacher-classes-cell, .subjects-cell {
           display: flex;
           flex-direction: column;
@@ -2052,7 +2732,7 @@ const AdminDashboard = () => {
         .mini-toggle {
           display: flex;
           align-items: center;
-          gap: 8px;
+          justify-content: space-between;
           padding: 8px 12px;
           border-radius: 6px;
           border: 1px solid var(--border);
@@ -2061,21 +2741,18 @@ const AdminDashboard = () => {
           font-size: 14px;
           color: #4a5568;
           transition: all 0.2s;
+          width: fit-content;
+          min-width: 120px;
         }
         
         .mini-toggle:hover {
-          border-color: #cbd5e0;
-          background: #f7fafc;
-        }
-        
-        .mini-toggle .chev {
-          font-size: 12px;
-          color: var(--muted);
+          border-color: var(--primary);
+          color: var(--primary);
         }
         
         .teacher-details {
           padding: 16px;
-          background: #f7fafc;
+          background: var(--bg);
           border-radius: 8px;
           border: 1px solid var(--border);
         }
@@ -2097,11 +2774,11 @@ const AdminDashboard = () => {
         
         .chip {
           padding: 4px 12px;
-          background: #edf2f7;
+          background: var(--card-bg);
           border-radius: 16px;
           font-size: 13px;
           color: #4a5568;
-          border: 1px solid #cbd5e0;
+          border: 1px solid var(--border);
         }
         
         .subjects-list {
@@ -2120,7 +2797,7 @@ const AdminDashboard = () => {
           font-style: italic;
         }
         
-        /* Modal Styles */
+        /* Modals */
         .modal-overlay {
           position: fixed;
           top: 0;
@@ -2138,14 +2815,14 @@ const AdminDashboard = () => {
         
         .modal {
           background: var(--card-bg);
-          border-radius: 12px;
+          border-radius: 16px;
           width: 100%;
-          max-width: 800px;
+          max-width: 500px;
           max-height: 90vh;
           overflow: hidden;
           display: flex;
           flex-direction: column;
-          box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
           animation: modalSlideIn 0.3s ease;
         }
         
@@ -2161,7 +2838,7 @@ const AdminDashboard = () => {
         }
         
         .modal-header {
-          padding: 20px 24px;
+          padding: 24px;
           border-bottom: 1px solid var(--border);
           display: flex;
           justify-content: space-between;
@@ -2190,19 +2867,13 @@ const AdminDashboard = () => {
         }
         
         .modal-close:hover {
-          background: #edf2f7;
-          color: #4a5568;
+          background: var(--bg);
         }
         
         .modal-body {
           flex: 1;
           padding: 24px;
           overflow-y: auto;
-        }
-        
-        .modal-body p {
-          margin: 0 0 16px 0;
-          color: #4a5568;
         }
         
         .modal-footer {
@@ -2213,7 +2884,160 @@ const AdminDashboard = () => {
           gap: 12px;
         }
         
-        /* Save Confirmation Popup */
+        /* Scratch Card Styles */
+        .input-with-button {
+          display: flex;
+          gap: 8px;
+        }
+        
+        .generate-btn {
+          padding: 8px 16px;
+          font-size: 13px;
+          background: var(--primary-light);
+          color: var(--primary);
+          border: none;
+          white-space: nowrap;
+        }
+        
+        .form-group {
+          margin-bottom: 20px;
+        }
+        
+        .form-group label {
+          display: block;
+          margin-bottom: 8px;
+          font-weight: 500;
+          color: #4a5568;
+        }
+        
+        .form-group input {
+          width: 100%;
+          padding: 12px 16px;
+          border-radius: 8px;
+          border: 1px solid var(--border);
+          font-size: 14px;
+          background: var(--card-bg);
+        }
+        
+        .form-group input:focus {
+          outline: none;
+          border-color: var(--primary);
+          box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+        }
+        
+        .generated-cards {
+          margin-top: 24px;
+          padding: 20px;
+          background: var(--bg);
+          border-radius: 8px;
+          border: 1px solid var(--border);
+        }
+        
+        .generated-cards h4 {
+          margin: 0 0 16px 0;
+          font-size: 14px;
+          color: #4a5568;
+        }
+        
+        .card-preview {
+          padding: 12px;
+          background: var(--card-bg);
+          border-radius: 8px;
+          margin-bottom: 8px;
+          border: 1px solid var(--border);
+        }
+        
+        .card-preview:last-child {
+          margin-bottom: 0;
+        }
+        
+        /* Usage Bar */
+        .usage-info {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        
+        .usage-count {
+          font-weight: 500;
+          color: #4a5568;
+        }
+        
+        .usage-bar {
+          height: 6px;
+          background: var(--border);
+          border-radius: 3px;
+          overflow: hidden;
+        }
+        
+        .usage-fill {
+          height: 100%;
+          transition: width 0.3s ease;
+        }
+        
+        /* Status Badge */
+        .status-badge {
+          display: inline-block;
+          padding: 4px 12px;
+          border-radius: 16px;
+          font-size: 12px;
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        
+        .status-badge.active {
+          background: rgba(56, 161, 105, 0.1);
+          color: #276749;
+        }
+        
+        .status-badge.inactive {
+          background: rgba(229, 62, 62, 0.1);
+          color: #9b2c2c;
+        }
+        
+        /* Card Actions */
+        .card-actions {
+          display: flex;
+          gap: 8px;
+        }
+        
+        .toggle-btn {
+          padding: 6px 12px;
+          font-size: 12px;
+          background: var(--primary-light);
+          color: var(--primary);
+          border: none;
+        }
+        
+        .delete-btn {
+          padding: 6px 12px;
+          font-size: 12px;
+          background: rgba(229, 62, 62, 0.1);
+          color: #e53e3e;
+          border: none;
+        }
+        
+        .delete-btn:hover {
+          background: rgba(229, 62, 62, 0.2);
+        }
+        
+        .inactive-card {
+          opacity: 0.6;
+        }
+        
+        /* Empty State */
+        .empty-state {
+          text-align: center;
+          padding: 40px;
+        }
+        
+        .empty-state p {
+          margin-top: 16px;
+          color: var(--muted);
+        }
+        
+        /* Save Popup */
         .save-popup {
           width: 100%;
           max-width: 400px;
@@ -2234,9 +3058,9 @@ const AdminDashboard = () => {
         .popup-content {
           background: var(--card-bg);
           border-radius: 12px;
-          padding: 24px;
+          padding: 32px;
           text-align: center;
-          box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
         }
         
         .popup-content.success {
@@ -2249,25 +3073,25 @@ const AdminDashboard = () => {
         
         .popup-icon {
           font-size: 48px;
-          margin-bottom: 16px;
+          margin-bottom: 20px;
         }
         
         .popup-content h3 {
           margin: 0 0 12px 0;
-          font-size: 18px;
+          font-size: 20px;
           color: #2d3748;
         }
         
         .popup-content p {
-          margin: 0 0 20px 0;
+          margin: 0 0 24px 0;
           color: #4a5568;
-          font-size: 14px;
+          font-size: 16px;
           line-height: 1.5;
         }
         
         .popup-progress {
           height: 4px;
-          background: #e2e8f0;
+          background: var(--border);
           border-radius: 2px;
           overflow: hidden;
         }
@@ -2293,25 +3117,159 @@ const AdminDashboard = () => {
           }
         }
         
-        /* Responsive Design */
-        @media (max-width: 768px) {
-          .dashboard-container {
-            flex-direction: column;
+        /* Warning Message */
+        .warning-message {
+          text-align: center;
+          padding: 20px;
+        }
+        
+        .warning-icon {
+          font-size: 48px;
+          margin-bottom: 20px;
+        }
+        
+        .warning-message h4 {
+          color: #9b2c2c;
+          margin: 0 0 16px 0;
+        }
+        
+        .warning-message ul {
+          text-align: left;
+          margin: 20px 0;
+          padding-left: 24px;
+        }
+        
+        .warning-message li {
+          margin: 8px 0;
+          color: #4a5568;
+        }
+        
+        .warning-note {
+          background: #fffaf0;
+          border-left: 4px solid #d69e2e;
+          padding: 16px;
+          margin: 20px 0 0 0;
+          text-align: left;
+          border-radius: 4px;
+          font-size: 14px;
+        }
+        
+        /* Secret Input */
+        .secret-input {
+          letter-spacing: 2px;
+          font-family: monospace;
+        }
+        
+        .secret-input::placeholder {
+          color: var(--muted);
+          opacity: 0.8;
+        }
+        
+        /* Search Results */
+        .search-results-section {
+          margin-top: 0;
+          border-top: 3px solid var(--primary);
+        }
+        
+        .search-results-group {
+          margin-bottom: 32px;
+        }
+        
+        .search-results-group:last-child {
+          margin-bottom: 0;
+        }
+        
+        .search-results-group h3 {
+          margin: 0 0 16px 0;
+          font-size: 16px;
+          color: #4a5568;
+          font-weight: 600;
+          padding-bottom: 12px;
+          border-bottom: 1px solid var(--border);
+        }
+        
+        .no-results {
+          text-align: center;
+          padding: 60px 40px;
+          background: var(--bg);
+          border-radius: 12px;
+          border: 2px dashed var(--border);
+        }
+        
+        .no-results p {
+          margin: 0;
+          color: var(--muted);
+          font-size: 16px;
+        }
+        
+        .search-highlight {
+          background-color: #fff3cd;
+          padding: 2px 4px;
+          border-radius: 3px;
+          font-weight: 600;
+        }
+        
+        /* Media Queries */
+        @media (max-width: 1200px) {
+          .content-grid {
+            grid-template-columns: 1fr;
           }
           
+          .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+        
+        @media (max-width: 992px) {
           .sidebar {
+            transform: translateX(-100%);
+            z-index: 1000;
+          }
+          
+          .sidebar.collapsed {
+            transform: translateX(0);
+          }
+          
+          .main-content {
+            margin-left: 0;
             width: 100%;
-            height: auto;
-            position: relative;
+          }
+          
+          .main-content.expanded {
+            margin-left: 0;
+          }
+          
+          .topbar {
+            flex-direction: column;
+            gap: 20px;
+            align-items: stretch;
+          }
+          
+          .topbar-right {
+            flex-direction: column;
+            gap: 16px;
+          }
+          
+          .search-container {
+            min-width: 100%;
+          }
+        }
+        
+        @media (max-width: 768px) {
+          .stats-grid {
+            grid-template-columns: 1fr;
           }
           
           .row {
             flex-direction: column;
             align-items: stretch;
           }
+          select {
+            width: 100%;
+          }
           
-          select, .topbar input {
-            min-width: 100%;
+          button {
+            width: 100%;
           }
           
           .classes-grid {
@@ -2324,343 +3282,78 @@ const AdminDashboard = () => {
           
           .modal, .save-popup {
             max-width: 100%;
+            margin: 10px;
+          }
+          
+          th, td {
+            padding: 12px 8px;
+            font-size: 14px;
+          }
+          
+          .card-actions {
+            flex-direction: column;}
+            
+      .cancel-search {
+              position: absolute;
+              right: 10px;
+              top: 50%;
+              transform: translateY(-50%);
+              background: var(--primary);
+              color: white;
+              border: none;
+              padding: 6px 12px;
+              border-radius: 6px;
+              font-size: 12px;
+              cursor: pointer;
+              transition: background-color 0.5s;
+              width: 9% !important;
+          }
+        
+        }
+
+        
+        @media (max-width: 480px) {
+          .main-content {
+            padding: 16px;
+          }
+          
+          .management {
+            padding: 20px;
+          }
+          
+          .stat-card {
+            padding: 20px;
+          }
+          
+          .modal-body {
+            padding: 20px;
+          }
+          
+          .modal-footer {
+            padding: 16px 20px;
           }
         }
-        /* ============ SCRATCH CARD STYLES ============ */
-.search-container {
-  flex: 1;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  max-width: 500px;
-}
-
-.cancel-search {
-  padding: 8px 12px;
-  font-size: 13px;
-  background: #edf2f7;
-  white-space: nowrap;
-}
-
-.cancel-search:hover {
-  background: #e2e8f0;
-}
-
-.input-with-button {
-  display: flex;
-  gap: 8px;
-}
-
-.generate-btn {
-  padding: 8px 16px;
-  font-size: 13px;
-  background: #edf2f7;
-  white-space: nowrap;
-}
-
-.generate-btn:hover {
-  background: #e2e8f0;
-}
-
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #4a5568;
-}
-
-.form-group input {
-  width: 100%;
-  padding: 10px 16px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  font-size: 14px;
-}
-
-.form-group input:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.1);
-}
-
-.form-group small {
-  display: block;
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.generated-cards {
-  margin-top: 24px;
-  padding: 16px;
-  background: #f7fafc;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-}
-
-.generated-cards h4 {
-  margin: 0 0 12px 0;
-  font-size: 14px;
-  color: #4a5568;
-}
-
-.card-preview {
-  padding: 12px;
-  background: white;
-  border-radius: 6px;
-  margin-bottom: 8px;
-  border: 1px solid #e2e8f0;
-}
-
-.card-preview:last-child {
-  margin-bottom: 0;
-}
-
-.card-preview div {
-  margin: 4px 0;
-  font-size: 13px;
-  color: #4a5568;
-}
-
-.card-preview strong {
-  color: #2d3748;
-  font-family: monospace;
-  letter-spacing: 0.5px;
-}
-
-.usage-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.usage-count {
-  font-weight: 500;
-  color: #4a5568;
-}
-
-.usage-bar {
-  height: 6px;
-  background: #e2e8f0;
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.usage-fill {
-  height: 100%;
-  transition: width 0.3s ease;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 16px;
-  font-size: 12px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.status-badge.active {
-  background: #c6f6d5;
-  color: #276749;
-}
-
-.status-badge.inactive {
-  background: #fed7d7;
-  color: #9b2c2c;
-}
-
-.card-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.toggle-btn {
-  padding: 6px 12px;
-  font-size: 12px;
-  background: #edf2f7;
-}
-
-.delete-btn {
-  padding: 6px 12px;
-  font-size: 12px;
-  background: #fed7d7;
-  color: #9b2c2c;
-  border-color: #fc8181;
-}
-
-.delete-btn:hover {
-  background: #feb2b2;
-}
-
-.inactive-card {
-  opacity: 0.6;
-  background: #f7fafc;
-}
-
-.inactive-card:hover {
-  background: #f7fafc;
-}
-
-.no-data {
-  text-align: center;
-  padding: 40px !important;
-  color: var(--muted);
-  font-style: italic;
-}
-
-code {
-  font-family: monospace;
-  background: #edf2f7;
-  padding: 2px 6px;
-  border-radius: 4px;
-  color: #2d3748;
-}
-.secret-input {
-  letter-spacing: 2px; /* Makes dots/bullets more spaced out */
-}
-
-.secret-input::placeholder {
-  color: #a0aec0;
-  opacity: 0.8;
-}
-.secret-input {
-  letter-spacing: 2px;
-  font-family: monospace; /* Optional: makes it look more like a code input */
-}
-
-.secret-input::placeholder {
-  color: #a0aec0;
-  opacity: 0.8;
-}
-
-/* Optional: Style the password dots to be more visible */
-.secret-input[type="password"] {
-  font-size: 18px;
-  font-weight: bold;
-}
-.secret-indicator {
-  margin-left: 6px;
-  font-size: 12px;
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0% { opacity: 0.3; }
-  50% { opacity: 1; }
-  100% { opacity: 0.3; }
-}
-/* Search Results Styles */
-.search-input-wrapper {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.search-results-count {
-  font-size: 12px;
-  color: var(--muted);
-  padding: 4px 8px;
-  background: #f7fafc;
-  border-radius: 4px;
-  align-self: flex-start;
-}
-
-.search-results-section {
-  margin-top: 0;
-  border-top: 2px solid var(--primary);
-}
-
-.search-results-group {
-  margin-bottom: 24px;
-}
-
-.search-results-group:last-child {
-  margin-bottom: 0;
-}
-
-.search-results-group h3 {
-  margin: 0 0 16px 0;
-  font-size: 16px;
-  color: #4a5568;
-  font-weight: 600;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
-}
-
-.no-results {
-  text-align: center;
-  padding: 40px;
-  background: #f7fafc;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-}
-
-.no-results p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 16px;
-}
-
-/* Highlight search matches in results */
-.search-highlight {
-  background-color: #fff3cd;
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-weight: 600;
-}
-/* Add to your styles */
-.warning-message {
-  text-align: center;
-  padding: 20px;
-}
-
-.warning-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.warning-message h4 {
-  color: #9b2c2c;
-  margin: 0 0 16px 0;
-}
-
-.warning-message ul {
-  text-align: left;
-  margin: 16px 0;
-  padding-left: 24px;
-}
-
-.warning-message li {
-  margin: 8px 0;
-  color: #4a5568;
-}
-
-.warning-note {
-  background: #fffaf0;
-  border-left: 4px solid #d69e2e;
-  padding: 12px;
-  margin: 16px 0 0 0;
-  text-align: left;
-  border-radius: 4px;
-}
-
-.btn-danger {
-  background: #c53030;
-  color: white;
-  border-color: #c53030;
-}
-
-.btn-danger:hover {
-  background: #9b2c2c;
-  border-color: #9b2c2c;
-}
+        
+        /* Print Styles */
+        @media print {
+          .sidebar, .topbar, button {
+            display: none;
+          }
+          
+          .main-content {
+            margin: 0;
+            padding: 0;
+          }
+          
+          table {
+            border: 1px solid #000;
+          }
+          
+          th, td {
+            border: 1px solid #000;
+            padding: 8px;
+          }
+        }
       `}</style>
     </div>
   );
