@@ -3572,8 +3572,8 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
     // Get school name based on class
     const schoolName = getSchoolName(className);
     const schoolAddress = schoolName.includes("Primary")
-      ? "123 Primary Street, Education City"
-      : "456 High School Road, Academic Town";
+      ? "Abakaliki 482103, Ebonyi"
+      : "Abakaliki 482103, Ebonyi";
 
     // Generate remarks
     const remarks = generateRemarks(roundedAverage);
@@ -4136,10 +4136,7 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
             <span class="info-label">Student ID:</span>
             <span>${studentId}</span>
           </div>
-          <div class="info-item">
-            <span class="info-label">Scratch Card:</span>
-            <span>${scratchCard.pin} (Validated)</span>
-          </div>
+          
           <div class="info-item">
             <span class="info-label">Report Date:</span>
             <span>${new Date().toLocaleDateString()}</span>
@@ -4425,110 +4422,9 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
           </button>
 
           {/* Optional: Add a direct print button if needed */}
-          <button
-            className="action-btn secondary"
-            onClick={() => {
-              const printWindow = window.open("", "_blank");
-              if (printWindow && results) {
-                printWindow.document.write(renderPDFContent());
-                printWindow.document.close();
-                printWindow.focus();
-                setTimeout(() => printWindow.print(), 500);
-              }
-            }}
-          >
-            <FileSpreadsheet size={16} />
-            Quick Print (No Download)
-          </button>
 
           <button
-            className="/* Loading spinner for export button */
-            .spinner {
-              display: inline-block;
-              width: 16px;
-              height: 16px;
-              border: 2px solid rgba(255, 255, 255, 0.3);
-              border-radius: 50%;
-              border-top-color: #ffffff;
-              animation: spin 1s linear infinite;
-              margin-right: 8px;
-            }
-            
-            @keyframes spin {
-              to { transform: rotate(360deg); }
-            }
-            
-            /* Results actions layout */
-            .results-actions {
-              display: flex;
-              gap: 12px;
-              justify-content: center;
-              padding-top: 20px;
-              border-top: 1px solid #e5e7eb;
-              flex-wrap: wrap;
-              margin-top: 20px;
-            }
-            
-            .action-btn.export-btn {
-              background: linear-gradient(135deg, #4299e1, #3182ce);
-              color: white;
-              border: none;
-              padding: 12px 24px;
-              border-radius: 8px;
-              font-weight: 600;
-              cursor: pointer;
-              display: flex;
-              align-items: center;
-              gap: 8px;
-              transition: all 0.3s ease;
-              box-shadow: 0 4px 6px rgba(66, 153, 225, 0.3);
-            }
-            
-            .action-btn.export-btn:hover:not(:disabled) {
-              background: linear-gradient(135deg, #3182ce, #2c5282);
-              transform: translateY(-2px);
-              box-shadow: 0 6px 8px rgba(66, 153, 225, 0.4);
-            }
-            
-            .action-btn.export-btn:disabled {
-              opacity: 0.7;
-              cursor: not-allowed;
-              transform: none !important;
-            }
-            
-            .action-btn.secondary {
-              background: #10b981;
-              color: white;
-              border: none;
-              padding: 12px 24px;
-              border-radius: 8px;
-              font-weight: 600;
-              cursor: pointer;
-              display: flex;
-              align-items: center;
-              gap: 8px;
-            }
-            
-            .action-btn.cancel {
-              background: #6b7280;
-              color: white;
-              border: none;
-              padding: 12px 24px;
-              border-radius: 8px;
-              font-weight: 600;
-              cursor: pointer;
-            }
-            
-            @media (max-width: 768px) {
-              .results-actions {
-                flex-direction: column;
-              }
-              
-              .action-btn {
-                width: 100%;
-                justify-content: center;
-              }
-            }"
+            className="action-btn secondary"
             onClick={() => {
               setResults(null);
               setCardValidated(false);
