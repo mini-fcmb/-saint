@@ -6023,7 +6023,20 @@ const StudentDashboard: React.FC = () => {
         <div className="header-content">
           {/* Logo Section */}
           <div className="logo-section">
-            <div className="logo-img"></div>
+            <div className="logo-img">
+              {" "}
+              <img
+                src={logo}
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                  border: "2px solid #000",
+                }}
+              />
+            </div>
+
             <span className="logo-text">SXaint</span>
             <span className="status online-indicator">
               <div className="online-dot"></div>
