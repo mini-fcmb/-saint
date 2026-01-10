@@ -3105,7 +3105,7 @@ const StrictQuizInterface: React.FC<{
   );
 };
 
-// Check Results Modal Component
+// Check Results Modal Component - UPDATED with structured results layout
 interface CheckResultsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -3140,6 +3140,11 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
   } | null>(null);
   const [verifyingCard, setVerifyingCard] = useState(false);
   const [cardValidated, setCardValidated] = useState(false);
+  const [classStats, setClassStats] = useState<{
+    totalStudents: number;
+    studentPosition: number;
+    classAverage: number;
+  } | null>(null);
 
   // Auto-fill student ID from user data
   useEffect(() => {
@@ -3147,6 +3152,7 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
       setStudentId(user.uid);
     }
   }, [user]);
+
   const validateScratchCard = async (): Promise<boolean> => {
     if (!scratchCard.pin || !scratchCard.puk) {
       setError("Please enter both PIN and PUK");
@@ -3184,14 +3190,7 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
       const cardData = cardDoc.data();
       const cardId = cardDoc.id;
 
-      console.log("🔍 Card validation check:", {
-        cardId,
-        usageCount: cardData.usageCount || 0,
-        maxUsage: cardData.maxUsage || 3,
-        isActive: cardData.isActive !== false, // Default to true if undefined
-      });
-
-      // Check if card is active (default to true if undefined)
+      // Check if card is active
       const isActive = cardData.isActive !== false;
       if (!isActive) {
         setCardValidation({
@@ -3206,7 +3205,7 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
         return false;
       }
 
-      // Check usage count (3 times TOTAL, not per student)
+      // Check usage count
       const usageCount = cardData.usageCount || 0;
       const maxUsage = cardData.maxUsage || 3;
 
@@ -3226,23 +3225,13 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
         return false;
       }
 
-      // ✅ Card is valid - increment usage count
-      // ✅ REMOVED the check for student already using the card
-      // ✅ Students can share cards, only limit is total usage count
-
+      // ✅ Card is valid
       const updatedUsageCount = usageCount + 1;
-
-      console.log("✅ Card is valid, updating usage:", {
-        oldUsage: usageCount,
-        newUsage: updatedUsageCount,
-        maxUsage,
-      });
 
       await updateDoc(doc(db, "scratchCards", cardId), {
         usageCount: updatedUsageCount,
-        // No longer tracking usedBy array since cards are shared
         lastUsedAt: new Date(),
-        lastUsedBy: user?.email || studentId, // Optional: just for reference
+        lastUsedBy: user?.email || studentId,
         updatedAt: new Date(),
       });
 
@@ -3264,141 +3253,180 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
       return false;
     }
   };
-  // ADD THIS FUNCTION - It was missing
-  const handleExportPDF = () => {
-    if (!results) return;
 
-    // Create a simple HTML representation for printing
-    const printWindow = window.open("", "_blank");
-    if (printWindow) {
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Student Results - ${results.studentName || studentName}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-            .student-info { margin-bottom: 20px; }
-            .results-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            .results-table th, .results-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            .results-table th { background-color: #f2f2f2; }
-            .subject-row { font-weight: bold; background-color: #f9f9f9; }
-            .total-row { font-weight: bold; background-color: #e8f4ff; }
-            .grade-badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-            .grade-a1 { background: #dcfce7; color: #166534; }
-            .grade-b2 { background: #bbf7d0; color: #15803d; }
-            .grade-b3 { background: #86efac; color: #15803d; }
-            .grade-c4 { background: #fef9c3; color: #854d0e; }
-            .grade-c5 { background: #fef08a; color: #854d0e; }
-            .grade-c6 { background: #fde047; color: #854d0e; }
-            .grade-d7 { background: #fed7aa; color: #9a3412; }
-            .grade-e8 { background: #fdba74; color: #9a3412; }
-            .grade-f9 { background: #fecaca; color: #991b1b; }
-            .card-info { 
-              background: #f8f9fa; 
-              border-left: 4px solid #4299e1; 
-              padding: 15px; 
-              margin: 20px 0;
-              border-radius: 4px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>Student Academic Results</h1>
-            <h2>${results.studentName || studentName}</h2>
-            <p>Class: ${
-              results.className || currentUserClass || "N/A"
-            } | Term: ${term} | Session: ${session}</p>
-            <div class="card-info">
-              <p><strong>Scratch Card Used:</strong> ${scratchCard.pin}</p>
-              <p><strong>Validated:</strong> ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</p>
-            </div>
-          </div>
-          
-          <div class="student-info">
-            <p><strong>Student ID:</strong> ${studentId}</p>
-            <p><strong>Generated:</strong> ${new Date().toLocaleDateString()}</p>
-          </div>
-          
-          ${renderResultsTableHTML()}
-          
-          <script>
-            window.onload = function() {
-              window.print();
-            }
-          </script>
-        </body>
-        </html>
-      `);
-      printWindow.document.close();
+  // Function to load class statistics
+  const loadClassStatistics = async (className: string) => {
+    try {
+      // Load all students in the same class
+      const studentsRef = collection(db, "students");
+      const q = query(studentsRef, where("className", "==", className));
+      const querySnapshot = await getDocs(q);
+
+      const totalStudents = querySnapshot.size;
+
+      // Load all results for this class and term to calculate positions
+      const resultsRef = collection(db, "studentTermGrades");
+      const resultsQ = query(
+        resultsRef,
+        where("className", "==", className),
+        where("term", "==", term),
+        where("session", "==", session)
+      );
+
+      const resultsSnapshot = await getDocs(resultsQ);
+
+      // Calculate averages and positions
+      const allResults: Array<{
+        studentId: string;
+        totalScore: number;
+        average: number;
+      }> = [];
+
+      resultsSnapshot.forEach((doc) => {
+        const data = doc.data();
+        const subjects = data.subjects || {};
+
+        // Calculate total score across all subjects
+        let totalScore = 0;
+        Object.values(subjects).forEach((subjectData: any) => {
+          totalScore += subjectData.totalScore || 0;
+        });
+
+        const average = totalScore / Object.keys(subjects).length;
+
+        allResults.push({
+          studentId: data.studentId,
+          totalScore,
+          average,
+        });
+      });
+
+      // Sort by average descending
+      allResults.sort((a, b) => b.average - a.average);
+
+      // Find current student's position
+      const studentPosition =
+        allResults.findIndex((result) => result.studentId === studentId) + 1;
+
+      // Calculate class average
+      const classAverage =
+        allResults.length > 0
+          ? allResults.reduce((sum, result) => sum + result.average, 0) /
+            allResults.length
+          : 0;
+
+      setClassStats({
+        totalStudents,
+        studentPosition,
+        classAverage: Math.round(classAverage * 100) / 100,
+      });
+    } catch (error) {
+      console.error("Error loading class statistics:", error);
+      // Set default values if error
+      setClassStats({
+        totalStudents: 0,
+        studentPosition: 0,
+        classAverage: 0,
+      });
     }
   };
 
-  // ADD THIS FUNCTION - It was also missing
-  const renderResultsTableHTML = () => {
-    if (!results || !results.subjects)
-      return "<p>No results data available</p>";
+  // Function to determine school name based on class
+  const getSchoolName = (className: string): string => {
+    if (!className) return "Saints High School";
 
-    const subjects = results.subjects;
-    let html = `
-      <table class="results-table">
-        <thead>
-          <tr>
-            <th>Subject</th>
-            <th>OBJ</th>
-            <th>CA</th>
-            <th>Theory</th>
-            <th>Total</th>
-            <th>Percentage</th>
-            <th>Grade</th>
-            <th>Position</th>
-            <th>Remark</th>
-          </tr>
-        </thead>
-        <tbody>
-    `;
+    const classLower = className.toLowerCase();
 
-    let overallTotal = 0;
-    let subjectCount = 0;
+    // Check for primary school classes (P5, P6, Primary 5, Primary 6)
+    if (
+      classLower.includes("p5") ||
+      classLower.includes("p6") ||
+      classLower.includes("primary 5") ||
+      classLower.includes("primary 6")
+    ) {
+      return "Little Saints Nursery and Primary School";
+    }
 
-    Object.entries(subjects).forEach(([subject, data]: [string, any]) => {
-      overallTotal += data.totalScore || 0;
-      subjectCount++;
+    // For JSS1-SSS3 or any other secondary classes
+    if (
+      classLower.includes("jss") ||
+      classLower.includes("sss") ||
+      classLower.includes("js") ||
+      classLower.includes("ss")
+    ) {
+      return "Saints High School";
+    }
 
-      html += `
-        <tr class="subject-row">
-          <td>${subject}</td>
-          <td>${data.objScore || 0}</td>
-          <td>${data.caScore || 0}</td>
-          <td>${data.theoryScore || 0}</td>
-          <td>${data.totalScore || 0}</td>
-          <td>${data.percentage || 0}%</td>
-          <td><span class="grade-badge grade-${(
-            data.grade || ""
-          ).toLowerCase()}">${data.grade || "N/A"}</span></td>
-          <td>${data.positionInClass || "N/A"}</td>
-          <td>${data.remark || "N/A"}</td>
-        </tr>
-      `;
-    });
+    // Default to high school
+    return "Saints High School";
+  };
 
-    const overallAverage = subjectCount > 0 ? overallTotal / subjectCount : 0;
+  // Function to generate automatic remarks
+  const generateRemarks = (
+    overallAverage: number
+  ): {
+    teacherRemark: string;
+    principalRemark: string;
+    decision: string;
+  } => {
+    if (overallAverage >= 80) {
+      return {
+        teacherRemark: "Excellent performance! Keep up the outstanding work.",
+        principalRemark:
+          "Exceptional achievement. Continue to set high standards.",
+        decision: "PASS",
+      };
+    } else if (overallAverage >= 70) {
+      return {
+        teacherRemark: "Very good result. Maintain this excellent standard.",
+        principalRemark:
+          "Commendable performance. Keep striving for excellence.",
+        decision: "PASS",
+      };
+    } else if (overallAverage >= 60) {
+      return {
+        teacherRemark:
+          "Good work. There's room for improvement, but you're on the right track.",
+        principalRemark:
+          "Satisfactory performance. Keep working hard to improve.",
+        decision: "PASS",
+      };
+    } else if (overallAverage >= 50) {
+      return {
+        teacherRemark:
+          "Average performance. You need to work harder next term.",
+        principalRemark:
+          "Fair performance. More dedication is required for better results.",
+        decision: "PASS",
+      };
+    } else if (overallAverage >= 40) {
+      return {
+        teacherRemark: "Below average. You must improve significantly.",
+        principalRemark: "Below expectations. Serious improvement needed.",
+        decision: "PASS WITH CAUTION",
+      };
+    } else {
+      return {
+        teacherRemark: "Poor performance. Immediate improvement is necessary.",
+        principalRemark: "Unsatisfactory. Must show significant improvement.",
+        decision: "FAIL",
+      };
+    }
+  };
 
-    html += `
-        <tr class="total-row">
-          <td><strong>OVERALL AVERAGE</strong></td>
-          <td colspan="3"></td>
-          <td><strong>${overallAverage.toFixed(2)}</strong></td>
-          <td><strong>${overallAverage.toFixed(2)}%</strong></td>
-          <td colspan="3"></td>
-        </tr>
-      </tbody>
-    </table>
-    `;
-
-    return html;
+  // Function to get grade interpretation
+  const getGradeInterpretation = () => {
+    return [
+      { grade: "A1", range: "75-100%", remark: "Excellent" },
+      { grade: "B2", range: "70-74%", remark: "Very Good" },
+      { grade: "B3", range: "65-69%", remark: "Good" },
+      { grade: "C4", range: "60-64%", remark: "Credit" },
+      { grade: "C5", range: "55-59%", remark: "Credit" },
+      { grade: "C6", range: "50-54%", remark: "Credit" },
+      { grade: "D7", range: "45-49%", remark: "Pass" },
+      { grade: "E8", range: "40-44%", remark: "Pass" },
+      { grade: "F9", range: "0-39%", remark: "Fail" },
+    ];
   };
 
   const handleCheckResults = async () => {
@@ -3418,6 +3446,7 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
     setLoading(true);
     setError("");
     setResults(null);
+    setClassStats(null);
 
     try {
       // Create document ID based on the format from teacher dashboard
@@ -3438,6 +3467,11 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
         // Validate that this is the correct student (extra security)
         if (data.studentId === studentId || data.studentEmail === user?.email) {
           setResults(data);
+
+          // Load class statistics
+          if (data.className) {
+            await loadClassStatistics(data.className);
+          }
         } else {
           setError("No results found for your student ID");
         }
@@ -3472,6 +3506,11 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
           const docData = querySnapshot.docs[0].data();
           console.log("✅ Found results by email:", docData);
           setResults(docData);
+
+          // Load class statistics
+          if (docData.className) {
+            await loadClassStatistics(docData.className);
+          }
           return;
         }
       }
@@ -3493,53 +3532,11 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
         const docData = querySnapshot.docs[0].data();
         console.log("✅ Found results by studentId and class:", docData);
         setResults(docData);
-        return;
-      }
 
-      // Alternative query 3: Check in scores collection (backward compatibility)
-      console.log("🔍 Checking in scores collection...");
-      const scoresRef = collection(db, "scores");
-      const scoresQ = query(
-        scoresRef,
-        where("studentId", "==", studentId),
-        where("term", "==", term),
-        where("session", "==", session)
-      );
-
-      const scoresSnapshot = await getDocs(scoresQ);
-
-      if (!scoresSnapshot.empty) {
-        // Combine scores by subject
-        const scoresBySubject: { [key: string]: any } = {};
-        const studentData = {
-          studentId: studentId,
-          studentName: studentName,
-          className: currentUserClass || "",
-          term: term,
-          session: session,
-          subjects: {},
-        };
-
-        scoresSnapshot.forEach((doc) => {
-          const data = doc.data();
-          studentData.studentName = data.studentName || studentName;
-
-          if (data.subject) {
-            scoresBySubject[data.subject] = {
-              objScore: data.obj || 0,
-              caScore: data.ca || 0,
-              theoryScore: data.theory || 0,
-              totalScore: data.total || 0,
-              percentage: data.percentage || 0,
-              grade: data.grade || "N/A",
-              positionInClass: data.position,
-              remark: data.remark || "N/A",
-            };
-          }
-        });
-
-        studentData.subjects = scoresBySubject;
-        setResults(studentData);
+        // Load class statistics
+        if (docData.className) {
+          await loadClassStatistics(docData.className);
+        }
         return;
       }
 
@@ -3550,76 +3547,796 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
     }
   };
 
+  // Function to render structured results HTML for PDF
+  const renderStructuredResultsHTML = () => {
+    if (!results || !results.subjects)
+      return "<p>No results data available</p>";
+
+    const subjects = results.subjects || {};
+    const studentName = results.studentName || "Unknown";
+    const className = results.className || currentUserClass || "Unknown";
+    const studentId = results.studentId || "Unknown";
+
+    // Calculate overall totals
+    let overallTotal = 0;
+    let subjectCount = 0;
+
+    Object.values(subjects).forEach((data: any) => {
+      overallTotal += data.totalScore || 0;
+      subjectCount++;
+    });
+
+    const overallAverage = subjectCount > 0 ? overallTotal / subjectCount : 0;
+    const roundedAverage = Math.round(overallAverage * 100) / 100;
+
+    // Get school name based on class
+    const schoolName = getSchoolName(className);
+    const schoolAddress = schoolName.includes("Primary")
+      ? "123 Primary Street, Education City"
+      : "456 High School Road, Academic Town";
+
+    // Generate remarks
+    const remarks = generateRemarks(roundedAverage);
+
+    // Get grade interpretation
+    const gradeInterpretation = getGradeInterpretation();
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Academic Results - ${studentName}</title>
+        <style>
+          body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #fff;
+            color: #000;
+            line-height: 1.5;
+          }
+          
+          .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+          }
+          
+          .student-info {
+            flex: 1;
+          }
+          
+          .student-id-row {
+            display: flex;
+            margin-bottom: 10px;
+          }
+          
+          .student-id-row > div {
+            flex: 1;
+          }
+          
+          .school-info {
+            display: flex;
+            margin-bottom: 15px;
+          }
+          
+          .school-info > div {
+            flex: 1;
+          }
+          
+          .class-stats-row {
+            display: flex;
+            margin-bottom: 15px;
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+          }
+          
+          .class-stats-row > div {
+            flex: 1;
+            text-align: center;
+          }
+          
+          .term-stats-row {
+            display: flex;
+            margin-bottom: 20px;
+            border: 2px solid #4299e1;
+            border-radius: 8px;
+            overflow: hidden;
+          }
+          
+          .term-stats-row > div {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            border-right: 1px solid #4299e1;
+          }
+          
+          .term-stats-row > div:last-child {
+            border-right: none;
+          }
+          
+          .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+          }
+          
+          .results-table th,
+          .results-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+          }
+          
+          .results-table th {
+            background-color: #4299e1;
+            color: white;
+            font-weight: bold;
+          }
+          
+          .subject-row {
+            background: #f9f9f9;
+          }
+          
+          .subject-row:hover {
+            background: #f0f0f0;
+          }
+          
+          .summary-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+          }
+          
+          .total-score {
+            flex: 2;
+            background: #f0f9ff;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #4299e1;
+          }
+          
+          .remarks-section {
+            flex: 3;
+            padding: 15px;
+          }
+          
+          .remarks-box {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+          }
+          
+          .remarks-box h4 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+          }
+          
+          .grade-interpretation {
+            background: #f0f9ff;
+            border: 2px solid #4299e1;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+          }
+          
+          .grade-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+          }
+          
+          .grade-item {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 5px;
+            text-align: center;
+          }
+          
+          .grade-a1 { background: #dcfce7; color: #166534; }
+          .grade-b2 { background: #bbf7d0; color: #15803d; }
+          .grade-b3 { background: #86efac; color: #15803d; }
+          .grade-c4 { background: #fef9c3; color: #854d0e; }
+          .grade-c5 { background: #fef08a; color: #854d0e; }
+          .grade-c6 { background: #fde047; color: #854d0e; }
+          .grade-d7 { background: #fed7aa; color: #9a3412; }
+          .grade-e8 { background: #fdba74; color: #9a3412; }
+          .grade-f9 { background: #fecaca; color: #991b1b; }
+          
+          .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #333;
+            color: #666;
+            font-size: 12px;
+          }
+          
+          .card-info {
+            background: #f0f9ff;
+            border-left: 4px solid #4299e1;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 12px;
+            color: #4299e1;
+          }
+        </style>
+      </head>
+      <body>
+        <!-- Header Section -->
+        <div class="header-container">
+          <div class="student-info">
+          <!-- Row 1: Student ID and Name -->
+          <div class="student-id-row">
+            <div><strong>Student ID:</strong> <span style="text-decoration: underline">${studentId}</span></div>
+            <div><strong>Student Name:</strong> <span style="text-decoration: underline">${studentName}</span></div>
+          </div>
+          
+          <!-- Row 2: School Name and Address -->
+          <div class="school-info">
+            <div><strong>School:</strong> <span style="text-decoration: underline">${schoolName}</span></div>
+            <div><strong>Address:</strong> <span style="text-decoration: underline">${schoolAddress}</span></div>
+          </div>
+          
+          <!-- Row 3: Class, Total Students, Position -->
+          <div class="class-stats-row">
+            <div><strong>Class:</strong> <span style="text-decoration: underline">${className}</span></div>
+            <div><strong>No. of Students:</strong> <span style="text-decoration: underline">${
+              classStats?.totalStudents || "N/A"
+            }</span></div>
+            <div><strong>Position in Class:</strong> <span style="text-decoration: underline">${
+              classStats?.studentPosition || "N/A"
+            }</span></div>
+          </div>
+          
+          <!-- Row 4: Term, Student Average, Date, Class Average -->
+          <div class="term-stats-row">
+            <div><strong>Term:</strong> <span style="text-decoration: underline">${term}</span></div>
+            <div><strong>Student Average:</strong> <span style="text-decoration: underline">${roundedAverage}%</span></div>
+            <div><strong>Date Generated:</strong> <span style="text-decoration: underline">${new Date().toLocaleDateString()}</span></div>
+            <div><strong>Class Average:</strong> <span style="text-decoration: underline">${
+              classStats?.classAverage || "N/A"
+            }%</span></div>
+          </div>
+          </div>
+        </div>
+        
+       
+        
+        <!-- Results Table -->
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th>Subject</th>
+              <th>CA</th>
+              <th>OBJ</th>
+              <th>Theory</th>
+              <th>Total</th>
+              <th>%</th>
+              <th>Grade</th>
+              <th>Position</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${Object.entries(subjects)
+              .map(
+                ([subject, data]: [string, any]) => `
+              <tr class="subject-row">
+                <td><strong>${subject}</strong></td>
+                <td>${data.caScore || 0}</td>
+                <td>${data.objScore || 0}</td>
+                <td>${data.theoryScore || 0}</td>
+                <td><strong>${data.totalScore || 0}</strong></td>
+                <td>${data.percentage || 0}%</td>
+                <td>
+                  <span class="grade-badge grade-${(
+                    data.grade || ""
+                  ).toLowerCase()}">
+                    ${data.grade || "N/A"}
+                  </span>
+                </td>
+                <td>${
+                  data.positionInSubject || data.positionInClass || "N/A"
+                }</td>
+              </tr>
+            `
+              )
+              .join("")}
+          </tbody>
+        </table>
+        
+        <!-- Summary Section -->
+        <div class="summary-section">
+          <div class="total-score">
+            <h3>OVERALL SUMMARY</h3>
+            <p><strong>Overall Total Score:</strong> ${overallTotal}</p>
+            <p><strong>Overall Average:</strong> ${roundedAverage}%</p>
+            <p><strong>Decision:</strong> 
+              <span style="font-weight: bold; color: ${
+                remarks.decision === "FAIL" ? "#dc2626" : "#059669"
+              }">
+                ${remarks.decision}
+              </span>
+            </p>
+            <p><strong>Total Subjects:</strong> ${subjectCount}</p>
+          </div>
+          
+          <div class="remarks-section">
+            <div class="remarks-box">
+              <h4>Teacher's Remark</h4>
+              <p>${remarks.teacherRemark}</p>
+            </div>
+            
+            <div class="remarks-box">
+              <h4>Principal's Remark</h4>
+              <p>${remarks.principalRemark}</p>
+            </div>
+          </div>
+        </div>
+        
+       
+        
+        <!-- Footer -->
+        <div class="footer">
+          <p>This result was generated electronically and is valid without signature.</p>
+          <p>© ${new Date().getFullYear()} ${schoolName}. All rights reserved.</p>
+        </div>
+      </body>
+      </html>
+    `;
+  };
+
+  const handleExportPDF = async () => {
+    if (!results) return;
+
+    // Show loading state
+    const exportBtn = document.querySelector(
+      ".export-btn"
+    ) as HTMLButtonElement;
+    const originalHtml = exportBtn?.innerHTML;
+    if (exportBtn) {
+      exportBtn.innerHTML = '<span class="spinner"></span> Generating PDF...';
+      exportBtn.disabled = true;
+    }
+
+    try {
+      // Create PDF content
+      const pdfContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Student Results - ${results.studentName || studentName}</title>
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; line-height: 1.6; }
+            .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #4299e1; }
+            .school-info { margin-bottom: 20px; }
+            .school-name { font-size: 24px; font-weight: bold; color: #1e40af; margin-bottom: 5px; }
+            .document-title { font-size: 18px; color: #374151; margin-bottom: 10px; }
+            .student-info { margin: 25px 0; background: #f8fafc; padding: 15px; border-radius: 8px; border-left: 4px solid #4299e1; }
+            .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+            .info-item { display: flex; justify-content: space-between; }
+            .info-label { font-weight: 600; color: #4b5563; }
+            .results-table { width: 100%; border-collapse: collapse; margin: 25px 0; font-size: 13px; }
+            .results-table th { background: #1e40af; color: white; padding: 12px 8px; text-align: center; font-weight: 600; border: 1px solid #1d4ed8; }
+            .results-table td { padding: 10px 8px; border: 1px solid #e5e7eb; text-align: center; }
+            .subject-row { font-weight: 600; background-color: #f9fafb; }
+            .total-row { font-weight: bold; background-color: #e0f2fe; border-top: 2px solid #0ea5e9; }
+            .grade-badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+            .grade-a1 { background: #dcfce7; color: #166534; }
+            .grade-b2 { background: #bbf7d0; color: #15803d; }
+            .grade-b3 { background: #86efac; color: #15803d; }
+            .grade-c4 { background: #fef9c3; color: #854d0e; }
+            .grade-c5 { background: #fef08a; color: #854d0e; }
+            .grade-c6 { background: #fde047; color: #854d0e; }
+            .grade-d7 { background: #fed7aa; color: #9a3412; }
+            .grade-e8 { background: #fdba74; color: #9a3412; }
+            .grade-f9 { background: #fecaca; color: #991b1b; }
+            .summary { margin: 25px 0; padding: 20px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 10px; border: 2px solid #bae6fd; }
+            .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }
+            .summary-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #cbd5e1; }
+            .footer { margin-top: 30px; padding-top: 20px; border-top: 2px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 12px; }
+            .signature { margin-top: 40px; display: flex; justify-content: space-between; }
+            .signature-box { width: 200px; text-align: center; padding-top: 50px; }
+            .signature-line { border-top: 1px solid #374151; width: 100%; margin: 0 auto; }
+            @media print {
+              @page { margin: 0.5in; }
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          ${renderPDFContent()}
+          
+          <div class="no-print" style="text-align: center; margin-top: 40px; padding: 20px; background: #f0f9ff; border-radius: 10px;">
+            <h3 style="color: #0369a1; margin-bottom: 15px;">Download Complete!</h3>
+            <p style="margin-bottom: 20px;">Your results have been downloaded. You can now:</p>
+            <button onclick="window.print()" style="background: #10b981; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; margin: 5px;">
+              🖨️ Print Results
+            </button>
+            <button onclick="window.close()" style="background: #6b7280; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; margin: 5px;">
+              ✕ Close Window
+            </button>
+            <p style="margin-top: 20px; font-size: 12px; color: #64748b;">
+              Note: The print button will open your system's print dialog
+            </p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Create a blob and download
+      const blob = new Blob([pdfContent], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Results_${studentName.replace(
+        /\s+/g,
+        "_"
+      )}_${term}_${session}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Restore button
+      if (exportBtn && originalHtml) {
+        exportBtn.innerHTML = originalHtml;
+        exportBtn.disabled = false;
+      }
+
+      // Show success message and open print dialog
+      setTimeout(() => {
+        const shouldPrint = window.confirm(
+          "✅ PDF downloaded successfully!\n\nWould you like to print the results now?"
+        );
+
+        if (shouldPrint) {
+          // Open the downloaded file in new window and print
+          const printWindow = window.open("", "_blank");
+          if (printWindow) {
+            printWindow.document.write(pdfContent);
+            printWindow.document.close();
+
+            // Wait for content to load, then trigger print
+            printWindow.onload = () => {
+              setTimeout(() => {
+                printWindow.print();
+                // Optional: Ask if they want to close the print window
+                setTimeout(() => {
+                  if (window.confirm("Close the print window?")) {
+                    printWindow.close();
+                  }
+                }, 1000);
+              }, 500);
+            };
+          }
+        }
+      }, 1000);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("❌ Failed to generate PDF. Please try again.");
+
+      // Restore button on error
+      if (exportBtn && originalHtml) {
+        exportBtn.innerHTML = originalHtml;
+        exportBtn.disabled = false;
+      }
+    }
+  };
+  const renderPDFContent = () => {
+    if (!results || !results.subjects) return "";
+
+    const subjects = results.subjects;
+    const subjectCount = Object.keys(subjects).length;
+    let overallTotal = 0;
+    let passedCount = 0;
+
+    Object.values(subjects).forEach((data: any) => {
+      overallTotal += data.totalScore || 0;
+      if ((data.percentage || 0) >= 50) passedCount++;
+    });
+
+    const overallAverage = subjectCount > 0 ? overallTotal / subjectCount : 0;
+    const passRate = subjectCount > 0 ? (passedCount / subjectCount) * 100 : 0;
+
+    // Generate grades table HTML
+    let tableHTML = `
+      <div class="results-table-container">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th>S/N</th>
+              <th>Subject</th>
+              <th>Objective</th>
+              <th>CA</th>
+              <th>Theory</th>
+              <th>Total</th>
+              <th>Percentage</th>
+              <th>Grade</th>
+              <th>Position</th>
+              <th>Remark</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    let serialNumber = 1;
+    Object.entries(subjects).forEach(([subject, data]: [string, any]) => {
+      tableHTML += `
+        <tr class="subject-row">
+          <td>${serialNumber++}</td>
+          <td style="text-align: left; font-weight: 600;">${subject}</td>
+          <td>${data.objScore || 0}</td>
+          <td>${data.caScore || 0}</td>
+          <td>${data.theoryScore || 0}</td>
+          <td><strong>${data.totalScore || 0}</strong></td>
+          <td>${data.percentage || 0}%</td>
+          <td><span class="grade-badge grade-${(
+            data.grade || ""
+          ).toLowerCase()}">${data.grade || "N/A"}</span></td>
+          <td>${data.positionInClass || "N/A"}</td>
+          <td style="font-weight: 600; color: ${getRemarkColor(data.remark)}">${
+        data.remark || "N/A"
+      }</td>
+        </tr>
+      `;
+    });
+
+    tableHTML += `
+          </tbody>
+          <tfoot>
+            <tr class="total-row">
+              <td colspan="5" style="text-align: right; font-weight: bold;">OVERALL AVERAGE:</td>
+              <td><strong>${overallAverage.toFixed(2)}</strong></td>
+              <td><strong>${overallAverage.toFixed(2)}%</strong></td>
+              <td colspan="3"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    `;
+
+    return `
+      <div class="header">
+        <div class="school-info">
+          <div class="school-name">SXAINT ACADEMY</div>
+          <div class="document-title">STUDENT ACADEMIC RESULTS REPORT</div>
+        </div>
+      </div>
+  
+      <div class="student-info">
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-label">Student Name:</span>
+            <span><strong>${results.studentName || studentName}</strong></span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Class:</span>
+            <span>${results.className || currentUserClass || "N/A"}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Academic Year:</span>
+            <span>${session}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Term:</span>
+            <span>${term}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Student ID:</span>
+            <span>${studentId}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Scratch Card:</span>
+            <span>${scratchCard.pin} (Validated)</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Report Date:</span>
+            <span>${new Date().toLocaleDateString()}</span>
+          </div>
+        </div>
+      </div>
+  
+      ${tableHTML}
+  
+      <div class="summary">
+        <h3 style="color: #0369a1; margin-top: 0; margin-bottom: 15px;">PERFORMANCE SUMMARY</h3>
+        <div class="summary-grid">
+          <div class="summary-item">
+            <span>Total Subjects:</span>
+            <strong>${subjectCount}</strong>
+          </div>
+          <div class="summary-item">
+            <span>Overall Average:</span>
+            <strong>${overallAverage.toFixed(2)} / 100</strong>
+          </div>
+          <div class="summary-item">
+            <span>Average Percentage:</span>
+            <strong>${overallAverage.toFixed(2)}%</strong>
+          </div>
+          <div class="summary-item">
+            <span>Pass Rate:</span>
+            <strong>${passRate.toFixed(1)}%</strong>
+          </div>
+          <div class="summary-item">
+            <span>Subjects Passed:</span>
+            <strong>${passedCount} / ${subjectCount}</strong>
+          </div>
+          <div class="summary-item">
+            <span>Result Status:</span>
+            <strong style="color: ${passRate >= 50 ? "#059669" : "#dc2626"}">
+              ${passRate >= 50 ? "PASSED" : "NEEDS IMPROVEMENT"}
+            </strong>
+          </div>
+        </div>
+      </div>
+  
+      <div class="signature">
+        <div class="signature-box">
+          <div class="signature-line"></div>
+          <div>Class Teacher's Signature</div>
+        </div>
+        <div class="signature-box">
+          <div class="signature-line"></div>
+          <div>Principal's Signature</div>
+        </div>
+        <div class="signature-box">
+          <div class="signature-line"></div>
+          <div>Date</div>
+        </div>
+      </div>
+  
+      <div class="footer">
+        <p>This is an official academic document generated by SXaint Student Portal</p>
+        <p><strong>Document ID:</strong> ${studentId}_${term}_${session}_${Date.now()}</p>
+        <p>© ${new Date().getFullYear()} SXAINT Academy. All rights reserved.</p>
+      </div>
+    `;
+  };
+
+  const getRemarkColor = (remark: string) => {
+    const colors: Record<string, string> = {
+      Excellent: "#166534",
+      "Very Good": "#15803d",
+      Good: "#16a34a",
+      Credit: "#ca8a04",
+      Pass: "#ea580c",
+      Fail: "#dc2626",
+    };
+    return colors[remark] || "#6b7280";
+  };
+
   const renderResultsPreview = () => {
     if (!results) return null;
 
     const subjects = results.subjects || {};
-    const subjectCount = Object.keys(subjects).length;
+    const studentName = results.studentName || "Unknown";
+    const className = results.className || currentUserClass || "Unknown";
+
+    // Calculate overall totals
     let overallTotal = 0;
+    let subjectCount = 0;
 
     Object.values(subjects).forEach((data: any) => {
       overallTotal += data.totalScore || 0;
+      subjectCount++;
     });
 
     const overallAverage = subjectCount > 0 ? overallTotal / subjectCount : 0;
+    const roundedAverage = Math.round(overallAverage * 100) / 100;
+
+    // Get school name
+    const schoolName = getSchoolName(className);
+
+    // Generate remarks
+    const remarks = generateRemarks(roundedAverage);
+
+    // Get grade interpretation
+    const gradeInterpretation = getGradeInterpretation();
 
     return (
-      <div className="results-preview">
+      <div className="structured-results-preview">
         <div className="results-header">
-          <h3>📊 Results Found!</h3>
-          <p>
-            Showing results for {term} - {session}
-          </p>
-          {cardValidation && (
-            <div
-              className={`card-status ${
-                cardValidation.isValid ? "valid" : "invalid"
-              }`}
-            >
-              <div className="card-status-content">
-                <span className="card-status-icon">
-                  {cardValidation.isValid ? "✅" : "❌"}
-                </span>
-                <span className="card-status-text">
-                  Scratch Card:{" "}
-                  {cardValidation.isValid ? "Validated" : "Invalid"}(
-                  {cardValidation.usageCount}/{cardValidation.maxUsage} uses)
-                </span>
-              </div>
-            </div>
-          )}
+          <div className="school-header">
+            <h2>{schoolName}</h2>
+            <p>
+              Academic Results for {term} - {session}
+            </p>
+          </div>
         </div>
 
-        <div className="student-summary">
-          <div className="summary-card">
-            <strong>Student Name:</strong>
-            <span>{results.studentName || studentName}</span>
+        {/* Row 1: Student ID and Name */}
+        <div className="info-row dual-column">
+          <div className="info-item">
+            <span className="info-label">Student ID:</span>
+            <span className="info-value">{results.studentId || studentId}</span>
           </div>
-          <div className="summary-card">
-            <strong>Class:</strong>
-            <span>{results.className || currentUserClass || "N/A"}</span>
+          <div className="info-item">
+            <span className="info-label">Student Name:</span>
+            <span className="info-value">{studentName}</span>
           </div>
-          <div className="summary-card">
-            <strong>Overall Average:</strong>
-            <span className="overall-average">
-              {overallAverage.toFixed(2)}%
+        </div>
+
+        {/* Row 2: School Name and Address */}
+        <div className="info-row dual-column">
+          <div className="info-item">
+            <span className="info-label">School:</span>
+            <span className="info-value">{schoolName}</span>
+          </div>
+          <div className="info-item">
+            <span className="info-label">Address:</span>
+            <span className="info-value">
+              {schoolName.includes("Primary")
+                ? "123 Primary Street, Education City"
+                : "456 High School Road, Academic Town"}
             </span>
           </div>
-          <div className="summary-card">
-            <strong>Scratch Card:</strong>
-            <span className="card-pin">{scratchCard.pin}</span>
+        </div>
+
+        {/* Row 3: Class, Total Students, Position */}
+        <div className="info-row triple-column">
+          <div className="info-item">
+            <span className="info-label">Class:</span>
+            <span className="info-value">{className}</span>
+          </div>
+          <div className="info-item">
+            <span className="info-label">No. of Students:</span>
+            <span className="info-value">
+              {classStats?.totalStudents || "Loading..."}
+            </span>
+          </div>
+          <div className="info-item">
+            <span className="info-label">Position in Class:</span>
+            <span className="info-value">
+              {classStats?.studentPosition || "Loading..."}
+            </span>
           </div>
         </div>
 
-        <div className="results-table-preview">
-          <h4>Subject-wise Results</h4>
-          <div className="table-container">
-            <table className="results-table">
+        {/* Row 4: Term, Student Average, Date, Class Average */}
+        <div className="info-row quad-column">
+          <div className="info-item">
+            <span className="info-label">Term:</span>
+            <span className="info-value">{term}</span>
+          </div>
+          <div className="info-item">
+            <span className="info-label">Student Average:</span>
+            <span className="info-value highlight">{roundedAverage}%</span>
+          </div>
+          <div className="info-item">
+            <span className="info-label">Date Generated:</span>
+            <span className="info-value">
+              {new Date().toLocaleDateString()}
+            </span>
+          </div>
+          <div className="info-item">
+            <span className="info-label">Class Average:</span>
+            <span className="info-value">
+              {classStats?.classAverage || "Loading..."}%
+            </span>
+          </div>
+        </div>
+
+        {/* Results Table */}
+        <div className="results-table-container">
+          <h3>Subject-wise Results</h3>
+          <div className="table-wrapper">
+            <table className="structured-results-table">
               <thead>
                 <tr>
                   <th>Subject</th>
-                  <th>OBJ</th>
                   <th>CA</th>
+                  <th>OBJ</th>
                   <th>Theory</th>
                   <th>Total</th>
                   <th>%</th>
@@ -3632,8 +4349,8 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
                   ([subject, data]: [string, any]) => (
                     <tr key={subject} className="subject-row">
                       <td className="subject-name">{subject}</td>
-                      <td>{data.objScore || 0}</td>
                       <td>{data.caScore || 0}</td>
+                      <td>{data.objScore || 0}</td>
                       <td>{data.theoryScore || 0}</td>
                       <td className="total-score">{data.totalScore || 0}</td>
                       <td>{data.percentage || 0}%</td>
@@ -3647,7 +4364,9 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
                         </span>
                       </td>
                       <td className="position">
-                        {data.positionInClass || "N/A"}
+                        {data.positionInSubject ||
+                          data.positionInClass ||
+                          "N/A"}
                       </td>
                     </tr>
                   )
@@ -3657,13 +4376,159 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
           </div>
         </div>
 
+        {/* Footer Summary */}
+        <div className="footer-summary">
+          <div className="overall-total">
+            <h4>OVERALL SUMMARY</h4>
+            <div className="total-stats">
+              <div className="total-stat">
+                <span className="stat-label">Overall Total Score:</span>
+                <span className="stat-value">{overallTotal}</span>
+              </div>
+              <div className="total-stat">
+                <span className="stat-label">Overall Average:</span>
+                <span className="stat-value highlight">{roundedAverage}%</span>
+              </div>
+              <div className="total-stat">
+                <span className="stat-label">Decision:</span>
+                <span
+                  className={`stat-value decision ${
+                    remarks.decision === "FAIL" ? "fail" : "pass"
+                  }`}
+                >
+                  {remarks.decision}
+                </span>
+              </div>
+              <div className="total-stat">
+                <span className="stat-label">Total Subjects:</span>
+                <span className="stat-value">{subjectCount}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="remarks-container">
+            <div className="remark-box">
+              <h4>Teacher's Remark</h4>
+              <p>{remarks.teacherRemark}</p>
+            </div>
+            <div className="remark-box">
+              <h4>Principal's Remark</h4>
+              <p>{remarks.principalRemark}</p>
+            </div>
+          </div>
+        </div>
+
         <div className="results-actions">
           <button className="action-btn export-btn" onClick={handleExportPDF}>
             <Download size={16} />
-            Export as PDF
+            Download & Print Results
           </button>
+
+          {/* Optional: Add a direct print button if needed */}
           <button
             className="action-btn secondary"
+            onClick={() => {
+              const printWindow = window.open("", "_blank");
+              if (printWindow && results) {
+                printWindow.document.write(renderPDFContent());
+                printWindow.document.close();
+                printWindow.focus();
+                setTimeout(() => printWindow.print(), 500);
+              }
+            }}
+          >
+            <FileSpreadsheet size={16} />
+            Quick Print (No Download)
+          </button>
+
+          <button
+            className="/* Loading spinner for export button */
+            .spinner {
+              display: inline-block;
+              width: 16px;
+              height: 16px;
+              border: 2px solid rgba(255, 255, 255, 0.3);
+              border-radius: 50%;
+              border-top-color: #ffffff;
+              animation: spin 1s linear infinite;
+              margin-right: 8px;
+            }
+            
+            @keyframes spin {
+              to { transform: rotate(360deg); }
+            }
+            
+            /* Results actions layout */
+            .results-actions {
+              display: flex;
+              gap: 12px;
+              justify-content: center;
+              padding-top: 20px;
+              border-top: 1px solid #e5e7eb;
+              flex-wrap: wrap;
+              margin-top: 20px;
+            }
+            
+            .action-btn.export-btn {
+              background: linear-gradient(135deg, #4299e1, #3182ce);
+              color: white;
+              border: none;
+              padding: 12px 24px;
+              border-radius: 8px;
+              font-weight: 600;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              transition: all 0.3s ease;
+              box-shadow: 0 4px 6px rgba(66, 153, 225, 0.3);
+            }
+            
+            .action-btn.export-btn:hover:not(:disabled) {
+              background: linear-gradient(135deg, #3182ce, #2c5282);
+              transform: translateY(-2px);
+              box-shadow: 0 6px 8px rgba(66, 153, 225, 0.4);
+            }
+            
+            .action-btn.export-btn:disabled {
+              opacity: 0.7;
+              cursor: not-allowed;
+              transform: none !important;
+            }
+            
+            .action-btn.secondary {
+              background: #10b981;
+              color: white;
+              border: none;
+              padding: 12px 24px;
+              border-radius: 8px;
+              font-weight: 600;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            }
+            
+            .action-btn.cancel {
+              background: #6b7280;
+              color: white;
+              border: none;
+              padding: 12px 24px;
+              border-radius: 8px;
+              font-weight: 600;
+              cursor: pointer;
+            }
+            
+            @media (max-width: 768px) {
+              .results-actions {
+                flex-direction: column;
+              }
+              
+              .action-btn {
+                width: 100%;
+                justify-content: center;
+              }
+            }"
             onClick={() => {
               setResults(null);
               setCardValidated(false);
@@ -3685,7 +4550,7 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
   return (
     <div className="modal-overlay">
       <div
-        className="modal-content large-modal"
+        className="modal-content xl-modal"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
@@ -3930,9 +4795,9 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
       </div>
 
       <style>{`
-        .large-modal {
-          max-width: 800px;
-          max-height: 85vh;
+        .xl-modal {
+          max-width: 1200px;
+          max-height: 90vh;
         }
         
         .animate-spin {
@@ -3944,7 +4809,417 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
           to { transform: rotate(360deg); }
         }
         
-        /* Scratch Card Section Styles */
+        /* Structured Results Styles */
+        .structured-results-preview {
+          animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .results-header {
+          text-align: center;
+          margin-bottom: 24px;
+          padding-bottom: 16px;
+          border-bottom: 2px solid #4299e1;
+        }
+        
+        .school-header h2 {
+          margin: 0 0 8px 0;
+          color: #1e40af;
+          font-size: 28px;
+        }
+        
+        .school-header p {
+          margin: 0;
+          color: #6b7280;
+          font-size: 16px;
+        }
+        
+        .card-status {
+          margin: 12px 0;
+          padding: 12px;
+          border-radius: 8px;
+          font-size: 14px;
+          max-width: 400px;
+          margin-left: auto;
+          margin-right: auto;
+        }
+        
+        .card-status.valid {
+          background: #d1fae5;
+          border: 1px solid #a7f3d0;
+          color: #065f46;
+        }
+        
+        .card-status.invalid {
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+          color: #dc2626;
+        }
+        
+        .card-status-content {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          justify-content: center;
+        }
+        
+        /* Information Rows */
+        .info-row {
+          display: grid;
+          gap: 16px;
+          margin-bottom: 16px;
+          padding: 16px;
+          background: #f8fafc;
+          border-radius: 12px;
+          border: 1px solid #e5e7eb;
+        }
+        
+        .dual-column {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .triple-column {
+          grid-template-columns: repeat(3, 1fr);
+        }
+        
+        .quad-column {
+          grid-template-columns: repeat(4, 1fr);
+        }
+        
+        .info-item {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        
+        .info-label {
+          font-size: 12px;
+          color: #6b7280;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        
+        .info-value {
+          font-size: 16px;
+          font-weight: 700;
+          color: #1f2937;
+        }
+        
+        .info-value.highlight {
+          color: #059669;
+        }
+        
+        /* Results Table */
+        .results-table-container {
+          margin: 32px 0;
+        }
+        
+        .results-table-container h3 {
+          margin: 0 0 16px 0;
+          color: #374151;
+          font-size: 20px;
+          padding-bottom: 8px;
+          border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .table-wrapper {
+          overflow-x: auto;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        .structured-results-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 14px;
+          background: white;
+        }
+        
+        .structured-results-table th {
+          background: #4299e1;
+          color: white;
+          padding: 12px 8px;
+          text-align: center;
+          font-weight: 600;
+          border: 1px solid #4299e1;
+          white-space: nowrap;
+        }
+        
+        .structured-results-table td {
+          padding: 12px 8px;
+          border: 1px solid #e5e7eb;
+          text-align: center;
+          vertical-align: middle;
+        }
+        
+        .structured-results-table tr:nth-child(even) {
+          background: #f9fafb;
+        }
+        
+        .structured-results-table tr:hover {
+          background: #f0f9ff;
+        }
+        
+        .subject-name {
+          font-weight: 600;
+          color: #1f2937;
+          text-align: left;
+          padding-left: 16px;
+        }
+        
+        .total-score {
+          font-weight: 700;
+          color: #1e40af;
+          background: #f0f9ff;
+        }
+        
+        .position {
+          font-weight: 600;
+          color: #7c3aed;
+        }
+        
+        .grade-badge {
+          padding: 4px 8px;
+          border-radius: 6px;
+          font-weight: 700;
+          font-size: 12px;
+          display: inline-block;
+          min-width: 30px;
+          text-align: center;
+        }
+        
+        .grade-a1 { background: #dcfce7; color: #166534; }
+        .grade-b2 { background: #bbf7d0; color: #15803d; }
+        .grade-b3 { background: #86efac; color: #15803d; }
+        .grade-c4 { background: #fef9c3; color: #854d0e; }
+        .grade-c5 { background: #fef08a; color: #854d0e; }
+        .grade-c6 { background: #fde047; color: #854d0e; }
+        .grade-d7 { background: #fed7aa; color: #9a3412; }
+        .grade-e8 { background: #fdba74; color: #9a3412; }
+        .grade-f9 { background: #fecaca; color: #991b1b; }
+        
+        /* Footer Summary */
+        .footer-summary {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 24px;
+          margin: 32px 0;
+          padding: 24px;
+          background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+          border-radius: 16px;
+          border: 2px solid #bae6fd;
+        }
+        
+        @media (max-width: 768px) {
+          .footer-summary {
+            grid-template-columns: 1fr;
+          }
+        }
+        
+        .overall-total h4 {
+          margin: 0 0 16px 0;
+          color: #0369a1;
+          font-size: 18px;
+          border-bottom: 2px solid #bae6fd;
+          padding-bottom: 8px;
+        }
+        
+        .total-stats {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 16px;
+        }
+        
+        @media (max-width: 480px) {
+          .total-stats {
+            grid-template-columns: 1fr;
+          }
+        }
+        
+        .total-stat {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        
+        .stat-label {
+          font-size: 12px;
+          color: #6b7280;
+          font-weight: 600;
+        }
+        
+        .stat-value {
+          font-size: 20px;
+          font-weight: 700;
+          color: #1e40af;
+        }
+        
+        .stat-value.highlight {
+          color: #059669;
+          font-size: 24px;
+        }
+        
+        .stat-value.decision {
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-size: 16px;
+          display: inline-block;
+        }
+        
+        .stat-value.decision.pass {
+          background: #d1fae5;
+          color: #065f46;
+        }
+        
+        .stat-value.decision.fail {
+          background: #fecaca;
+          color: #991b1b;
+        }
+        
+        /* Remarks */
+        .remarks-container {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        
+        .remark-box {
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          padding: 16px;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        
+        .remark-box h4 {
+          margin: 0 0 8px 0;
+          color: #374151;
+          font-size: 16px;
+          border-bottom: 1px solid #e5e7eb;
+          padding-bottom: 8px;
+        }
+        
+        .remark-box p {
+          margin: 0;
+          color: #6b7280;
+          font-size: 14px;
+          line-height: 1.5;
+        }
+        
+        /* Grade Interpretation */
+        .grade-interpretation-box {
+          margin: 32px 0;
+          padding: 24px;
+          background: linear-gradient(135deg, #f0f9ff 0%, #e0f7fa 100%);
+          border-radius: 16px;
+          border: 2px solid #bae6fd;
+        }
+        
+        .grade-interpretation-box h4 {
+          margin: 0 0 16px 0;
+          color: #0369a1;
+          font-size: 18px;
+          text-align: center;
+        }
+        
+        .grade-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+        }
+        
+        @media (max-width: 768px) {
+          .grade-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .grade-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+        
+        .grade-item {
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          padding: 12px;
+          text-align: center;
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .grade-item:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .grade-header {
+          font-size: 24px;
+          font-weight: 700;
+          margin-bottom: 4px;
+        }
+        
+        .grade-range {
+          font-size: 12px;
+          color: #6b7280;
+          margin-bottom: 4px;
+        }
+        
+        .grade-remark {
+          font-size: 14px;
+          font-weight: 600;
+          color: #374151;
+        }
+        
+        .results-actions {
+          display: flex;
+          gap: 12px;
+          justify-content: center;
+          padding-top: 24px;
+          border-top: 1px solid #e5e7eb;
+        }
+        
+        .action-btn.export-btn {
+          background: #f59e0b;
+          color: white;
+          padding: 12px 24px;
+          border-radius: 8px;
+          border: none;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          transition: background-color 0.2s;
+        }
+        
+        .action-btn.export-btn:hover {
+          background: #d97706;
+        }
+        
+        .action-btn.secondary {
+          background: #6b7280;
+          color: white;
+          padding: 12px 24px;
+          border-radius: 8px;
+          border: none;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background-color 0.2s;
+        }
+        
+        .action-btn.secondary:hover {
+          background: #4b5563;
+        }
+        
+        /* Existing styles from previous implementation */
         .scratch-card-section,
         .card-validated-section,
         .results-query-section {
@@ -3981,6 +5256,12 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
         
         @media (max-width: 768px) {
           .card-inputs-grid {
+            grid-template-columns: 1fr;
+          }
+          
+          .info-row.dual-column,
+          .info-row.triple-column,
+          .info-row.quad-column {
             grid-template-columns: 1fr;
           }
         }
@@ -4115,206 +5396,17 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
           line-height: 1.4;
         }
         
-        /* Card Status in Results Preview */
-        .card-status {
-          margin: 12px 0;
-          padding: 12px;
+        .action-btn {
+          padding: 12px 24px;
           border-radius: 8px;
           font-size: 14px;
-        }
-        
-        .card-status.valid {
-          background: #d1fae5;
-          border: 1px solid #a7f3d0;
-          color: #065f46;
-        }
-        
-        .card-status.invalid {
-          background: #fef2f2;
-          border: 1px solid #fecaca;
-          color: #dc2626;
-        }
-        
-        .card-status-content {
+          font-weight: 600;
+          cursor: pointer;
+          border: none;
+          transition: all 0.2s;
           display: flex;
           align-items: center;
           gap: 8px;
-        }
-        
-        /* Results Preview Styles */
-        .results-preview {
-          animation: slideIn 0.3s ease;
-        }
-        
-        @keyframes slideIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .results-header {
-          text-align: center;
-          margin-bottom: 24px;
-          padding-bottom: 16px;
-          border-bottom: 2px solid #e5e7eb;
-        }
-        
-        .results-header h3 {
-          margin: 0 0 8px 0;
-          color: #1e40af;
-          font-size: 24px;
-        }
-        
-        .results-header p {
-          margin: 0;
-          color: #6b7280;
-        }
-        
-        .student-summary {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 16px;
-          margin-bottom: 24px;
-        }
-        
-        .summary-card {
-          background: #f8fafc;
-          border: 2px solid #e5e7eb;
-          border-radius: 12px;
-          padding: 16px;
-          text-align: center;
-        }
-        
-        .summary-card strong {
-          display: block;
-          margin-bottom: 8px;
-          color: #6b7280;
-          font-size: 14px;
-        }
-        
-        .summary-card span {
-          display: block;
-          font-size: 18px;
-          font-weight: 600;
-          color: #1f2937;
-        }
-        
-        .summary-card .overall-average {
-          color: #10b981;
-          font-size: 22px;
-        }
-        
-        .summary-card .card-pin {
-          color: #3b82f6;
-          font-family: monospace;
-          font-size: 16px;
-          letter-spacing: 1px;
-        }
-        
-        .results-table-preview {
-          margin-bottom: 24px;
-        }
-        
-        .results-table-preview h4 {
-          margin: 0 0 16px 0;
-          color: #374151;
-          font-size: 18px;
-        }
-        
-        .table-container {
-          overflow-x: auto;
-          border: 1px solid #e5e7eb;
-          border-radius: 8px;
-        }
-        
-        .results-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 13px;
-        }
-        
-        .results-table th {
-          background: #f9fafb;
-          padding: 12px 8px;
-          text-align: left;
-          font-weight: 600;
-          color: #374151;
-          border-bottom: 2px solid #e5e7eb;
-          white-space: nowrap;
-        }
-        
-        .results-table td {
-          padding: 12px 8px;
-          border-bottom: 1px solid #e5e7eb;
-          vertical-align: middle;
-        }
-        
-        .results-table tr:last-child td {
-          border-bottom: none;
-        }
-        
-        .results-table tr:hover {
-          background: #f9fafb;
-        }
-        
-        .subject-name {
-          font-weight: 600;
-          color: #1f2937;
-        }
-        
-        .total-score {
-          font-weight: 700;
-          color: #1e40af;
-        }
-        
-        .position {
-          font-weight: 600;
-          color: #7c3aed;
-        }
-        
-        .grade-badge {
-          padding: 4px 8px;
-          border-radius: 6px;
-          font-weight: 700;
-          font-size: 12px;
-          display: inline-block;
-          min-width: 30px;
-          text-align: center;
-        }
-        
-        .grade-a1 { background: #dcfce7; color: #166534; }
-        .grade-b2 { background: #bbf7d0; color: #15803d; }
-        .grade-b3 { background: #86efac; color: #15803d; }
-        .grade-c4 { background: #fef9c3; color: #854d0e; }
-        .grade-c5 { background: #fef08a; color: #854d0e; }
-        .grade-c6 { background: #fde047; color: #854d0e; }
-        .grade-d7 { background: #fed7aa; color: #9a3412; }
-        .grade-e8 { background: #fdba74; color: #9a3412; }
-        .grade-f9 { background: #fecaca; color: #991b1b; }
-        
-        .results-actions {
-          display: flex;
-          gap: 12px;
-          justify-content: center;
-          padding-top: 20px;
-          border-top: 1px solid #e5e7eb;
-        }
-        
-        .action-btn.export-btn {
-          background: #f59e0b;
-          color: white;
-        }
-        
-        .action-btn.export-btn:hover {
-          background: #d97706;
-        }
-        
-        .action-btn.secondary {
-          background: #6b7280;
-          color: white;
-        }
-        
-        .action-btn.secondary:hover {
-          background: #4b5563;
         }
         
         .action-btn.cancel {
@@ -4339,25 +5431,10 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
           opacity: 0.6;
           cursor: not-allowed;
         }
-        
-        @media (max-width: 768px) {
-          .student-summary {
-            grid-template-columns: 1fr;
-          }
-          
-          .results-actions {
-            flex-direction: column;
-          }
-          
-          .action-btn {
-            width: 100%;
-          }
-        }
       `}</style>
     </div>
   );
 };
-
 // Main Student Dashboard Component
 const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -8785,6 +9862,97 @@ const StudentDashboard: React.FC = () => {
           opacity: 0.5;
           cursor: not-allowed;
         }
+        .info-value.underlined {
+          text-decoration: underline;
+          padding-bottom: 2px;
+        }
+        /* Loading spinner for export button */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #ffffff;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Results actions layout */
+.results-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+.action-btn.export-btn {
+  background: linear-gradient(135deg, #4299e1, #3182ce);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(66, 153, 225, 0.3);
+}
+
+.action-btn.export-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #3182ce, #2c5282);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 8px rgba(66, 153, 225, 0.4);
+}
+
+.action-btn.export-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.action-btn.secondary {
+  background: #10b981;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-btn.cancel {
+  background: #6b7280;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .results-actions {
+    flex-direction: column;
+  }
+  
+  .action-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
         
       `}</style>
     </div>
