@@ -3215,12 +3215,9 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
           isActive: true,
           usageCount,
           maxUsage,
-          message:
-            "Card usage limit reached (3 uses). Please purchase a new card.",
+          message: "Card usage limit reached. Please purchase a new card.",
         });
-        setError(
-          "Card usage limit reached (3 uses). Please purchase a new card."
-        );
+        setError("Card usage limit reached. Please purchase a new card.");
         setVerifyingCard(false);
         return false;
       }
