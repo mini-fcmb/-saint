@@ -4271,8 +4271,8 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
             <span className="info-label">Address:</span>
             <span className="info-value">
               {schoolName.includes("Primary")
-                ? "123 Primary Street, Education City"
-                : "456 High School Road, Academic Town"}
+                ? "Abakaliki 482103, Ebonyi State"
+                : "Abakaliki 482103, Ebonyi State"}
             </span>
           </div>
         </div>
@@ -6039,7 +6039,7 @@ const StudentDashboard: React.FC = () => {
               <div className="online-dot"></div>
               Online - Available for work
             </span>
-            <button className="follow-btn">Follow</button>
+            <button className="follow-btn">Study</button>
           </div>
 
           {/* Header Actions */}
@@ -9130,7 +9130,7 @@ const StudentDashboard: React.FC = () => {
         }
         
         .action-btn.cancel:hover {
-          background: #f9fafb;
+          background: #4b5563;
           border-color: #9ca3af;
         }
         
