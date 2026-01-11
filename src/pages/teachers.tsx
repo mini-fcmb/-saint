@@ -9636,6 +9636,299 @@ height:50px;
 width:99px;
   }
 }
+@media (max-width: 424px) {
+  /* Modal container adjustments */
+  .modal-content {
+    max-width: 95vw !important;
+    max-height: 95vh !important;
+    border-radius: 16px !important;
+    margin: 8px !important;
+  }
+
+  .modal-header {
+    padding: 16px 16px 0 !important;
+    margin-bottom: 16px !important;
+  }
+
+  .modal-body {
+    padding: 0 16px !important;
+  }
+
+  .modal-footer {
+    padding: 16px 16px 20px !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  /* Header adjustments */
+  .modal-title-section h2 {
+    font-size: 20px !important;
+  }
+
+  .question-counter {
+    font-size: 12px !important;
+  }
+
+  .close-btn {
+    padding: 6px !important;
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  /* Form elements */
+  .form-group {
+    margin-bottom: 24px !important;
+  }
+
+  .form-group label {
+    font-size: 13px !important;
+    margin-bottom: 6px !important;
+  }
+
+  .question-textarea {
+    padding: 12px !important;
+    font-size: 13px !important;
+    min-height: 80px !important;
+    border-radius: 10px !important;
+  }
+
+  /* Image upload section */
+  .image-upload-area {
+    padding: 24px 12px !important;
+  }
+
+  .upload-label p {
+    font-size: 14px !important;
+  }
+
+  .upload-label span {
+    font-size: 12px !important;
+  }
+
+  .preview-image {
+    max-height: 150px !important;
+  }
+
+  /* Options container */
+  .option-item {
+    padding: 16px !important;
+    border-radius: 10px !important;
+  }
+
+  .option-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .option-label {
+    font-size: 13px !important;
+  }
+
+  .correct-answer-selector {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .option-input {
+    padding: 12px 14px !important;
+    font-size: 13px !important;
+    border-radius: 6px !important;
+  }
+
+  /* Footer buttons */
+  .footer-left,
+  .footer-right {
+    width: 100% !important;
+    flex-direction: column !important;
+  }
+
+  .nav-btn {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 10px 12px !important;
+    font-size: 13px !important;
+  }
+
+  .prev {
+    order: 2 !important;
+  }
+
+  .next {
+    order: 3 !important;
+  }
+
+  .remove-question-btn {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 10px 12px !important;
+    font-size: 13px !important;
+    order: 1 !important;
+  }
+
+  .add-question-btn {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 10px 12px !important;
+    font-size: 13px !important;
+    order: 2 !important;
+  }
+
+  .action-btn.save {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 12px 16px !important;
+    font-size: 14px !important;
+    order: 1 !important;
+  }
+
+  /* Adjust button icons */
+  .nav-btn,
+  .remove-question-btn,
+  .add-question-btn,
+  .action-btn.save {
+    gap: 6px !important;
+  }
+
+  /* Quiz Name Modal adjustments */
+  .text-input {
+    padding: 10px 14px !important;
+    font-size: 13px !important;
+  }
+
+  .quiz-summary {
+    padding: 16px !important;
+    border-radius: 12px !important;
+  }
+
+  .quiz-summary h4 {
+    font-size: 14px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .quiz-summary p {
+    font-size: 12px !important;
+    margin: 8px 0 !important;
+  }
+
+  /* Time adjustments buttons */
+  .time-adjustments {
+    gap: 6px !important;
+  }
+
+  .time-adjust-btn {
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+  }
+
+  /* Grade Management adjustments */
+  .grade-controls {
+    padding: 12px !important;
+    gap: 12px !important;
+  }
+
+  .control-group label {
+    font-size: 12px !important;
+  }
+
+  .control-group select.text-input {
+    padding: 8px 10px !important;
+    font-size: 12px !important;
+  }
+
+  .action-buttons .action-btn {
+    font-size: 11px !important;
+    padding: 6px 12px !important;
+  }
+
+  .grades-table th,
+  .grades-table td {
+    padding: 6px 4px !important;
+    font-size: 11px !important;
+  }
+
+  .score-input {
+    width: 50px !important;
+    padding: 3px 6px !important;
+    font-size: 11px !important;
+  }
+
+  /* Live Monitoring adjustments */
+  .monitoring-controls {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  .monitoring-stats {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  .stat-card {
+    padding: 12px !important;
+  }
+
+  .stat-number {
+    font-size: 24px !important;
+  }
+
+  /* Performance Menu adjustments */
+  .performance-menu-grid {
+    grid-template-columns: 1fr !important;
+    padding: 0 12px 16px !important;
+  }
+
+  .performance-menu-item {
+    padding: 16px !important;
+    gap: 12px !important;
+  }
+
+  .menu-item-icon {
+    width: 48px !important;
+    height: 48px !important;
+  }
+
+  .menu-item-content h4 {
+    font-size: 14px !important;
+  }
+
+  .menu-item-content p {
+    font-size: 12px !important;
+  }
+
+  /* Class options in quiz name modal */
+  .class-options {
+    gap: 8px !important;
+  }
+
+  .class-option-btn {
+    padding: 12px !important;
+    gap: 6px !important;
+  }
+
+  .class-option-btn span:first-of-type {
+    font-size: 14px !important;
+  }
+
+  .student-count {
+    font-size: 12px !important;
+  }
+
+  /* Image icons sizing */
+  .image-upload-area svg,
+  .upload-label svg {
+    width: 28px !important;
+    height: 28px !important;
+  }
+
+  .remove-image-btn {
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+    gap: 4px !important;
+  }
+}
         
 
       `}</style>
