@@ -6021,7 +6021,6 @@ const StudentDashboard: React.FC = () => {
           {/* Logo Section */}
           <div className="logo-section">
             <div className="logo-img">
-              {" "}
               <img
                 src={logo}
                 style={{
@@ -9150,59 +9149,146 @@ const StudentDashboard: React.FC = () => {
         }
         
         @media (max-width: 768px) {
+          /* Existing responsive adjustments */
           .header {
             padding: 0 24px;
           }
+        get-in-touch{
+          display:none;
+        }
           .main-content {
             padding: 24px;
             margin-left: 0;
           }
+          .sidebar.open ~ .main-content {
+            margin-left: 300px;
+        }
+        
+        
           .sidebar:not(.open) ~ .main-content {
-            margin-left: 0;
+            margin-left: 88px;
           }
-          .sidebar {
-            transform: translateX(-100%);
-          }
+          
           .sidebar.open {
             transform: translateX(0);
           }
+          .sidebar:not(.open) {
+            width: 88px !important;
+        }
+        
           .profile-card {
+            display: none !important; /* hide full profile card on mobile */
             position: static;
             width: 100%;
             margin-top: 24px;
           }
+        
           .progress-card {
             flex-direction: column;
             text-align: center;
             gap: 20px;
           }
+        
           .monitoring-stats {
             grid-template-columns: repeat(2, 1fr);
           }
+        
           .monitoring-item {
             flex-direction: column;
             align-items: flex-start;
             gap: 12px;
           }
+        
           .progress-display {
             width: 100%;
             justify-content: space-between;
           }
+        
           .grade-controls {
             grid-template-columns: 1fr;
           }
+        
           .action-buttons {
             flex-direction: column;
           }
+        
           .modal-footer {
             flex-direction: column;
           }
+        
           .footer-left,
           .footer-right {
             justify-content: center;
             width: 100%;
           }
+        
+          /* ------------------ New avatar + dropdown ------------------ */
+          .profile-avatar-container {
+            display: block;
+          }
+        
+          .profile-avatar-mobile {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #cce0ff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            cursor: pointer;
+            color: #4299e1;
+            user-select: none;
+          }
+        
+          .profile-dropdown {
+            position: absolute;
+            top: 50px; /* adjust based on header height */
+            right: 0;
+            width: 200px;
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 0.75rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: none; /* hidden by default */
+            z-index: 100;
+          }
+          .profile-dropdown.show {
+            display: block;
+          }
+          .profile-dropdown h2 {
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+          }
+        
+          .profile-dropdown p {
+            font-size: 0.8rem;
+            color: #555;
+            margin-bottom: 0.5rem;
+          }
+          .get-in-touch{
+            display:none;
+          }
+        
+          .profile-dropdown button {
+            background: #4299e1;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 0 24px;
+            height: 30px;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            width:100%;
+            gap: 8px;
+            justify-content:center;
+          }
         }
+        
+        
         
         @media (max-width: 480px) {
           .performance-menu-grid {
