@@ -9389,7 +9389,7 @@ get-in-touch{
           }
         }
         /* Mobile Responsive Sidebar - Media Queries */
-@media (max-width: 425px) {
+@media (max-width: 767px) {
   .sidebar {
     display: none !important;
   }
@@ -9435,6 +9435,10 @@ get-in-touch{
   /* Hide desktop get-in-touch */
   .get-in-touch {
     display: none !important;
+    
+  }
+  .icon-btn{
+    display:none !important;
   }
 }
 
