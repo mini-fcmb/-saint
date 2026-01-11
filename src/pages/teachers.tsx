@@ -16,6 +16,8 @@ import {
   ChevronLeft,
   Clock,
   Plus,
+  User,
+  LogOut,
   CheckCircle,
   AlertCircle,
   ArrowRight,
@@ -46,6 +48,7 @@ import {
   Book,
   Building,
   Info,
+  Menu as MenuIcon,
 } from "lucide-react";
 import {
   useFirebaseStore,
@@ -69,6 +72,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
+import logo from "../assets/logo.png";
 
 // Enhanced Types
 interface TeacherClassInfo {
@@ -2248,57 +2252,58 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     }
   };
   // Fallback function to save scores one by one (for backward compatibility)
-const saveScoresOneByOne = async () => {
-  if (!user?.uid || !selectedClass || !selectedSubject) {
-    throw new Error("Missing required data");
-  }
+  const saveScoresOneByOne = async () => {
+    if (!user?.uid || !selectedClass || !selectedSubject) {
+      throw new Error("Missing required data");
+    }
 
-  console.log("🔄 Fallback: Saving scores one by one to 'scores' collection");
+    console.log("🔄 Fallback: Saving scores one by one to 'scores' collection");
 
-  const batch = writeBatch(db);
-  const timestamp = new Date();
-  let savedCount = 0;
+    const batch = writeBatch(db);
+    const timestamp = new Date();
+    let savedCount = 0;
 
-  for (const record of gradeRecords) {
-    const scoreId = `${record.studentId}_${selectedClass}_${selectedSubject}_${activeTerm}_${activeSession}`
-      .replace(/\s+/g, "_")
-      .replace(/\//g, "_");
+    for (const record of gradeRecords) {
+      const scoreId =
+        `${record.studentId}_${selectedClass}_${selectedSubject}_${activeTerm}_${activeSession}`
+          .replace(/\s+/g, "_")
+          .replace(/\//g, "_");
 
-    const scoreRef = doc(db, "scores", scoreId);
+      const scoreRef = doc(db, "scores", scoreId);
 
-    const scoreData = {
-      id: scoreId,
-      studentId: record.studentId,
-      studentName: record.studentName,
-      classId: selectedClass,
-      className: selectedClass,
-      subjectId: selectedSubject,
-      subject: selectedSubject,
-      term: activeTerm,
-      session: activeSession,
-      obj: record.objScore,
-      ca: record.caScore,
-      theory: record.theoryScore,
-      total: record.totalScore,
-      percentage: record.percentage,
-      grade: record.grade,
-      position: record.positionInClass,
-      remark: record.remark,
-      teacherId: user.uid,
-      teacherName: user.displayName || "Teacher",
-      updatedAt: timestamp,
-      createdAt: timestamp,
-    };
+      const scoreData = {
+        id: scoreId,
+        studentId: record.studentId,
+        studentName: record.studentName,
+        classId: selectedClass,
+        className: selectedClass,
+        subjectId: selectedSubject,
+        subject: selectedSubject,
+        term: activeTerm,
+        session: activeSession,
+        obj: record.objScore,
+        ca: record.caScore,
+        theory: record.theoryScore,
+        total: record.totalScore,
+        percentage: record.percentage,
+        grade: record.grade,
+        position: record.positionInClass,
+        remark: record.remark,
+        teacherId: user.uid,
+        teacherName: user.displayName || "Teacher",
+        updatedAt: timestamp,
+        createdAt: timestamp,
+      };
 
-    batch.set(scoreRef, scoreData, { merge: true });
-    savedCount++;
-    console.log(`📝 Prepared score for ${record.studentName}`);
-  }
+      batch.set(scoreRef, scoreData, { merge: true });
+      savedCount++;
+      console.log(`📝 Prepared score for ${record.studentName}`);
+    }
 
-  await batch.commit();
-  console.log(`✅ Saved ${savedCount} scores to 'scores' collection`);
-  return savedCount;
-};
+    await batch.commit();
+    console.log(`✅ Saved ${savedCount} scores to 'scores' collection`);
+    return savedCount;
+  };
   // Function to save grades to student term documents (ONE DOCUMENT PER STUDENT)
 
   // Function to save to scores collection (for backward compatibility)
@@ -4255,6 +4260,8 @@ const TeacherDashboard: React.FC = () => {
   const [selectedSubject, setSelectedSubject] = useState<string>("");
   const [activeTerm, setActiveTerm] = useState<string>("First Term");
   const [activeSession, setActiveSession] = useState<string>("2024/2025");
+  const [mobileSidePanelOpen, setMobileSidePanelOpen] = useState(false);
+  const [mobileDropdownOpen, setMobileDropdownOpen] = useState(false);
 
   const navigate = useNavigate();
 
@@ -4321,6 +4328,21 @@ const TeacherDashboard: React.FC = () => {
       console.log(`${index + 1}. ${student.fullName} -> ${student.className}`);
     });
   };
+  // Add this effect to close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (
+        !target.closest(".profile-avatar-container") &&
+        !target.closest(".profile-dropdown")
+      ) {
+        setMobileDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const fetchTeacherData = async () => {
@@ -4603,6 +4625,7 @@ const TeacherDashboard: React.FC = () => {
       classes: student.classes || [], // Ensure classes is included
     }));
   }, [classStudents]);
+
   // Add this useEffect to listen for quiz deletions from other devices
   useEffect(() => {
     if (!user?.uid) return;
@@ -5411,7 +5434,18 @@ const TeacherDashboard: React.FC = () => {
         <div className="header-content">
           {/* Logo Section */}
           <div className="logo-section">
-            <div className="logo-img"></div>
+            <div className="logo-img">
+              <img
+                src={logo}
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                  border: "2px solid #000",
+                }}
+              />
+            </div>
             <span className="logo-text">SXaint</span>
             <span className="status online-indicator">
               <div className="online-dot"></div>
@@ -5422,6 +5456,12 @@ const TeacherDashboard: React.FC = () => {
 
           {/* Header Actions */}
           <div className="header-actions">
+            <button
+              className="mobile-menu-btn"
+              onClick={() => setMobileSidePanelOpen(true)}
+            >
+              <MenuIcon size={20} />
+            </button>
             <button className="icon-btn">
               <Search size={20} />
             </button>
@@ -5467,6 +5507,194 @@ const TeacherDashboard: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+        <div
+          className={`mobile-panel-overlay ${
+            mobileSidePanelOpen ? "active" : ""
+          }`}
+          onClick={() => setMobileSidePanelOpen(false)}
+        />
+        <div
+          className={`mobile-side-panel ${mobileSidePanelOpen ? "open" : ""}`}
+        >
+          <div className="mobile-panel-header">
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div className="logo-img">
+                <img
+                  src={logo}
+                  style={{ width: "32px", height: "32px", borderRadius: "50%" }}
+                />
+              </div>
+              <span className="logo-text">SXaint</span>
+            </div>
+            <button
+              className="close-btn"
+              onClick={() => setMobileSidePanelOpen(false)}
+            >
+              <X size={24} />
+            </button>
+          </div>
+
+          <div className="mobile-panel-content">
+            {/* Mobile Navigation */}
+            <nav
+              style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+            >
+              {menuItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setSelectedMenu(item.id);
+                      setMobileSidePanelOpen(false);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      padding: "12px 16px",
+                      borderRadius: "12px",
+                      background:
+                        selectedMenu === item.id ? "#eef2ff" : "transparent",
+                      border: "none",
+                      color: selectedMenu === item.id ? "#4f46e5" : "#6b7280",
+                      fontSize: "15px",
+                      fontWeight: selectedMenu === item.id ? "600" : "500",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      width: "100%",
+                    }}
+                  >
+                    <Icon size={20} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+
+            {/* Mobile Analytics Menu */}
+            <div
+              style={{
+                marginTop: "32px",
+                padding: "16px",
+                background: "#f8fafc",
+                borderRadius: "16px",
+              }}
+            >
+              <h4
+                style={{
+                  margin: "0 0 16px 0",
+                  fontSize: "16px",
+                  fontWeight: "600",
+                }}
+              >
+                Performance Management
+              </h4>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setGradeManagementModalOpen(true);
+                    setMobileSidePanelOpen(false);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    padding: "12px",
+                    background: "white",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "12px",
+                    color: "#374151",
+                    fontSize: "14px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Table size={18} color="#10b981" />
+                  <span>Grade Management</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setLiveMonitoringModalOpen(true);
+                    setMobileSidePanelOpen(false);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    padding: "12px",
+                    background: "white",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "12px",
+                    color: "#374151",
+                    fontSize: "14px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Eye size={18} color="#3b82f6" />
+                  <span>Live Monitoring</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setUploadCAModalOpen(true);
+                    setMobileSidePanelOpen(false);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    padding: "12px",
+                    background: "white",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "12px",
+                    color: "#374151",
+                    fontSize: "14px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Upload size={18} color="#8b5cf6" />
+                  <span>Upload CA Scores</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Create Quiz Button for Mobile */}
+            <div style={{ marginTop: "24px" }}>
+              <button
+                onClick={() => {
+                  setEditingQuiz(null);
+                  setQuizModalOpen(true);
+                  setMobileSidePanelOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  padding: "16px",
+                  background: "#4f46e5",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "16px",
+                  fontSize: "15px",
+                  fontWeight: "600",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
+                  cursor: "pointer",
+                }}
+              >
+                <Plus size={20} />
+                Create New Quiz
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -7306,7 +7534,7 @@ const TeacherDashboard: React.FC = () => {
           position: fixed;
           top: 100px;
           right: 48px;
-          width: 380px;
+          width: 380px !important;
           background: #fff;
           border-radius: 24px;
           padding: 32px;
@@ -9160,6 +9388,225 @@ get-in-touch{
             justify-content: space-between;
           }
         }
+        /* Mobile Responsive Sidebar - Media Queries */
+@media (max-width: 425px) {
+  .sidebar {
+    display: none !important;
+  }
+  
+  .main-content {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+  
+  /* New mobile header layout */
+  .logo-section {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .logo-text {
+    font-size: 18px !important;
+  }
+  
+  .online-indicator {
+    display: none !important;
+  }
+  
+  .follow-btn {
+    display: none !important;
+  }
+  
+  /* Performance button for mobile */
+  .performance-btn {
+    display: none !important;
+  }
+  
+  /* Show mobile menu icon */
+  .mobile-menu-btn {
+    display: flex !important;
+  }
+  
+  /* Mobile profile avatar in header */
+  .profile-avatar-mobile {
+    display: flex !important;
+  }
+  
+  /* Hide desktop get-in-touch */
+  .get-in-touch {
+    display: none !important;
+  }
+}
+
+@media (max-width: 375px) {
+  .sidebar {
+    display: none !important;
+  }
+  
+  .main-content {
+    margin-left: 0 !important;
+    padding: 16px !important;
+  }
+  
+  .logo-text {
+    font-size: 16px !important;
+  }
+  
+  .header {
+    padding: 0 16px !important;
+  }
+  
+  .header-actions {
+    gap: 8px !important;
+  }
+  
+  .icon-btn {
+    width: 36px !important;
+    height: 36px !important;
+  }
+}
+
+@media (max-width: 320px) {
+  .sidebar {
+    display: none !important;
+  }
+  
+  .logo-section {
+    gap: 8px !important;
+  }
+  
+  .logo-img {
+    width: 30px !important;
+    height: 30px !important;
+  }
+  
+  .logo-text {
+    font-size: 18px !important;
+    margin-left: 10px;
+  }
+  
+  .header-actions {
+    gap: 4px !important;
+  }
+  
+  .icon-btn {
+    width: 32px !important;
+    height: 32px !important;
+  }
+}
+
+/* New Mobile Side Panel */
+.mobile-side-panel {
+  position: fixed;
+  top: 0;
+  left: -100%;
+  width: 280px;
+  height: 100vh;
+  background: white;
+  z-index: 1000;
+  transition: left 0.3s ease;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  overflow-y: auto;
+}
+
+.mobile-side-panel.open {
+  left: 0;
+}
+
+.mobile-panel-header {
+  padding: 20px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mobile-panel-content {
+  padding: 20px;
+}
+
+.mobile-panel-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  display: none;
+}
+
+.mobile-panel-overlay.active {
+  display: block;
+}
+
+/* Mobile Menu Button */
+.mobile-menu-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+/* Show mobile menu button on small screens */
+@media (max-width: 425px) {
+  .mobile-menu-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Mobile Header Adjustments */
+@media (max-width: 425px) {
+  .header-content {
+    gap: 12px;
+  }
+  
+  .performance-btn {
+    order: 2;
+  }
+  
+  .mobile-menu-btn {
+    order: 1;
+    margin-right: 8px;
+  }
+  
+  .profile-avatar-container {
+    order: 3;
+  }
+  
+  .icon-btn:not(.performance-btn) {
+    display: none !important;
+  }
+}
+/* Mobile Profile Dropdown */
+.profile-dropdown {
+  position: absolute;
+  top: 50px;
+  right: 0;
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  width: 280px;
+  z-index: 1000;
+  display: none;
+}
+
+.profile-dropdown.show {
+  display: block;
+}
+
+@media (max-width: 320px) {
+  .profile-dropdown {
+    width: 250px;
+    right: -10px;
+  }
+}
         
 
       `}</style>
