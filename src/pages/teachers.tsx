@@ -4075,8 +4075,9 @@ const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
               onClick={handleSave}
               style={{ backgroundColor: "#4299e1 !important" }}
             >
-              {editingQuiz ? "Update Questions" : "Save Questions"} (
-              {questions.length} questions)
+              {editingQuiz
+                ? "Update Questions"
+                : `Save ${questions.length} Question`}
             </button>
           </div>
         </div>
@@ -9573,7 +9574,22 @@ get-in-touch{
   .performance-btn {
     order: 2;
   }
-  
+  .action-btn.save{
+    font-size:10px;
+  }
+  .add-question-btn {
+    font-size:10px;
+  }
+  .nav-btn {
+    font-size: 10px;
+    width: 100px;
+    height: 50px;
+  }
+  .remove-question-btn{
+    width: 300px;
+    height: 50px;
+    font-size: 13px;
+  }
   .mobile-menu-btn {
     order: 1;
     margin-right: 8px;
@@ -9609,6 +9625,15 @@ get-in-touch{
   .profile-dropdown {
     width: 250px;
     right: -10px;
+
+  }
+  .action-btn.save {
+width:70px;
+height:50px;
+  }
+
+  .remove-question-btn{
+width:99px;
   }
 }
         
