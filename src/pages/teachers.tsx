@@ -3049,23 +3049,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
               left: "20px",
               bottom: "20px",
             }}
-          >
-            <button
-              onClick={testDatabaseConnection}
-              style={{
-                background: "#f59e0b",
-                color: "white",
-                padding: "6px 10px",
-                border: "none",
-                borderRadius: "6px",
-                fontSize: "11px",
-                cursor: "pointer",
-                marginRight: "8px",
-              }}
-            >
-              🐛 Test DB
-            </button>
-          </div>
+          ></div>
           <div className="footer-stats">
             <div className="stat">
               <span className="stat-label">Total Students:</span>
@@ -9929,6 +9913,363 @@ width:99px;
     gap: 4px !important;
   }
 }
+@media (max-width: 425px) {
+  /* Live Monitoring Modal Container */
+  .xl-modal {
+    width: 95vw !important;
+    max-height: 85vh !important;
+    margin: 8px !important;
+    border-radius: 16px !important;
+  }
+  
+  .modal-header {
+    padding: 16px 16px 0 !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    margin-bottom: 16px !important;
+  }
+  
+  .modal-header h2 {
+    font-size: 20px !important;
+    line-height: 1.2 !important;
+  }
+  
+  .modal-header p {
+    font-size: 13px !important;
+    color: #6b7280 !important;
+  }
+  
+  /* Monitoring Controls */
+  .monitoring-controls {
+    width: 100% !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  
+  .live-indicator {
+    font-size: 12px !important;
+    justify-content: center !important;
+    width: 100% !important;
+    padding: 6px 0 !important;
+  }
+  
+  .refresh-btn, .refresh-manual-btn, .quiz-selector {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 10px !important;
+    font-size: 11px !important;
+    height: 36px !important;
+  }
+  
+  .quiz-selector {
+    height: 36px !important;
+    min-width: unset !important;
+  }
+  
+  /* Monitoring Stats */
+  .monitoring-stats {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+    margin-bottom: 16px !important;
+  }
+  
+  .stat-card {
+    padding: 12px 8px !important;
+    border-radius: 10px !important;
+  }
+  
+  .stat-card svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+  
+  .stat-number {
+    font-size: 20px !important;
+  }
+  
+  .stat-label {
+    font-size: 11px !important;
+  }
+  
+  /* Students Monitoring Section */
+  .students-monitoring {
+    margin-top: 16px !important;
+  }
+  
+  .students-monitoring h4 {
+    font-size: 16px !important;
+    margin-bottom: 12px !important;
+  }
+  
+  .monitoring-list {
+    max-height: 400px !important;
+    gap: 10px !important;
+  }
+  
+  /* Monitoring Item */
+  .monitoring-item {
+    flex-direction: column !important;
+    padding: 12px !important;
+    gap: 12px !important;
+    border-radius: 10px !important;
+  }
+  
+  .student-info {
+    width: 100% !important;
+  }
+  
+  .student-avatar-small {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 12px !important;
+  }
+  
+  .student-name-section {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+  
+  .student-name-section strong {
+    font-size: 14px !important;
+    word-break: break-word !important;
+  }
+  
+  /* Status Badges */
+  .status-badge {
+    padding: 3px 8px !important;
+    font-size: 10px !important;
+    width: fit-content !important;
+  }
+  
+  /* Student Meta */
+  .student-meta {
+    gap: 8px !important;
+    font-size: 11px !important;
+    margin-top: 6px !important;
+  }
+  
+  .student-meta span {
+    gap: 3px !important;
+  }
+  
+  .student-meta svg {
+    width: 10px !important;
+    height: 10px !important;
+  }
+  
+  /* Progress Display */
+  .progress-display {
+    width: 100% !important;
+    min-width: unset !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+  }
+  
+  .progress-bar {
+    width: 100% !important;
+    flex: 1 !important;
+    margin-right: 12px !important;
+  }
+  
+  .progress-text {
+    font-size: 13px !important;
+    min-width: 35px !important;
+  }
+  
+  /* Violations List */
+  .violations-list {
+    padding: 10px !important;
+    border-radius: 6px !important;
+    margin-top: 10px !important;
+    border-left-width: 3px !important;
+  }
+  
+  .violation-header strong {
+    font-size: 12px !important;
+  }
+  
+  .violation-item {
+    padding: 6px !important;
+    margin-bottom: 6px !important;
+  }
+  
+  .violation-meta {
+    gap: 6px !important;
+    margin-bottom: 4px !important;
+  }
+  
+  .violation-type {
+    font-size: 11px !important;
+  }
+  
+  .severity-badge {
+    padding: 1px 6px !important;
+    font-size: 9px !important;
+  }
+  
+  .violation-desc {
+    font-size: 10px !important;
+    margin-left: 0 !important;
+    line-height: 1.4 !important;
+  }
+  
+  .violation-time {
+    font-size: 9px !important;
+    margin-top: 2px !important;
+  }
+  
+  /* Modal Body */
+  .modal-body {
+    padding: 0 16px !important;
+  }
+  
+  /* Modal Footer */
+  .modal-footer {
+    padding: 16px 16px 20px !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    border-radius: 0 0 16px 16px !important;
+  }
+  
+  .action-btn {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 12px !important;
+    font-size: 14px !important;
+    height: 44px !important;
+  }
+  
+  /* Empty State */
+  .empty-state {
+    padding: 32px 16px !important;
+  }
+  
+  .empty-state svg {
+    width: 36px !important;
+    height: 36px !important;
+    margin-bottom: 12px !important;
+  }
+  
+  .empty-state p {
+    font-size: 14px !important;
+    margin-bottom: 6px !important;
+  }
+  
+  .empty-state span {
+    font-size: 12px !important;
+    line-height: 1.4 !important;
+  }
+  
+  /* Footer Stats */
+  .footer-stats {
+    width: 100% !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+  }
+  
+  .footer-stats .stat {
+    align-items: center !important;
+  }
+  
+  .footer-stats .stat-label {
+    font-size: 10px !important;
+    text-align: center !important;
+  }
+  
+  .footer-stats .stat-value {
+    font-size: 14px !important;
+  }
+  
+  /* Save Actions */
+  .save-actions {
+    width: 100% !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  
+  /* Close Button */
+  .close-btn {
+    position: absolute !important;
+    top: 16px !important;
+    right: 16px !important;
+    background: #f3f4f6 !important;
+    width: 32px !important;
+    height: 32px !important;
+    padding: 0 !important;
+    border-radius: 8px !important;
+  }
+  
+  /* Text Truncation */
+  .student-name-section strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  
+  .violation-desc {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orrient: vertical;
+  }
+  
+  /* Modal Content Height Fix */
+  .modal-content {
+    max-height: calc(100vh - 20px) !important;
+  }
+  
+  .modal-body {
+    max-height: calc(80vh - 160px) !important;
+    overflow-y: auto !important;
+  }
+  
+  /* Icon Sizing */
+  .status-badge svg,
+  .student-meta svg,
+  .violation-header svg {
+    width: 12px !important;
+    height: 12px !important;
+  }
+  
+  /* Time and Date Format */
+  .violation-time {
+    text-align: left !important;
+  }
+  
+  /* Remove unnecessary padding */
+  .monitoring-list {
+    padding-right: 4px !important;
+  }
+  
+  /* Touch-friendly buttons */
+  .refresh-btn, 
+  .refresh-manual-btn, 
+  .action-btn,
+  .view-details-btn {
+    min-height: 36px !important;
+  }
+  
+  /* Ensure proper tap targets */
+  .monitoring-item {
+    cursor: pointer !important;
+  }
+  
+  /* Scrollbar styling for mobile */
+  .monitoring-list::-webkit-scrollbar {
+    width: 3px !important;
+  }
+  
+  /* Reduce animation intensity for mobile */
+  .live-dot {
+    animation: pulse 1.5s infinite !important;
+  }
+}
         
 
       `}</style>
@@ -9937,3 +10278,5 @@ width:99px;
 };
 
 export default TeacherDashboard;
+
+  
