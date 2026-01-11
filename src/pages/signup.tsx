@@ -22,6 +22,23 @@ const DASHBOARD_ROUTES = {
   student: "/students",
 } as const;
 
+// Helper function to normalize class names
+const normalizeClassName = (className: string): string => {
+  if (!className) return "";
+
+  const trimmed = className.trim();
+
+  // Add space between letters and numbers if missing
+  // Matches patterns like: "JSS1", "Primary5", "SSS2"
+  const match = trimmed.match(/^([A-Za-z]+)(\d+)$/);
+
+  if (match) {
+    return `${match[1]} ${match[2]}`;
+  }
+
+  return trimmed;
+};
+
 // Subjects configuration based on class levels
 const SUBJECTS_BY_LEVEL = {
   "Primary 5-6": [
@@ -160,11 +177,19 @@ export default function Signup() {
     return "Primary 5-6";
   };
 
-  // ───── Helper: Save to Firestore ─────
   const saveUserToFirestore = async (uid: string, data: any) => {
     const collection = userType === "teacher" ? "teachers" : "students";
-    await setDoc(doc(db, collection, uid), data);
-    console.log(`[Firestore] Saved ${userType} ${uid}`);
+
+    // Normalize class name before saving
+    const normalizedData = {
+      ...data,
+      className: data.className ? normalizeClassName(data.className) : "",
+    };
+
+    await setDoc(doc(db, collection, uid), normalizedData);
+    console.log(
+      `[Firestore] Saved ${userType} ${uid} with className: ${normalizedData.className}`
+    );
   };
 
   // ───── Teacher Classes Selection Handlers ─────
@@ -523,7 +548,7 @@ export default function Signup() {
       fullName: info.fullName,
       email: info.email,
       phone: info.phone,
-      className: info.className,
+      className: normalizeClassName(info.className),
       createdAt: serverTimestamp(),
     };
 
@@ -542,9 +567,10 @@ export default function Signup() {
 
       if (userType === "teacher") {
         // For social signup teachers, pre-select the class they chose
-        setSelectedClasses([info.className]);
+        const normalizedClass = normalizeClassName(info.className);
+        setSelectedClasses([normalizedClass]);
         setTeacherSubjects({
-          [info.className]: [],
+          [normalizedClass]: [],
         });
         setShowAdminModal(true);
         return;
@@ -594,17 +620,17 @@ export default function Signup() {
         fullName,
         email,
         phone,
-        className,
+        className: normalizeClassName(className),
         createdAt: serverTimestamp(),
         subjects: userType === "student" ? [] : undefined,
       };
-
       if (userType === "teacher") {
         // For teachers - store data and go to class selection
         // Pre-select the class they chose in the form
-        setSelectedClasses([className]);
+        const normalizedClass = normalizeClassName(className);
+        setSelectedClasses([normalizedClass]);
         setTeacherSubjects({
-          [className]: [],
+          [normalizedClass]: [],
         });
 
         setTempUserData({
@@ -707,30 +733,30 @@ export default function Signup() {
                 />
               </div>
 
-             <div className="password-input-container">
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isLoading}
-                className="text-input"
-              />
+              <div className="password-input-container">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={isLoading}
+                  className="text-input"
+                />
 
-              <button
-                type="button"
-                className="password-toggle"
-                onClick={() => setShowPassword(!showPassword)}
-                tabIndex={-1}
-              >
-                {showPassword ? (
-                  <EyeOff size={18} color="#6b7280" />
-                ) : (
-                  <Eye size={18} color="#6b7280" />
-                )}
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeOff size={18} color="#6b7280" />
+                  ) : (
+                    <Eye size={18} color="#6b7280" />
+                  )}
+                </button>
+              </div>
 
               <select
                 value={className}
