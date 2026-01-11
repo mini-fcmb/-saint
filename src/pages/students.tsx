@@ -46,6 +46,7 @@ import {
   Save,
   Users2,
   Info,
+  Menu,
 } from "lucide-react";
 import { useFirebaseStore } from "../stores/useFirebaseStore";
 import { useLiveDate, useCalendar } from "../hooks/useDateUtils";
@@ -5341,6 +5342,7 @@ const StudentDashboard: React.FC = () => {
   const [quizSubmissions, setQuizSubmissions] = useState<{
     [key: string]: QuizSubmission;
   }>({});
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [showQuizInstructions, setShowQuizInstructions] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
   const [quizInProgress, setQuizInProgress] = useState(false);
@@ -6073,6 +6075,13 @@ const StudentDashboard: React.FC = () => {
             {/* Mobile Profile Avatar */}
             {user && (
               <div className="profile-avatar-container">
+                <button
+                  className="mobile-menu-btn"
+                  onClick={() => setMobileSidebarOpen(true)}
+                >
+                  <Menu size={20} />{" "}
+                  {/* You'll need to import Menu from lucide-react */}
+                </button>
                 <div
                   className="profile-avatar-mobile"
                   onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -9484,11 +9493,14 @@ const StudentDashboard: React.FC = () => {
         }
         
         /* Responsive styles */
-        @media (max-width: 768px) {
+        @media (max-width: 1023px) {
           .start-screen-content {
             padding: 30px 20px;
             width: 95%;
             max-height: 85vh;
+          }
+          .mobile-menu-btn{
+            display:none !important;
           }
         
           .start-screen-content h1 {
@@ -9945,8 +9957,448 @@ const StudentDashboard: React.FC = () => {
     justify-content: center;
   }
 }
+/* Mobile Responsive Styles - Sidebar Hidden, Mobile Menu */
+@media (max-width: 767px) {
+  .layout {
+    flex-direction: column;
+  }
+  .icon-btn{
+    display:none !important;
+  }
+  
+  /* Hide the desktop sidebar */
+  .sidebar {
+    display: none;
+  }
+  
+  /* Main content takes full width */
+  .main-content {
+    margin-left: 0 !important;
+    width: 100%;
+    padding: 20px;
+  }
+  
+  /* Header modifications */
+  .header {
+    padding: 0 20px;
+    height: 70px;
+  }
+  
+  .header-content {
+    justify-content: space-between;
+    gap: 10px;
+  }
+  
+  /* Logo section - keep only logo and menu icon */
+  .logo-section {
+    gap: 12px;
+  }
+  
+  .logo-text {
+    font-size: 20px;
+  }
+  
+  .status, .follow-btn {
+    display: none;
+  }
+  
+  /* Hide performance button and get-in-touch on mobile */
+  .performance-btn, .get-in-touch {
+    display: none !important;
+  }
+  
+  /* Header actions - only show search, bell, profile */
+  .header-actions {
+    gap: 8px;
+  }
+  
+  /* Mobile menu icon */
+  .mobile-menu-btn {
+    display: flex !important;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: #fff;
+    border: none;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+    cursor: pointer;
+  }
+  
+  /* Profile avatar in header */
+  .profile-avatar-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .profile-avatar-mobile {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #4299e1;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  
+  /* Profile dropdown */
+  .profile-dropdown {
+    position: absolute;
+    top: 70px;
+    right: 20px;
+    width: 280px;
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    display: none;
+    border: 1px solid #e5e7eb;
+  }
+  
+  .profile-dropdown.show {
+    display: block;
+    animation: slideDown 0.3s ease;
+  }
+  
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .profile-dropdown h2 {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    color: #111827;
+  }
+  
+  .profile-dropdown p {
+    margin: 0 0 12px 0;
+    color: #6b7280;
+    font-size: 14px;
+  }
+  
+  .profile-dropdown button {
+    width: 100%;
+    background: #4299e1;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+  
+  .profile-dropdown button:hover {
+    background: #3182ce;
+  }
+}
+
+/* Mobile Sidebar Panel */
+@media (max-width: 767px) {
+  .mobile-sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 999;
+    display: none;
+  }
+  
+  .mobile-sidebar-overlay.active {
+    display: block;
+  }
+  
+  .mobile-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    background: white;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    padding: 20px;
+    overflow-y: auto;
+  }
+  
+  .mobile-sidebar.active {
+    transform: translateX(0);
+  }
+  
+  .mobile-sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  .mobile-sidebar-header h3 {
+    margin: 0;
+    font-size: 20px;
+    color: #111827;
+  }
+  
+  .mobile-sidebar-close {
+    background: none;
+    border: none;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .mobile-sidebar-close:hover {
+    background: #f3f4f6;
+  }
+  
+  .mobile-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .mobile-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 12px;
+    background: transparent;
+    border: none;
+    color: #6b7280;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .mobile-nav-item:hover {
+    background: #f3f4f6;
+  }
+  
+  .mobile-nav-item.active {
+    background: #eef2ff;
+    color: #4299e1;
+    font-weight: 600;
+  }
+  
+  .mobile-nav-icon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .mobile-sidebar-footer {
+    position: absolute;
+    bottom: 30px;
+    left: 20px;
+    right: 20px;
+  }
+  
+  .mobile-results-card {
+    background: #eef2ff;
+    border-radius: 16px;
+    padding: 20px;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  
+  .check-results-btn-mobile {
+    background: #4299e1;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 14px;
+    width: 100%;
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+  }
+}
+
+/* Specific breakpoint adjustments */
+@media (max-width: 425px) {
+  .header {
+    padding: 0 16px;
+  }
+  
+  .mobile-sidebar {
+    width: 250px;
+  }
+  
+  .profile-dropdown {
+    right: 16px;
+    width: 260px;
+  }
+  
+  .main-content {
+    padding: 16px;
+  }
+  
+  .progress-card {
+    flex-direction: column;
+    text-align: center;
+    padding: 20px;
+    gap: 20px;
+  }
+  
+  .top-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .bottom-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .card {
+    padding: 16px;
+  }
+  
+  .quizzes-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 375px) {
+  .header {
+    padding: 0 12px;
+  }
+  
+  .mobile-sidebar {
+    width: 230px;
+  }
+  
+  .profile-dropdown {
+    right: 12px;
+    width: 240px;
+  }
+  
+  .logo-text {
+    font-size: 18px;
+  }
+  
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (max-width: 320px) {
+  .header {
+    padding: 0 10px;
+  }
+  
+  .mobile-sidebar {
+    width: 200px;
+  }
+  
+  .profile-dropdown {
+    right: 10px;
+    width: 200px;
+  }
+  
+  .logo-text {
+    font-size: 16px;
+  }
+  
+  .mobile-nav-item {
+    font-size: 15px;
+    padding: 14px;
+  }
+}
         
       `}</style>
+      <div
+        className={`mobile-sidebar-overlay ${
+          mobileSidebarOpen ? "active" : ""
+        }`}
+        onClick={() => setMobileSidebarOpen(false)}
+      />
+
+      {/* Mobile Sidebar */}
+      <div className={`mobile-sidebar ${mobileSidebarOpen ? "active" : ""}`}>
+        <div className="mobile-sidebar-header">
+          <h3>Menu</h3>
+          <button
+            className="mobile-sidebar-close"
+            onClick={() => setMobileSidebarOpen(false)}
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        <nav className="mobile-nav">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setSelectedMenu(item.id);
+                  setMobileSidebarOpen(false);
+                }}
+                className={`mobile-nav-item ${
+                  selectedMenu === item.id ? "active" : ""
+                }`}
+              >
+                <div className="mobile-nav-icon">
+                  <Icon size={20} />
+                </div>
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="mobile-sidebar-footer">
+          <div className="mobile-results-card">
+            <button
+              className="check-results-btn-mobile"
+              onClick={() => {
+                setShowResultsModal(true);
+                setMobileSidebarOpen(false);
+              }}
+            >
+              <BarChart3 size={18} />
+              Check Results
+            </button>
+          </div>
+          <div className="copyright">© SXaint Student</div>
+        </div>
+      </div>
     </div>
   );
 };
