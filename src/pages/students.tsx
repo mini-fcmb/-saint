@@ -2057,9 +2057,10 @@ const StrictQuizInterface: React.FC<{
   }
 
   // Show confirmation modal
+  // Update your confirmation modal JSX to include the class:
   if (showConfirmModal) {
     return (
-      <div className="modal-overlay">
+      <div className="modal-overlay confirmation-modal">
         <div className="modal-content">
           <div className="modal-header">
             <AlertTriangle size={24} />
@@ -2494,6 +2495,7 @@ const StrictQuizInterface: React.FC<{
           z-index: 2000;
           overflow: hidden;
           backdrop-filter: blur(10px);
+         
         }
         
         .start-screen-content {
@@ -2512,6 +2514,9 @@ const StrictQuizInterface: React.FC<{
           transform: translate(-50%, -50%);
           overflow-y: auto; 
           overflow-x: hidden;
+          scrollbar-width: thin !important;
+          scrollbar-color: transparent transparent !important;
+  
         }
         
         .quiz-details-start {
@@ -9378,6 +9383,7 @@ const StudentDashboard: React.FC = () => {
         .start-screen-content * {
           max-width: 100%;
           box-sizing: border-box;
+          
         }
         
         .quiz-title {
@@ -10396,6 +10402,279 @@ const StudentDashboard: React.FC = () => {
   .close-btn{
     display:none !important;
   }
+}
+/* Confirmation Modal Styles */
+.confirmation-modal .modal-content {
+  background: white !important;
+  border-radius: 24px !important;
+  padding: 32px !important;
+  max-width: 500px !important;
+  width: 90% !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+  animation: modalSlideIn 0.3s ease !important;
+}
+
+.confirmation-modal .modal-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  margin-bottom: 20px !important;
+  padding: 0 !important;
+}
+
+.confirmation-modal .modal-header h3 {
+  margin: 0 !important;
+  font-size: 24px !important;
+  font-weight: 700 !important;
+  color: #1f2937 !important;
+}
+
+.confirmation-modal .modal-body {
+  padding: 0 !important;
+  margin-bottom: 24px !important;
+}
+
+.confirmation-modal .modal-body p {
+  margin: 0 0 16px 0 !important;
+  color: #6b7280 !important;
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+}
+
+.confirmation-modal .submission-stats {
+  background: #f8fafc !important;
+  border-radius: 12px !important;
+  padding: 20px !important;
+  margin: 16px 0 !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+.confirmation-modal .stat-item {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 12px 0 !important;
+}
+
+.confirmation-modal .stat-item:not(:last-child) {
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+.confirmation-modal .stat-item span {
+  font-size: 14px !important;
+  color: #6b7280 !important;
+  font-weight: 500 !important;
+}
+
+.confirmation-modal .stat-item strong {
+  font-size: 16px !important;
+  color: #1f2937 !important;
+  font-weight: 600 !important;
+}
+
+.confirmation-modal .modal-actions {
+  display: flex !important;
+  gap: 12px !important;
+  justify-content: flex-end !important;
+  padding-top: 24px !important;
+  border-top: 1px solid #e5e7eb !important;
+}
+
+.confirmation-modal .modal-btn {
+  padding: 12px 24px !important;
+  border-radius: 12px !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+  border: none !important;
+  min-width: 120px !important;
+  height: 48px !important;
+}
+
+.confirmation-modal .modal-btn.cancel {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+  border: 1px solid #d1d5db !important;
+}
+
+.confirmation-modal .modal-btn.cancel:hover {
+  background: #e5e7eb !important;
+  transform: translateY(-1px) !important;
+}
+
+.confirmation-modal .modal-btn.confirm {
+  background: #10b981 !important;
+  color: white !important;
+  border: 1px solid #10b981 !important;
+}
+
+.confirmation-modal .modal-btn.confirm:hover {
+  background: #059669 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
+}
+
+.confirmation-modal .modal-btn:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .confirmation-modal .modal-content {
+    padding: 24px !important;
+    max-width: 90% !important;
+    width: 90% !important;
+    margin: 20px !important;
+  }
+  
+  .confirmation-modal .modal-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+  
+  .confirmation-modal .modal-header h3 {
+    font-size: 20px !important;
+  }
+  
+  .confirmation-modal .modal-body p {
+    font-size: 15px !important;
+  }
+  
+  .confirmation-modal .submission-stats {
+    padding: 16px !important;
+  }
+  
+  .confirmation-modal .stat-item {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+    padding: 10px 0 !important;
+  }
+  
+  .confirmation-modal .stat-item span,
+  .confirmation-modal .stat-item strong {
+    width: 100% !important;
+    text-align: left !important;
+  }
+  
+  .confirmation-modal .stat-item strong {
+    font-size: 15px !important;
+  }
+  
+  .confirmation-modal .modal-actions {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  
+  .confirmation-modal .modal-btn {
+    width: 100% !important;
+    min-width: unset !important;
+    height: 44px !important;
+    font-size: 15px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .confirmation-modal .modal-content {
+    padding: 20px !important;
+    max-width: 95% !important;
+    width: 95% !important;
+    margin: 10px !important;
+  }
+  
+  .confirmation-modal .modal-header h3 {
+    font-size: 18px !important;
+  }
+  
+  .confirmation-modal .modal-body p {
+    font-size: 14px !important;
+    line-height: 1.4 !important;
+  }
+  
+  .confirmation-modal .submission-stats {
+    padding: 12px !important;
+  }
+  
+  .confirmation-modal .stat-item {
+    padding: 8px 0 !important;
+  }
+  
+  .confirmation-modal .modal-btn {
+    height: 42px !important;
+    font-size: 14px !important;
+    padding: 10px 20px !important;
+  }
+  
+  .confirmation-modal .modal-actions {
+    gap: 10px !important;
+  }
+}
+
+@media (max-width: 320px) {
+  .confirmation-modal .modal-content {
+    padding: 16px !important;
+    border-radius: 20px !important;
+  }
+  
+  .confirmation-modal .modal-header h3 {
+    font-size: 17px !important;
+  }
+  
+  .confirmation-modal .modal-body p {
+    font-size: 13px !important;
+  }
+  
+  .confirmation-modal .stat-item span {
+    font-size: 13px !important;
+  }
+  
+  .confirmation-modal .stat-item strong {
+    font-size: 14px !important;
+  }
+  
+  .confirmation-modal .modal-btn {
+    height: 40px !important;
+    font-size: 13px !important;
+    padding: 8px 16px !important;
+  }
+}
+
+/* Animation for modal appearance */
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* For the confirmation modal overlay */
+.confirmation-modal .modal-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(4px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 3000 !important;
+  padding: 20px !important;
+}
+
+/* For the modal structure in your StrictQuizInterface component */
+.confirmation-modal {
+  z-index: 3001 !important;
 }
         
       `}</style>
