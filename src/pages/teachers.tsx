@@ -5470,7 +5470,8 @@ const TeacherDashboard: React.FC = () => {
               />
             </div>
             <button className="get-in-touch" onClick={handleLogout}>
-              <i className="bx bx-log-out">Logout</i>
+              <LogOut size={20} />
+              Logout
             </button>
 
             {/* Mobile Profile Avatar */}
@@ -10278,5 +10279,3 @@ width:99px;
 };
 
 export default TeacherDashboard;
-
-  
