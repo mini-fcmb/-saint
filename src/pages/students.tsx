@@ -3065,6 +3065,9 @@ const StrictQuizInterface: React.FC<{
         }
         
         @media (max-width: 768px) {
+          .close-btn{
+            display:none !important;
+          }
           .quiz-header {
             padding: 16px;
             flex-direction: column;
@@ -6632,10 +6635,15 @@ const StudentDashboard: React.FC = () => {
       
       /* Responsive adjustments */
       @media (max-width: 1024px) {
+        .close-btn{
+          display:none !important;
+        }
         .results-card {
           padding: 24px;
           gap: 16px;
         }
+        .mobile-menu-btn{display:none !important}
+
         
         .logo-img-small {
           width: 50px;
@@ -9494,6 +9502,7 @@ const StudentDashboard: React.FC = () => {
         
         /* Responsive styles */
         @media (max-width: 1023px) {
+          .mobile-menu-btn{display:none !important}
           .start-screen-content {
             padding: 30px 20px;
             width: 95%;
@@ -10249,6 +10258,9 @@ const StudentDashboard: React.FC = () => {
 
 /* Specific breakpoint adjustments */
 @media (max-width: 425px) {
+  .close-btn{
+    display:none !important;
+  }
   .header {
     padding: 0 16px;
   }
@@ -10337,6 +10349,52 @@ const StudentDashboard: React.FC = () => {
   .mobile-nav-item {
     font-size: 15px;
     padding: 14px;
+  }
+}
+/* Add this to your main CSS file */
+.quiz-instructions-modal .modal-content {
+  animation: slideInUp 0.3s ease !important;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Make sure modal overlay is properly positioned */
+.quiz-instructions-modal .modal-overlay {
+  z-index: 2000 !important;
+}
+
+/* Ensure Lock icon is properly sized on mobile */
+.quiz-instructions-modal .modal-title-section svg {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+@media (max-width: 320px) {
+  .quiz-instructions-modal .modal-title-section svg {
+    width: 24px !important;
+    height: 24px !important;
+    
+  }
+  .info-item{
+    font-size:10px;
+  }
+  .rule-card{
+    display:none !important;
+  }
+  .quiz-info-section{
+    display:none !important;
+  }
+  .close-btn{
+    display:none !important;
   }
 }
         
