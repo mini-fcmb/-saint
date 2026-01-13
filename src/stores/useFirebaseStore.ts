@@ -171,6 +171,55 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     log("User document not found in teachers or students collection");
     throw new Error("User profile not found");
   };
+  // Add this function INSIDE the store creation, after the existing loadUserData function
+
+const loadStudentClassmates = async (studentClass: string, excludeEmail: string): Promise<Student[]> => {
+  try {
+    if (!studentClass.trim()) {
+      log("No student class provided for classmates query");
+      return [];
+    }
+
+    log(`Loading classmates for class: "${studentClass}"`);
+    
+    const q = query(
+      collection(db, "students"),
+      where("className", "==", studentClass)
+    );
+    
+    const snapshot = await getDocs(q);
+    const classmates: Student[] = [];
+    
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      
+      // Skip current student (exclude by email)
+      if (data.email === excludeEmail) return;
+      
+      // Use the existing splitName function
+      const { first, last } = splitName(data.fullName, data.email);
+      
+      classmates.push({
+        id: doc.id,
+        first,
+        last,
+        email: data.email || "",
+        progress: typeof data.progress === "number" ? data.progress : 0,
+        className: data.className || studentClass,
+        enrollmentNo: data.enrollmentNo,
+        course: data.course,
+        session: data.session,
+        semester: data.semester,
+      });
+    });
+    
+    log(`Loaded ${classmates.length} classmates for class "${studentClass}"`);
+    return classmates;
+  } catch (error: any) {
+    log(`Error loading classmates: ${error.message}`);
+    return [];
+  }
+};
 
   const loadTeacherClasses = (userData: UserData): TeacherClass[] => {
     if (userData.role !== "teacher") return [];
@@ -358,11 +407,24 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
             set({ teacherClasses: classes });
             startStudentListener(classes.map((c) => c.id));
           } else {
+            // ✅ For students, load their classmates
+            const classmates = await loadStudentClassmates(
+              userData.className || "", 
+              user.email || ""
+            );
+            
+            // Sort classmates alphabetically
+            classmates.sort((a, b) =>
+              `${a.first} ${a.last}`.localeCompare(`${b.first} ${b.last}`)
+            );
+            
             set({ 
               teacherClasses: [],
-              students: [],
+              students: classmates,  // ✅ Now populated with classmates!
               loading: false 
             });
+            
+            log(`Student ${user.email} has ${classmates.length} classmates in class "${userData.className}"`);
           }
 
         } catch (error: any) {
