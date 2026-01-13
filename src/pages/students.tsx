@@ -795,13 +795,13 @@ const ClassListPanel: React.FC<{
   currentUserClass?: string;
 }> = ({ students, isOpen, toggle, loading, currentUserClass }) => {
   // Filter students by same class as current user
-  // Update the classmates filtering logic in ClassListPanel
   const classmates = useMemo(() => {
     if (!currentUserClass) return [];
 
-    // Use the same normalization function as teacher dashboard
+    // Use the exact same normalization function as teacher dashboard
     const normalizeClassName = (className: string | undefined): string => {
       if (!className) return "";
+      // Convert to lowercase, remove all spaces, hyphens, underscores
       return className
         .toLowerCase()
         .replace(/\s+/g, "")
@@ -812,10 +812,30 @@ const ClassListPanel: React.FC<{
     const normalizedCurrentClass = normalizeClassName(currentUserClass);
 
     return students.filter((student) => {
+      // Get student's class from either className or classId
       const studentClassName = student.className || student.classId || "";
       const normalizedStudentClass = normalizeClassName(studentClassName);
 
-      // Return true if classes match (case-insensitive, ignoring spaces/hyphens)
+      // Also check if student has subjects array that might contain class info
+      const studentSubjects = student.subjects || [];
+
+      // If no class name found in main fields, check subjects
+      if (!normalizedStudentClass && studentSubjects.length > 0) {
+        // Try to extract class from subjects if available
+        const classFromSubjects = studentSubjects.find(
+          (subj) =>
+            subj.toLowerCase().includes("class") ||
+            subj.toLowerCase().includes("jss") ||
+            subj.toLowerCase().includes("sss")
+        );
+
+        if (classFromSubjects) {
+          const normalizedFromSubjects = normalizeClassName(classFromSubjects);
+          return normalizedFromSubjects === normalizedCurrentClass;
+        }
+      }
+
+      // Direct class match
       return normalizedStudentClass === normalizedCurrentClass;
     });
   }, [students, currentUserClass]);
@@ -5375,6 +5395,7 @@ const StudentDashboard: React.FC = () => {
   const currentUserClass = userData?.className;
 
   // Update the enhancedStudents memo:
+  // Update the enhancedStudents memo at the top of your StudentDashboard component:
   const enhancedStudents = useMemo(() => {
     // Apply the same normalization as in teacher dashboard
     const normalizeClassName = (className: string | undefined): string => {
