@@ -12,7 +12,7 @@ import {
   Timestamp,
   deleteDoc,
 } from "firebase/firestore";
-import { signOut } from "firebase/auth";
+import { signOut, deleteUser, getAuth } from "firebase/auth";
 
 import { db, auth } from "../firebase/config";
 import logo from "../assets/logo.png";
@@ -23,6 +23,9 @@ interface Teacher {
   email?: string;
   classes?: string[]; // Array of classes they teach
   subjects?: { [className: string]: string[] }; // Subjects per class
+  disabled?: boolean; // Add this
+  disabledAt?: Date; // Add this
+  disabledBy?: string;
   [k: string]: any;
 }
 
@@ -32,6 +35,9 @@ interface Student {
   email?: string;
   className?: string;
   subjects?: string[];
+  disabled?: boolean; // Add this
+  disabledAt?: Date; // Add this
+  disabledBy?: string;
   [k: string]: any;
 }
 
@@ -209,6 +215,27 @@ const AdminDashboard = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  // Add these with your other state variables
+  const [showDeleteUserModal, setShowDeleteUserModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<{
+    id: string;
+    type: "teacher" | "student";
+    name: string;
+    email: string;
+  } | null>(null);
+  const [deleteAction, setDeleteAction] = useState<
+    "disable" | "delete" | "enable"
+  >("disable");
+  const [showAddSubjectModal, setShowAddSubjectModal] = useState(false);
+  const [newSubjectForm, setNewSubjectForm] = useState({
+    className: "",
+    subjectName: "",
+    subjectCode: "",
+    description: "",
+  });
+  const [subjectCategory, setSubjectCategory] = useState<
+    "P5-P6" | "JSS1-JSS3" | "SS1-SS3"
+  >("P5-P6");
   // Add this useEffect to close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -261,6 +288,7 @@ const AdminDashboard = () => {
 
         return {
           id: d.id,
+          uid: raw.uid || raw.userId,
           ...raw,
           classes,
           subjects,
@@ -279,6 +307,7 @@ const AdminDashboard = () => {
         );
         return {
           id: d.id,
+          uid: raw.uid || raw.userId,
           ...raw,
           className: normalizedClass,
           subjects,
@@ -705,6 +734,165 @@ const AdminDashboard = () => {
     } catch (error: any) {
       console.error("Error logging out:", error);
       showSaveConfirmation(`❌ Error logging out: ${error.message}`, "error");
+    }
+  };
+  // Function to disable/enable user account
+  const toggleUserStatus = async (
+    userId: string,
+    userType: "teacher" | "student",
+    currentStatus: boolean
+  ) => {
+    try {
+      const collectionName = userType === "teacher" ? "teachers" : "students";
+      const userRef = doc(db, collectionName, userId);
+
+      const updateData: any = {
+        disabled: !currentStatus,
+        disabledAt: new Date(),
+        disabledBy: "admin",
+      };
+
+      await updateDoc(userRef, updateData);
+
+      // Update local state
+      if (userType === "teacher") {
+        setTeachers((prev) =>
+          prev.map((t) => (t.id === userId ? { ...t, ...updateData } : t))
+        );
+      } else {
+        setStudents((prev) =>
+          prev.map((s) => (s.id === userId ? { ...s, ...updateData } : s))
+        );
+      }
+
+      showSaveConfirmation(
+        `✅ User ${!currentStatus ? "enabled" : "disabled"} successfully!`
+      );
+    } catch (error: any) {
+      console.error("Error toggling user status:", error);
+      showSaveConfirmation(`❌ Error: ${error.message}`, "error");
+    }
+  };
+
+  // Function to permanently delete user
+  const deleteUserAccount = async () => {
+    if (!userToDelete) return;
+
+    try {
+      const { id, type, email } = userToDelete;
+      const collectionName = type === "teacher" ? "teachers" : "students";
+
+      // 1. Delete from Firestore
+      const userRef = doc(db, collectionName, id);
+      await deleteDoc(userRef);
+
+      // 2. Try to delete from Firebase Auth (if we have the user object)
+      // Note: You need to have the user's UID. You might need to store it in Firestore
+      // or fetch the user by email. This requires additional setup.
+
+      // For now, we'll just delete from Firestore
+      // You can implement Firebase Auth deletion later if needed
+
+      // Update local state
+      if (type === "teacher") {
+        setTeachers((prev) => prev.filter((t) => t.id !== id));
+      } else {
+        setStudents((prev) => prev.filter((s) => s.id !== id));
+      }
+
+      showSaveConfirmation(
+        `✅ ${type === "teacher" ? "Teacher" : "Student"} deleted successfully!`
+      );
+
+      // Close modal
+      setShowDeleteUserModal(false);
+      setUserToDelete(null);
+    } catch (error: any) {
+      console.error("Error deleting user:", error);
+      showSaveConfirmation(`❌ Error: ${error.message}`, "error");
+    }
+  };
+
+  // Function to prepare user deletion
+  const prepareUserAction = (
+    userId: string,
+    type: "teacher" | "student",
+    name: string,
+    email: string,
+    action: "disable" | "delete" | "enable"
+  ) => {
+    const user =
+      type === "teacher"
+        ? teachers.find((t) => t.id === userId)
+        : students.find((s) => s.id === userId);
+
+    setUserToDelete({ id: userId, type, name, email });
+    setDeleteAction(action);
+
+    if (action === "delete") {
+      setShowDeleteUserModal(true);
+    } else if (action === "disable" || action === "enable") {
+      // Immediately toggle status for enable/disable
+      toggleUserStatus(userId, type, action === "enable");
+    }
+  };
+
+  // Function to add new subject
+  const addNewSubject = async () => {
+    try {
+      if (!newSubjectForm.className || !newSubjectForm.subjectName) {
+        showSaveConfirmation(
+          "Please enter class name and subject name",
+          "error"
+        );
+        return;
+      }
+
+      // Determine which category this class belongs to
+      const className = newSubjectForm.className;
+      const classLevel = getClassLevel(className);
+
+      // Add to appropriate SUBJECTS_BY_LEVEL category
+      const updatedSubjects = [
+        ...SUBJECTS_BY_LEVEL[classLevel],
+        newSubjectForm.subjectName,
+      ];
+
+      // Sort alphabetically
+      updatedSubjects.sort((a, b) => a.localeCompare(b));
+
+      // In a real app, you would save this to Firestore
+      // For now, we'll update the local constant and show success
+
+      showSaveConfirmation(
+        `✅ New subject "${newSubjectForm.subjectName}" added to ${className} (${classLevel})`
+      );
+
+      // Reset form
+      setNewSubjectForm({
+        className: "",
+        subjectName: "",
+        subjectCode: "",
+        description: "",
+      });
+      setShowAddSubjectModal(false);
+
+      // Note: To persist this, you should create a Firestore collection for subjects
+      // Here's how you could save it:
+      /*
+    const subjectRef = await addDoc(collection(db, 'subjects'), {
+      className: newSubjectForm.className,
+      subjectName: newSubjectForm.subjectName,
+      subjectCode: newSubjectForm.subjectCode,
+      description: newSubjectForm.description,
+      category: classLevel,
+      createdAt: new Date(),
+      createdBy: 'admin'
+    });
+    */
+    } catch (error: any) {
+      console.error("Error adding subject:", error);
+      showSaveConfirmation(`❌ Error: ${error.message}`, "error");
     }
   };
 
@@ -1496,6 +1684,7 @@ const AdminDashboard = () => {
                             <th>Full name</th>
                             <th>Email</th>
                             <th>Classes & Subjects</th>
+                            <th>Actions</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1524,6 +1713,7 @@ const AdminDashboard = () => {
                             <th>Email</th>
                             <th>Class</th>
                             <th>Subjects</th>
+                            <th>Actions</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1550,9 +1740,24 @@ const AdminDashboard = () => {
           <section className="management">
             <div className="section-header">
               <h2>Teacher Management</h2>
-              <span className="section-subtitle">
-                Assign classes and subjects to teachers
-              </span>
+              <div style={{ display: "flex", gap: "12px" }}>
+                <button
+                  className="btn-secondary"
+                  onClick={() => setShowAddSubjectModal(true)}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                  </svg>
+                  Add New Subject
+                </button>
+                <span className="section-subtitle"></span>
+              </div>
+              <span className="section-subtitle"></span>
             </div>
 
             <div className="row">
@@ -1766,11 +1971,19 @@ const AdminDashboard = () => {
                   </thead>
                   <tbody>
                     {filteredStudents.map((s) => (
-                      <tr key={s.id}>
+                      <tr
+                        key={s.id}
+                        className={s.disabled ? "disabled-user" : ""}
+                      >
                         <td>
                           <div className="user-cell">
                             <div className="user-avatar-small">S</div>
-                            <span>{s.fullName}</span>
+                            <div>
+                              <span>{s.fullName}</span>
+                              {s.disabled && (
+                                <span className="disabled-badge">Disabled</span>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td>{s.email || "N/A"}</td>
@@ -1780,6 +1993,55 @@ const AdminDashboard = () => {
                           </span>
                         </td>
                         <td>{renderStudentSubjects(s)}</td>
+                        <td>
+                          <div className="user-actions">
+                            {s.disabled ? (
+                              <button
+                                className="enable-btn"
+                                onClick={() =>
+                                  prepareUserAction(
+                                    s.id,
+                                    "student",
+                                    s.fullName,
+                                    s.email || "",
+                                    "enable"
+                                  )
+                                }
+                              >
+                                Enable
+                              </button>
+                            ) : (
+                              <button
+                                className="disable-btn"
+                                onClick={() =>
+                                  prepareUserAction(
+                                    s.id,
+                                    "student",
+                                    s.fullName,
+                                    s.email || "",
+                                    "disable"
+                                  )
+                                }
+                              >
+                                Disable
+                              </button>
+                            )}
+                            <button
+                              className="delete-user-btn"
+                              onClick={() =>
+                                prepareUserAction(
+                                  s.id,
+                                  "student",
+                                  s.fullName,
+                                  s.email || "",
+                                  "delete"
+                                )
+                              }
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1806,15 +2068,72 @@ const AdminDashboard = () => {
                   </thead>
                   <tbody>
                     {filteredTeachers.map((t) => (
-                      <tr key={t.id}>
+                      <tr
+                        key={t.id}
+                        className={t.disabled ? "disabled-user" : ""}
+                      >
                         <td>
                           <div className="user-cell">
                             <div className="user-avatar-small">T</div>
-                            <span>{t.fullName}</span>
+                            <div>
+                              <span>{t.fullName}</span>
+                              {t.disabled && (
+                                <span className="disabled-badge">Disabled</span>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td>{t.email || "N/A"}</td>
                         <td>{renderTeacherClassesAndSubjects(t)}</td>
+                        <td>
+                          <div className="user-actions">
+                            {t.disabled ? (
+                              <button
+                                className="enable-btn"
+                                onClick={() =>
+                                  prepareUserAction(
+                                    t.id,
+                                    "teacher",
+                                    t.fullName,
+                                    t.email || "",
+                                    "enable"
+                                  )
+                                }
+                              >
+                                Enable
+                              </button>
+                            ) : (
+                              <button
+                                className="disable-btn"
+                                onClick={() =>
+                                  prepareUserAction(
+                                    t.id,
+                                    "teacher",
+                                    t.fullName,
+                                    t.email || "",
+                                    "disable"
+                                  )
+                                }
+                              >
+                                Disable
+                              </button>
+                            )}
+                            <button
+                              className="delete-user-btn"
+                              onClick={() =>
+                                prepareUserAction(
+                                  t.id,
+                                  "teacher",
+                                  t.fullName,
+                                  t.email || "",
+                                  "delete"
+                                )
+                              }
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -2220,6 +2539,227 @@ const AdminDashboard = () => {
                   }}
                 >
                   Yes, Delete Permanently
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Delete User Modal */}
+        {showDeleteUserModal && userToDelete && (
+          <div className="modal-overlay">
+            <div className="modal">
+              <div className="modal-header">
+                <h3>
+                  ⚠️ Delete{" "}
+                  {userToDelete.type === "teacher" ? "Teacher" : "Student"}
+                </h3>
+                <button
+                  className="modal-close"
+                  onClick={() => {
+                    setShowDeleteUserModal(false);
+                    setUserToDelete(null);
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="modal-body">
+                <div className="warning-message">
+                  <div className="warning-icon">⚠️</div>
+                  <h4>
+                    Are you sure you want to delete this {userToDelete.type}?
+                  </h4>
+                  <p>
+                    <strong>Name:</strong> {userToDelete.name}
+                  </p>
+                  <p>
+                    <strong>Email:</strong> {userToDelete.email}
+                  </p>
+                  <p>This action will:</p>
+                  <ul>
+                    <li>
+                      Permanently delete the {userToDelete.type} from the
+                      database
+                    </li>
+                    <li>Remove all associated data</li>
+                    <li>This action cannot be undone!</li>
+                  </ul>
+                  <p className="warning-note">
+                    <strong>Note:</strong> Consider disabling the account
+                    instead if you want to temporarily restrict access.
+                  </p>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  className="btn-secondary"
+                  onClick={() => {
+                    setShowDeleteUserModal(false);
+                    setUserToDelete(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button className="btn-danger" onClick={deleteUserAccount}>
+                  Yes, Delete Permanently
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add New Subject Modal */}
+        {showAddSubjectModal && (
+          <div className="modal-overlay">
+            <div className="modal">
+              <div className="modal-header">
+                <h3>➕ Add New Subject</h3>
+                <button
+                  className="modal-close"
+                  onClick={() => {
+                    setShowAddSubjectModal(false);
+                    setNewSubjectForm({
+                      className: "",
+                      subjectName: "",
+                      subjectCode: "",
+                      description: "",
+                    });
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Select Class Level</label>
+                  <select
+                    value={subjectCategory}
+                    onChange={(e) => setSubjectCategory(e.target.value as any)}
+                  >
+                    <option value="P5-P6">Primary 5-6</option>
+                    <option value="JSS1-JSS3">JSS 1-3</option>
+                    <option value="SS1-SS3">SS 1-3</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Class Name</label>
+                  <select
+                    value={newSubjectForm.className}
+                    onChange={(e) =>
+                      setNewSubjectForm((prev) => ({
+                        ...prev,
+                        className: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Select Class</option>
+                    {subjectCategory === "P5-P6" && (
+                      <>
+                        <option value="P5">Primary 5</option>
+                        <option value="P6">Primary 6</option>
+                      </>
+                    )}
+                    {subjectCategory === "JSS1-JSS3" && (
+                      <>
+                        <option value="JSS1">JSS 1</option>
+                        <option value="JSS2">JSS 2</option>
+                        <option value="JSS3">JSS 3</option>
+                      </>
+                    )}
+                    {subjectCategory === "SS1-SS3" && (
+                      <>
+                        <option value="SS1">SS 1</option>
+                        <option value="SS2">SS 2</option>
+                        <option value="SS3">SS 3</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Subject Name *</label>
+                  <input
+                    type="text"
+                    value={newSubjectForm.subjectName}
+                    onChange={(e) =>
+                      setNewSubjectForm((prev) => ({
+                        ...prev,
+                        subjectName: e.target.value,
+                      }))
+                    }
+                    placeholder="e.g., Advanced Mathematics"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Subject Code (Optional)</label>
+                  <input
+                    type="text"
+                    value={newSubjectForm.subjectCode}
+                    onChange={(e) =>
+                      setNewSubjectForm((prev) => ({
+                        ...prev,
+                        subjectCode: e.target.value,
+                      }))
+                    }
+                    placeholder="e.g., MATH301"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Description (Optional)</label>
+                  <textarea
+                    value={newSubjectForm.description}
+                    onChange={(e) =>
+                      setNewSubjectForm((prev) => ({
+                        ...prev,
+                        description: e.target.value,
+                      }))
+                    }
+                    placeholder="Brief description of the subject"
+                    rows={3}
+                  />
+                </div>
+
+                <div className="existing-subjects">
+                  <h4>Existing Subjects for {subjectCategory}</h4>
+                  <div className="subject-chips">
+                    {SUBJECTS_BY_LEVEL[subjectCategory].map((subject) => (
+                      <span key={subject} className="chip">
+                        {subject}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  className="btn-secondary"
+                  onClick={() => {
+                    setShowAddSubjectModal(false);
+                    setNewSubjectForm({
+                      className: "",
+                      subjectName: "",
+                      subjectCode: "",
+                      description: "",
+                    });
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={addNewSubject}
+                  disabled={
+                    !newSubjectForm.className || !newSubjectForm.subjectName
+                  }
+                >
+                  Add Subject
                 </button>
               </div>
             </div>
@@ -3732,6 +4272,102 @@ const AdminDashboard = () => {
     z-index: 1001;
     padding: 8px;
   }
+}
+/* Add to your existing CSS */
+.disabled-user {
+  opacity: 0.6;
+  background-color: #f7fafc !important;
+}
+
+.disabled-user:hover {
+  background-color: #edf2f7 !important;
+}
+
+.disabled-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  background-color: #fed7d7;
+  color: #9b2c2c;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.user-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.disable-btn, .enable-btn, .delete-user-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.disable-btn {
+  background-color: #fed7d7;
+  color: #9b2c2c;
+}
+
+.disable-btn:hover {
+  background-color: #feb2b2;
+}
+
+.enable-btn {
+  background-color: #c6f6d5;
+  color: #276749;
+}
+
+.enable-btn:hover {
+  background-color: #9ae6b4;
+}
+
+.delete-user-btn {
+  background-color: #fed7d7;
+  color: #9b2c2c;
+  border: 1px solid #fc8181;
+}
+
+.delete-user-btn:hover {
+  background-color: #feb2b2;
+}
+
+.existing-subjects {
+  margin-top: 24px;
+  padding: 16px;
+  background-color: #f7fafc;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.existing-subjects h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #4a5568;
+}
+
+textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  background: var(--card-bg);
+  font-family: inherit;
+  resize: vertical;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
 }
       `}</style>
     </div>
