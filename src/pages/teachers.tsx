@@ -163,7 +163,13 @@ interface EnhancedMonitoringData {
   quizId: string;
   quizName: string;
   quizClass: string;
-  status: "in-progress" | "submitted" | "violation" | "expired";
+  status:
+    | "not-started"
+    | "in-progress"
+    | "submitted"
+    | "violation"
+    | "expired"
+    | "auto-submitted";
   progress: number;
   timeSpent: string;
   currentQuestion: number;
@@ -173,19 +179,58 @@ interface EnhancedMonitoringData {
   score?: number;
   maxScore?: number;
   studentEmail?: string;
-}
 
+  // New fields for smarter tracking
+  quizStatusDetails?: {
+    startedAt?: Date;
+    submittedAt?: Date;
+    lastQuestionActivity?: Date;
+    lastViolationTime?: Date;
+    emergencyExitAttempts: number;
+    totalKeyPresses: number;
+    tabSwitchCount: number;
+    maxViolationsReached: boolean;
+    violationCount: number;
+  };
+
+  // Real-time activity tracking
+  currentActivity?: {
+    type:
+      | "viewing-question"
+      | "answering"
+      | "reviewing"
+      | "emergency-exit-attempt"
+      | "tab-switch"
+      | "idle";
+    questionId?: number;
+    timestamp: Date;
+    details?: string;
+  };
+
+  notifications?: {
+    quizStarted: boolean;
+    violationDetected: boolean;
+    maxViolationsReached: boolean;
+    quizSubmitted: boolean;
+    emergencyExitAttempt: boolean;
+  };
+}
 interface EnhancedViolation {
   id: string;
   timestamp: Date;
   type:
-    | "keyboard"
+    | "emergency-exit"
+    | "key-press"
+    | "tab-exit"
     | "right-click"
     | "tab-switch"
     | "dev-tools"
-    | "fullscreen-exit";
+    | "fullscreen-exit"
+    | "quiz-started"
+    | "quiz-submitted"
+    | "max-violations-reached";
   description: string;
-  severity: "low" | "medium" | "high";
+  severity: "low" | "medium" | "high" | "critical";
   studentId: string;
   studentName: string;
   studentClass: string;
@@ -194,6 +239,9 @@ interface EnhancedViolation {
   quizClass: string;
   browser: string;
   deviceType: string;
+  keyPressed?: string;
+  actionContext?: string;
+  autoAction?: boolean;
 }
 
 // Performance Management Menu Component
@@ -333,6 +381,14 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   // Add these functions inside the LiveMonitoringModal component
+  const setupComprehensiveMonitoring = () => {
+    console.log("🔍 Setting up comprehensive monitoring");
+
+    // Return a cleanup function
+    return () => {
+      console.log("🧹 Cleaning up comprehensive monitoring");
+    };
+  };
 
   // 1. Check if student has started a quiz
   const checkIfStudentHasStartedQuiz = async (
@@ -356,52 +412,153 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
     }
   };
 
-  // 2. Setup submission listener
-  const setupSubmissionListener = () => {
-    if (!user?.uid || !teacherClasses.length) return () => {};
+  const createEnhancedSampleMonitoringData = (): EnhancedMonitoringData[] => {
+    if (students.length === 0 || activeQuizzes.length === 0) return [];
 
-    const teacherClassNames = teacherClasses.map((c) => c.className);
+    const sampleData: EnhancedMonitoringData[] = [];
+    const activeQuiz = activeQuizzes.find((quiz) => quiz.status === "active");
+    if (!activeQuiz) return [];
 
-    // Listen for quiz submissions
-    const submissionsRef = collection(db, "studentQuizSubmissions");
-    const q = query(
-      submissionsRef,
-      where("className", "in", teacherClassNames),
-      where("status", "==", "submitted")
-    );
+    // Create sample data for different scenarios
+    students.slice(0, 5).forEach((student, index) => {
+      // Different scenarios for demonstration
+      const scenarios = [
+        {
+          status: "not-started" as const,
+          desc: "Accessed quiz but hasn't started",
+          activity: "idle" as const,
+        },
+        {
+          status: "in-progress" as const,
+          desc: "Just started quiz",
+          activity: "viewing-question" as const,
+          progress: 15,
+        },
+        {
+          status: "in-progress" as const,
+          desc: "Active with violations",
+          activity: "answering" as const,
+          progress: 45,
+          violations: 2,
+        },
+        {
+          status: "violation" as const,
+          desc: "Multiple violations detected",
+          activity: "emergency-exit-attempt" as const,
+          progress: 60,
+          violations: 3,
+        },
+        {
+          status: "submitted" as const,
+          desc: "Successfully submitted",
+          activity: "reviewing" as const,
+          progress: 100,
+        },
+      ];
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "added") {
-          const data = change.doc.data();
-          console.log(
-            `📝 Student ${data.studentName} submitted quiz ${data.quizName}`
-          );
+      const scenario = scenarios[index] || scenarios[0];
 
-          // Update monitoring data to show "submitted" for this student
-          setMonitoringData((prev) =>
-            prev.map((item) => {
-              if (
-                item.studentId === data.studentId &&
-                item.quizId === data.quizId
-              ) {
-                return {
-                  ...item,
-                  status: "submitted",
-                  progress: 100,
-                  score: data.score,
-                  maxScore: data.maxScore,
-                  lastActivity: new Date(),
-                };
-              }
-              return item;
-            })
-          );
-        }
-      });
+      const data: EnhancedMonitoringData = {
+        studentId: student.id || `student-${index}`,
+        studentName: student.fullName || `Student ${index + 1}`,
+        studentClass: student.className || "Class A",
+        quizId: activeQuiz.id,
+        quizName: activeQuiz.name,
+        quizClass: activeQuiz.targetClass || "Class A",
+        status: scenario.status,
+        progress: scenario.progress || 0,
+        timeSpent:
+          scenario.status === "submitted"
+            ? `${activeQuiz.duration}:00`
+            : scenario.status === "not-started"
+            ? "00:00"
+            : `${Math.floor(Math.random() * 20) + 1}:${Math.floor(
+                Math.random() * 60
+              )
+                .toString()
+                .padStart(2, "0")}`,
+        currentQuestion:
+          scenario.status === "submitted"
+            ? activeQuiz.questions.length
+            : scenario.status === "not-started"
+            ? 0
+            : Math.floor(Math.random() * activeQuiz.questions.length) + 1,
+        totalQuestions: activeQuiz.questions.length,
+        violations: scenario.violations
+          ? Array(scenario.violations)
+              .fill(null)
+              .map((_, i) => ({
+                id: `violation-${Date.now()}-${i}`,
+                timestamp: new Date(Date.now() - Math.random() * 300000),
+                type:
+                  i === 0
+                    ? "tab-switch"
+                    : i === 1
+                    ? "emergency-exit"
+                    : "key-press",
+                description:
+                  i === 0
+                    ? "Switched to another browser tab"
+                    : i === 1
+                    ? "Attempted emergency exit"
+                    : "Pressed restricted key",
+                severity: i === 0 ? "medium" : i === 1 ? "critical" : "low",
+                studentId: student.id || `student-${index}`,
+                studentName: student.fullName || `Student ${index + 1}`,
+                studentClass: student.className || "Class A",
+                quizId: activeQuiz.id,
+                quizName: activeQuiz.name,
+                quizClass: activeQuiz.targetClass || "Class A",
+                browser: "Chrome/120.0",
+                deviceType: "Desktop",
+                ...(i === 2 ? { keyPressed: "F12" } : {}),
+              }))
+          : [],
+        lastActivity: new Date(Date.now() - Math.random() * 600000),
+        score:
+          scenario.status === "submitted"
+            ? Math.floor(Math.random() * activeQuiz.maxScore)
+            : undefined,
+        maxScore: activeQuiz.maxScore,
+        quizStatusDetails: {
+          startedAt:
+            scenario.status === "not-started"
+              ? undefined
+              : new Date(Date.now() - Math.random() * 900000),
+          submittedAt:
+            scenario.status === "submitted"
+              ? new Date(Date.now() - Math.random() * 60000)
+              : undefined,
+          emergencyExitAttempts: scenario.violations === 3 ? 1 : 0,
+          totalKeyPresses: Math.floor(Math.random() * 50),
+          tabSwitchCount: scenario.violations || 0,
+          maxViolationsReached: scenario.status === "violation",
+          violationCount: scenario.violations || 0,
+        },
+        currentActivity: {
+          type: scenario.activity,
+          questionId:
+            scenario.status === "not-started"
+              ? undefined
+              : Math.floor(Math.random() * activeQuiz.questions.length) + 1,
+          timestamp: new Date(),
+          details: scenario.desc,
+        },
+        notifications: {
+          quizStarted: scenario.status !== "not-started",
+          violationDetected: scenario.violations
+            ? scenario.violations > 0
+            : false,
+          maxViolationsReached: scenario.status === "violation",
+          quizSubmitted: scenario.status === "submitted",
+          emergencyExitAttempt: scenario.violations === 3,
+        },
+      };
+
+      sampleData.push(data);
     });
 
-    return unsubscribe;
+    return sampleData;
   };
 
   // REPLACED the existing createSampleMonitoringData function with this:
@@ -417,7 +574,6 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
 
     // Only show 3 sample students (not all)
     students.slice(0, 3).forEach((student, index) => {
-      // Simulate: 1st student in-progress, 2nd student violation, 3rd student submitted
       const statuses: ("in-progress" | "violation" | "submitted")[] = [
         "in-progress",
         "violation",
@@ -474,6 +630,25 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
             ? Math.floor(Math.random() * activeQuiz.maxScore)
             : undefined,
         maxScore: activeQuiz.maxScore,
+        // Add the missing properties
+        quizStatusDetails: {
+          startedAt: new Date(Date.now() - Math.random() * 900000),
+          submittedAt: status === "submitted" ? new Date() : undefined,
+          lastQuestionActivity: new Date(),
+          lastViolationTime: status === "violation" ? new Date() : undefined,
+          emergencyExitAttempts: 0,
+          totalKeyPresses: Math.floor(Math.random() * 50),
+          tabSwitchCount: status === "violation" ? 1 : 0,
+          maxViolationsReached: false,
+          violationCount: status === "violation" ? 1 : 0,
+        },
+        notifications: {
+          quizStarted: status !== "not-started",
+          violationDetected: status === "violation",
+          maxViolationsReached: false,
+          quizSubmitted: status === "submitted",
+          emergencyExitAttempt: false,
+        },
       };
 
       sampleData.push(data);
@@ -565,8 +740,7 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
   useEffect(() => {
     if (!isOpen || !user?.uid) return;
 
-    const submissionUnsubscribe = setupSubmissionListener();
-
+    const submissionUnsubscribe = setupComprehensiveMonitoring();
     return () => {
       if (submissionUnsubscribe) {
         submissionUnsubscribe();
@@ -594,13 +768,27 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
           q = query(
             monitoringRef,
             where("quizClass", "in", teacherClassNames),
-            where("status", "in", ["in-progress", "submitted", "violation"])
+            where("status", "in", [
+              "not-started",
+              "in-progress",
+              "submitted",
+              "violation",
+              "expired",
+              "auto-submitted",
+            ])
           );
         } else {
           q = query(
             monitoringRef,
             where("quizId", "==", selectedQuiz),
-            where("status", "in", ["in-progress", "submitted", "violation"])
+            where("status", "in", [
+              "not-started",
+              "in-progress",
+              "submitted",
+              "violation",
+              "expired",
+              "auto-submitted",
+            ])
           );
         }
 
@@ -633,6 +821,31 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
               lastActivity: data.lastActivity?.toDate() || new Date(),
               score: data.score,
               maxScore: data.maxScore,
+              // ADD THESE:
+              quizStatusDetails: data.quizStatusDetails || {
+                startedAt: data.startedAt?.toDate?.(),
+                submittedAt: data.submittedAt?.toDate?.(),
+                emergencyExitAttempts: data.emergencyExitAttempts || 0,
+                totalKeyPresses: data.totalKeyPresses || 0,
+                tabSwitchCount: data.tabSwitchCount || 0,
+                maxViolationsReached: data.maxViolationsReached || false,
+                violationCount: data.violationCount || 0,
+              },
+              currentActivity: data.currentActivity || {
+                type: "viewing-question",
+                questionId: data.currentQuestion || 0,
+                timestamp: new Date(),
+                details: "Active in quiz",
+              },
+              notifications: data.notifications || {
+                quizStarted: status !== "not-started",
+                violationDetected: data.violations?.length > 0,
+                maxViolationsReached: data.status === "auto-submitted",
+                quizSubmitted:
+                  data.status === "submitted" ||
+                  data.status === "auto-submitted",
+                emergencyExitAttempt: false,
+              },
             });
           }
         });
@@ -641,8 +854,128 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
 
         if (monitoringData.length === 0) {
           // Create sample data if no real data exists (for testing)
-          const sampleData = createSampleMonitoringData();
-          setMonitoringData(sampleData);
+          const createSampleMonitoringData = (): EnhancedMonitoringData[] => {
+            if (students.length === 0 || activeQuizzes.length === 0) return [];
+
+            const sampleData: EnhancedMonitoringData[] = [];
+
+            // Only create sample data for active quizzes
+            const activeQuiz = activeQuizzes.find(
+              (quiz) => quiz.status === "active"
+            );
+            if (!activeQuiz) return [];
+
+            // Only show 3 sample students (not all)
+            students.slice(0, 3).forEach((student, index) => {
+              // Simulate: 1st student in-progress, 2nd student violation, 3rd student submitted
+              const statuses: ("in-progress" | "violation" | "submitted")[] = [
+                "in-progress",
+                "violation",
+                "submitted",
+              ];
+              const status = statuses[index] || "in-progress";
+
+              const data: EnhancedMonitoringData = {
+                studentId: student.id || `student-${index}`,
+                studentName: student.fullName || `Student ${index + 1}`,
+                studentClass: student.className || "Class A",
+                quizId: activeQuiz.id,
+                quizName: activeQuiz.name,
+                quizClass: activeQuiz.targetClass || "Class A",
+                status: status,
+                progress:
+                  status === "submitted"
+                    ? 100
+                    : Math.floor(Math.random() * 30) + 70,
+                timeSpent:
+                  status === "submitted"
+                    ? `${activeQuiz.duration}:00`
+                    : `${Math.floor(Math.random() * 20) + 1}:${Math.floor(
+                        Math.random() * 60
+                      )
+                        .toString()
+                        .padStart(2, "0")}`,
+                currentQuestion:
+                  status === "submitted"
+                    ? activeQuiz.questions.length
+                    : Math.floor(Math.random() * activeQuiz.questions.length) +
+                      1,
+                totalQuestions: activeQuiz.questions.length,
+                violations:
+                  status === "violation"
+                    ? [
+                        {
+                          id: `violation-${Date.now()}-${index}`,
+                          timestamp: new Date(
+                            Date.now() - Math.random() * 300000
+                          ),
+                          type: "tab-switch",
+                          description: "Switched to another browser tab",
+                          severity: "medium",
+                          studentId: student.id || `student-${index}`,
+                          studentName:
+                            student.fullName || `Student ${index + 1}`,
+                          studentClass: student.className || "Class A",
+                          quizId: activeQuiz.id,
+                          quizName: activeQuiz.name,
+                          quizClass: activeQuiz.targetClass || "Class A",
+                          browser: "Chrome/120.0",
+                          deviceType: "Desktop",
+                        },
+                      ]
+                    : [],
+                lastActivity: new Date(Date.now() - Math.random() * 600000),
+                score:
+                  status === "submitted"
+                    ? Math.floor(Math.random() * activeQuiz.maxScore)
+                    : undefined,
+                maxScore: activeQuiz.maxScore,
+                // ADD THESE NEW PROPERTIES:
+                quizStatusDetails: {
+                  startedAt:
+                    status !== "not-started"
+                      ? new Date(Date.now() - Math.random() * 900000)
+                      : undefined,
+                  submittedAt:
+                    status === "submitted"
+                      ? new Date(Date.now() - Math.random() * 60000)
+                      : undefined,
+                  emergencyExitAttempts: status === "violation" ? 1 : 0,
+                  totalKeyPresses: Math.floor(Math.random() * 50),
+                  tabSwitchCount: status === "violation" ? 1 : 0,
+                  maxViolationsReached: false,
+                  violationCount: status === "violation" ? 1 : 0,
+                },
+                currentActivity: {
+                  type: status === "submitted" ? "reviewing" : "answering",
+                  questionId:
+                    status === "submitted"
+                      ? activeQuiz.questions.length
+                      : Math.floor(
+                          Math.random() * activeQuiz.questions.length
+                        ) + 1,
+                  timestamp: new Date(),
+                  details:
+                    status === "submitted"
+                      ? "Reviewing answers"
+                      : status === "violation"
+                      ? "Violation detected"
+                      : "Answering questions",
+                },
+                notifications: {
+                  quizStarted: status !== "not-started",
+                  violationDetected: status === "violation",
+                  maxViolationsReached: false,
+                  quizSubmitted: status === "submitted",
+                  emergencyExitAttempt: false,
+                },
+              };
+
+              sampleData.push(data);
+            });
+
+            return sampleData;
+          };
         }
       } catch (error) {
         console.error("Error loading monitoring data:", error);
@@ -737,7 +1070,11 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
           let status = data.status || "in-progress";
 
           // If there are violations, mark as violation (unless already submitted)
-          if (violations.length > 0 && status !== "submitted") {
+          if (
+            violations.length > 0 &&
+            status !== "submitted" &&
+            status !== "expired"
+          ) {
             status = "violation";
           }
 
@@ -813,19 +1150,22 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case "not-started":
+        return "#9ca3af"; // Gray
       case "in-progress":
-        return "#3b82f6";
+        return "#3b82f6"; // Blue
       case "submitted":
-        return "#10b981";
+        return "#10b981"; // Green
+      case "auto-submitted":
+        return "#f59e0b"; // Orange
       case "violation":
-        return "#ef4444";
+        return "#ef4444"; // Red
       case "expired":
-        return "#6b7280";
+        return "#6b7280"; // Dark gray
       default:
         return "#6b7280";
     }
   };
-
   const getViolationIcon = (type: string) => {
     switch (type) {
       case "keyboard":
@@ -1009,6 +1349,7 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
                           .toUpperCase()
                           .slice(0, 2)}
                       </div>
+
                       <div className="student-details">
                         <div className="student-name-section">
                           <strong>{data.studentName}</strong>
@@ -1016,15 +1357,60 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
                             className={`status-badge status-${data.status}`}
                           >
                             {getStatusIcon(data.status)}
-                            {data.status === "in-progress"
+                            {data.status === "not-started"
+                              ? "Not Started"
+                              : data.status === "in-progress"
                               ? "In Progress"
                               : data.status === "submitted"
                               ? "Submitted"
+                              : data.status === "auto-submitted"
+                              ? "Auto-Submitted"
                               : data.status === "violation"
                               ? "Violation Detected"
                               : "Expired"}
                           </span>
                         </div>
+
+                        {/* ADD PART 6 HERE - Notification Badges */}
+                        {(data.notifications?.quizStarted ||
+                          data.notifications?.violationDetected ||
+                          data.notifications?.maxViolationsReached ||
+                          data.notifications?.quizSubmitted ||
+                          data.notifications?.emergencyExitAttempt) && (
+                          <div className="notification-badges">
+                            {data.notifications.quizStarted && (
+                              <span className="notification-badge badge-quiz-started">
+                                <Bell size={12} />
+                                Quiz Started
+                              </span>
+                            )}
+                            {data.notifications.violationDetected && (
+                              <span className="notification-badge badge-violation">
+                                <AlertTriangle size={12} />
+                                Violation
+                              </span>
+                            )}
+                            {data.notifications.maxViolationsReached && (
+                              <span className="notification-badge badge-max-violations">
+                                <AlertCircle size={12} />
+                                Max Violations
+                              </span>
+                            )}
+                            {data.notifications.quizSubmitted && (
+                              <span className="notification-badge badge-submitted">
+                                <CheckCircle size={12} />
+                                Submitted
+                              </span>
+                            )}
+                            {data.notifications.emergencyExitAttempt && (
+                              <span className="notification-badge badge-emergency-exit">
+                                <X size={12} />
+                                Emergency Exit Attempt
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         <div className="student-meta">
                           <span>
                             <FileText size={12} /> Quiz: {data.quizName}
@@ -1045,6 +1431,20 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
                               {data.maxScore}
                             </span>
                           )}
+
+                          {/* Add current activity display */}
+                          {data.currentActivity && (
+                            <span>
+                              <Eye size={12} /> Activity:{" "}
+                              {data.currentActivity.type}
+                            </span>
+                          )}
+
+                          {/* Add violation count display */}
+                          <span>
+                            <AlertTriangle size={12} /> Violations:{" "}
+                            {data.violations.length}
+                          </span>
                         </div>
                         {data.violations.length > 0 && (
                           <div className="violations-list">
@@ -10270,6 +10670,52 @@ width:99px;
   .live-dot {
     animation: pulse 1.5s infinite !important;
   }
+}
+.notification-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.notification-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge-quiz-started {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+.badge-violation {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+}
+
+.badge-max-violations {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.badge-submitted {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.badge-emergency-exit {
+  background: #fce7f3;
+  color: #be185d;
+  border: 1px solid #f9a8d4;
 }
         
 
