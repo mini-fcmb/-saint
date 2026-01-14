@@ -380,6 +380,25 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
   const [selectedQuiz, setSelectedQuiz] = useState<string>("all");
   const [autoRefresh, setAutoRefresh] = useState(true);
 
+  const StatusUtils = {
+    isQuizStarted: (status: string): boolean => {
+      return [
+        "in-progress",
+        "submitted",
+        "violation",
+        "auto-submitted",
+      ].includes(status);
+    },
+  };
+  const hasQuizStarted = (status: string): boolean => {
+    return [
+      "in-progress",
+      "submitted",
+      "violation",
+      "auto-submitted",
+      "expired",
+    ].includes(status);
+  };
   // Add these functions inside the LiveMonitoringModal component
   const setupComprehensiveMonitoring = () => {
     console.log("🔍 Setting up comprehensive monitoring");
@@ -574,11 +593,12 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
 
     // Only show 3 sample students (not all)
     students.slice(0, 3).forEach((student, index) => {
-      const statuses: ("in-progress" | "violation" | "submitted")[] = [
-        "in-progress",
-        "violation",
-        "submitted",
-      ];
+      const statuses: (
+        | "in-progress"
+        | "violation"
+        | "submitted"
+        | "not-started"
+      )[] = ["in-progress", "violation", "submitted"];
       const status = statuses[index] || "in-progress";
 
       const data: EnhancedMonitoringData = {
@@ -643,7 +663,7 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
           violationCount: status === "violation" ? 1 : 0,
         },
         notifications: {
-          quizStarted: status !== "not-started",
+          quizStarted: hasQuizStarted(status),
           violationDetected: status === "violation",
           maxViolationsReached: false,
           quizSubmitted: status === "submitted",
@@ -838,7 +858,7 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
                 details: "Active in quiz",
               },
               notifications: data.notifications || {
-                quizStarted: status !== "not-started",
+                quizStarted: hasQuizStarted(status),
                 violationDetected: data.violations?.length > 0,
                 maxViolationsReached: data.status === "auto-submitted",
                 quizSubmitted:
@@ -932,10 +952,7 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
                 maxScore: activeQuiz.maxScore,
                 // ADD THESE NEW PROPERTIES:
                 quizStatusDetails: {
-                  startedAt:
-                    status !== "not-started"
-                      ? new Date(Date.now() - Math.random() * 900000)
-                      : undefined,
+                  startedAt: new Date(Date.now() - Math.random() * 900000), // Always set startedAt
                   submittedAt:
                     status === "submitted"
                       ? new Date(Date.now() - Math.random() * 60000)
@@ -963,7 +980,7 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
                       : "Answering questions",
                 },
                 notifications: {
-                  quizStarted: status !== "not-started",
+                  quizStarted: hasQuizStarted(status),
                   violationDetected: status === "violation",
                   maxViolationsReached: false,
                   quizSubmitted: status === "submitted",
