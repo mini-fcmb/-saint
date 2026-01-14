@@ -2008,7 +2008,7 @@ const AdminDashboard = () => {
                                   )
                                 }
                               >
-                                Enable
+                                Enabled
                               </button>
                             ) : (
                               <button
@@ -2023,7 +2023,7 @@ const AdminDashboard = () => {
                                   )
                                 }
                               >
-                                Disable
+                                Disabled
                               </button>
                             )}
                             <button
@@ -2100,7 +2100,7 @@ const AdminDashboard = () => {
                                   )
                                 }
                               >
-                                Enable
+                                Enabled
                               </button>
                             ) : (
                               <button
@@ -2115,7 +2115,7 @@ const AdminDashboard = () => {
                                   )
                                 }
                               >
-                                Disable
+                                Disabled
                               </button>
                             )}
                             <button
