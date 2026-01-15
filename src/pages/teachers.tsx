@@ -73,6 +73,33 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase/config";
 import logo from "../assets/logo.png";
+// Format class name for display (add spaces for readability)
+const formatClassNameForDisplay = (className: string): string => {
+  if (!className) return "";
+
+  // Add space between letters and numbers for display
+  const formatted = className.replace(/([A-Z]+)(\d+)/, "$1 $2");
+  return formatted;
+};
+
+// Standard class name normalization function - NO SPACES
+const normalizeClassName = (className: string): string => {
+  if (!className) return "";
+
+  // Convert to uppercase
+  let normalized = className.toUpperCase().trim();
+
+  // Remove ALL spaces
+  normalized = normalized.replace(/\s+/g, "");
+
+  // Ensure proper format (e.g., "JSS2" not "JSS-2" or "JSS_2")
+  normalized = normalized.replace(/[_-]/g, "");
+
+  // For JSS classes, ensure format like "JSS1", "JSS2", etc.
+  normalized = normalized.replace(/([A-Z]+)(\d+)/, "$1$2");
+
+  return normalized;
+};
 
 // Enhanced Types
 interface TeacherClassInfo {
@@ -690,6 +717,7 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
         monitoringRef,
         {
           ...data,
+          quizClass: normalizeClassName(data.quizClass), // Add this normalization
           teacherId: user.uid,
           teacherName: user.displayName || "Teacher",
           lastActivity: new Date(),
@@ -775,8 +803,18 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
     const loadData = async () => {
       try {
         // Get teacher's classes first
+        // Add this helper function at the top of LiveMonitoringModal component
+        const normalizeClassName = (className: string): string => {
+          if (!className) return "";
+          return className
+            .toUpperCase()
+            .replace(/\s+/g, "")
+            .replace(/[_-]/g, "")
+            .trim();
+        };
+
         const teacherClassNames = teacherClasses.map(
-          (c: TeacherClassInfo) => c.className
+          (c: TeacherClassInfo) => normalizeClassName(c.className) // Normalize here
         );
 
         // Query monitoring collection
@@ -1433,7 +1471,8 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
                             <FileText size={12} /> Quiz: {data.quizName}
                           </span>
                           <span>
-                            <Building size={12} /> Class: {data.studentClass}
+                            <Building size={12} /> Class:{" "}
+                            {formatClassNameForDisplay(data.studentClass)}
                           </span>
                           <span>
                             <Clock size={12} /> Time: {data.timeSpent}
@@ -1781,7 +1820,14 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
   const { userData } = useFirebaseStore();
 
   const normalizeClassName = (className: string): string => {
-    return (className || "").toLowerCase().replace(/\s+/g, "").trim();
+    if (!className) return "";
+
+    // Use standard NO SPACES format
+    return className
+      .toUpperCase()
+      .replace(/\s+/g, "") // Remove all spaces
+      .replace(/[_-]/g, "") // Remove hyphens and underscores
+      .trim();
   };
 
   // Initialize grade system
@@ -1819,55 +1865,79 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     }
   }, [selectedClass, teacherClasses, selectedSubject]);
 
-  // Filter students by selected class - WITH NORMALIZATION
+  // Filter students by selected class - JSS 2 FORMAT (WITH SPACE)
   const filteredStudents = useMemo(() => {
     if (!selectedClass) return [];
 
-    console.log("🔍 Filtering students for class:", selectedClass);
-    console.log("📊 Total students available:", students.length);
-    console.log("🏫 Selected class:", selectedClass);
-    console.log("📋 Teacher classes:", teacherClasses);
+    console.log("🎯 GRADE MANAGEMENT: Filtering for JSS 2 format (WITH SPACE)");
+    console.log("Selected class:", selectedClass);
+    console.log("Total students:", students.length);
 
-    // Enhanced normalization function
-    const normalizeClassName = (className: string | undefined): string => {
+    // Normalize to JSS 2 format (UPPERCASE, WITH SPACE between letters and numbers)
+    const normalizeToJSS2WithSpace = (
+      className: string | undefined
+    ): string => {
       if (!className) return "";
-      // Convert to lowercase, remove spaces, hyphens, underscores
-      return className
-        .toLowerCase()
-        .replace(/\s+/g, "")
-        .replace(/[_-]/g, "")
-        .trim();
+
+      // 1. Convert to UPPERCASE
+      // 2. Ensure format: "JSS 2" (letter, space, number)
+      // 3. Remove any extra spaces
+      let normalized = className.toUpperCase().trim();
+
+      // Add space between letters and numbers if missing
+      // Example: "JSS2" → "JSS 2"
+      normalized = normalized.replace(/([A-Z]+)(\d+)/, "$1 $2");
+
+      // Ensure single space between words/numbers
+      normalized = normalized.replace(/\s+/g, " ").trim();
+
+      return normalized;
     };
 
-    // Normalize the selected class
-    const normalizedSelectedClass = normalizeClassName(selectedClass);
-    console.log("🔤 Normalized selected class:", normalizedSelectedClass);
+    // Normalize selected class
+    const selectedClassWithSpace = normalizeToJSS2WithSpace(selectedClass);
+    console.log("🔤 Selected class (JSS 2 format):", selectedClassWithSpace);
 
     // Filter students
     const filtered = students.filter((student) => {
       const studentClass = student.className || "";
-      const normalizedStudentClass = normalizeClassName(studentClass);
+      const studentClassWithSpace = normalizeToJSS2WithSpace(studentClass);
 
-      // Debug log for each student
-      console.log(`👤 ${student.first} ${student.last}: 
-      Original class: "${studentClass}"
-      Normalized: "${normalizedStudentClass}"
-      Matches? ${normalizedStudentClass === normalizedSelectedClass}`);
+      // Log for debugging
+      console.log(
+        `📝 ${student.fullName}: "${studentClass}" → "${studentClassWithSpace}"`
+      );
 
-      return normalizedStudentClass === normalizedSelectedClass;
+      // Compare in JSS 2 format with space
+      const matches = studentClassWithSpace === selectedClassWithSpace;
+
+      if (matches) {
+        console.log(`✅ MATCH: ${student.fullName}`);
+      }
+
+      return matches;
     });
 
     console.log(
-      `✅ Found ${filtered.length} students for class "${selectedClass}"`
+      `✅ Found ${filtered.length} students for "${selectedClass}" (as JSS 2 with space)`
     );
-    console.log(
-      "📋 Filtered students:",
-      filtered.map((s) => `${s.first} ${s.last} (${s.className})`)
-    );
+
+    if (filtered.length === 0) {
+      console.warn("⚠️ No students found! Check class name formats:");
+
+      // Show what class formats actually exist
+      const uniqueClasses = new Set();
+      students.forEach((student) => {
+        const original = student.className || "";
+        const withSpaceFormat = normalizeToJSS2WithSpace(original);
+        uniqueClasses.add(`${original} → ${withSpaceFormat}`);
+      });
+
+      console.log("Available class formats:", Array.from(uniqueClasses));
+    }
 
     return filtered;
   }, [students, selectedClass]);
-
   // Replace the current loadQuizResults function with this:
   // REPLACE your loadQuizResults function with this FIXED version:
   const loadQuizResults = useCallback(async () => {
@@ -2756,11 +2826,28 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
             const studentGrades = data.grades || [];
 
             // Find grade for current subject and class
-            const subjectGrade = studentGrades.find(
-              (g: any) =>
-                g.subject === selectedSubject && g.className === selectedClass
-            );
+            // Helper function for NO SPACES comparison
+            const normalizeForComparison = (className: string): string => {
+              return className
+                .toUpperCase()
+                .replace(/\s+/g, "")
+                .replace(/[_-]/g, "")
+                .trim();
+            };
 
+            // Find grade for current subject and class using NO SPACES comparison
+            const subjectGrade = studentGrades.find((g: any) => {
+              const gradeClassNormalized = normalizeForComparison(
+                g.className || ""
+              );
+              const selectedClassNormalized =
+                normalizeForComparison(selectedClass);
+
+              return (
+                g.subject === selectedSubject &&
+                gradeClassNormalized === selectedClassNormalized
+              );
+            });
             if (subjectGrade) {
               const student = filteredStudents.find(
                 (s) => (s.id || s.studentId || s.userId) === studentId
@@ -3320,7 +3407,9 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
                     <tr key={record.id} className="grade-row">
                       <td className="serial-number">{index + 1}</td>
                       <td className="student-name">{record.studentName}</td>
-                      <td className="class-name">{record.className}</td>
+                      <td className="class-name">
+                        {formatClassNameForDisplay(record.className)}
+                      </td>
 
                       {/* Component Scores */}
                       <td className="obj-score-cell">
@@ -4609,7 +4698,9 @@ const ClassListPanel: React.FC<ClassListPanelProps> = ({
                             marginLeft: "8px",
                           }}
                         >
-                          {s.className}
+                          {s.className
+                            ? formatClassNameForDisplay(s.className)
+                            : "Unknown Class"}
                         </span>
                       </div>
                       <div style={{ fontSize: "13px", color: "#6b7280" }}>
@@ -4688,6 +4779,15 @@ const TeacherDashboard: React.FC = () => {
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const [selectedQuizForReschedule, setSelectedQuizForReschedule] =
     useState<Quiz | null>(null);
+  // Add this inside TeacherDashboard component, after state declarations
+  const normalizeClassName = (className: string): string => {
+    if (!className) return "";
+    return className
+      .toUpperCase()
+      .replace(/\s+/g, "")
+      .replace(/[_-]/g, "")
+      .trim();
+  };
 
   const debugStudentData = () => {
     console.log("🔍 DEBUG: Student & Teacher Data Analysis");
@@ -4767,13 +4867,25 @@ const TeacherDashboard: React.FC = () => {
           if (teacherData.classes && Array.isArray(teacherData.classes)) {
             console.log("📚 Classes array found:", teacherData.classes);
 
+            // Add this helper function at the top of fetchTeacherData or component scope
+            const normalizeClassName = (className: string): string => {
+              if (!className) return "";
+              return className
+                .toUpperCase()
+                .replace(/\s+/g, "")
+                .replace(/[_-]/g, "")
+                .trim();
+            };
+
             classesData = teacherData.classes
               .filter(
                 (className: string) =>
                   className && typeof className === "string"
               )
               .map((className: string) => {
-                const normalizedClassName = className.trim();
+                const normalizedClassName = normalizeClassName(
+                  className.trim()
+                );
 
                 // Extract subjects for this class
                 let subjects: string[] = [];
@@ -4785,11 +4897,19 @@ const TeacherDashboard: React.FC = () => {
                   subjects = teacherData.subjects[normalizedClassName];
                 } else if (
                   teacherData.subjects &&
+                  teacherData.subjects[className] // Also check original name
+                ) {
+                  subjects = teacherData.subjects[className];
+                } else if (
+                  teacherData.subjects &&
                   Array.isArray(teacherData.subjects)
                 ) {
                   subjects = teacherData.subjects;
                 } else if (teacherData[normalizedClassName]?.subjects) {
                   subjects = teacherData[normalizedClassName].subjects;
+                } else if (teacherData[className]?.subjects) {
+                  // Check original too
+                  subjects = teacherData[className].subjects;
                 } else if (teacherData.subject) {
                   subjects = [teacherData.subject];
                 } else {
@@ -4797,7 +4917,7 @@ const TeacherDashboard: React.FC = () => {
                 }
 
                 return {
-                  className: normalizedClassName,
+                  className: normalizedClassName, // Store normalized
                   subjects: Array.isArray(subjects)
                     ? subjects
                         .filter((s) => s && typeof s === "string")
@@ -4931,17 +5051,16 @@ const TeacherDashboard: React.FC = () => {
       );
     });
 
-    // Enhanced normalization function
     const normalizeClassName = (className: string | undefined): string => {
       if (!className) return "";
       return className
-        .toLowerCase()
-        .replace(/\s+/g, "") // Remove all spaces
+        .toUpperCase()
+        .replace(/\s+/g, "") // Remove ALL spaces
         .replace(/[_-]/g, "") // Remove hyphens and underscores
         .trim();
     };
 
-    // Filter students - Students only have className, NOT classes array
+    // Filter students - Use NO SPACES normalization
     const filtered = students.filter((student) => {
       const studentClass = student.className || "";
       const studentNormalized = normalizeClassName(studentClass);
@@ -4953,20 +5072,20 @@ const TeacherDashboard: React.FC = () => {
 
       console.log(`🔍 Checking student: ${student.first} ${student.last}`);
       console.log(`  Original class: "${studentClass}"`);
-      console.log(`  Normalized: "${studentNormalized}"`);
+      console.log(`  Normalized (NO SPACES): "${studentNormalized}"`);
 
-      // Check if student's className matches ANY teacher class
+      // Check if student's className matches ANY teacher class using NO SPACES format
       const matches = teacherClasses.some((teacherClass) => {
         const teacherClassName = teacherClass.className;
         const teacherNormalized = normalizeClassName(teacherClassName);
 
         console.log(`  Comparing with teacher class: "${teacherClassName}"`);
-        console.log(`  Teacher normalized: "${teacherNormalized}"`);
+        console.log(`  Teacher normalized (NO SPACES): "${teacherNormalized}"`);
 
-        // ONLY check for EXACT match after normalization
+        // ONLY check for EXACT match after NO SPACES normalization
         if (studentNormalized === teacherNormalized) {
           console.log(
-            `✅ Exact match: "${studentClass}" = "${teacherClassName}"`
+            `✅ Exact NO SPACES match: "${studentClass}" = "${teacherClassName}"`
           );
           return true;
         }
@@ -4974,9 +5093,6 @@ const TeacherDashboard: React.FC = () => {
         console.log(
           `❌ No match: "${studentNormalized}" ≠ "${teacherNormalized}"`
         );
-        return false;
-
-        console.log(`❌ No match`);
         return false;
       });
 
@@ -4992,18 +5108,22 @@ const TeacherDashboard: React.FC = () => {
       const studentClass = student.className || "";
       const studentNormalized = normalizeClassName(studentClass);
 
-      // Find matching teacher class - ONLY EXACT MATCHES!
+      // Find matching teacher class - ONLY EXACT MATCHES with NO SPACES!
       const matchedClassInfo = teacherClasses.find((teacherClass) => {
         const teacherNormalized = normalizeClassName(teacherClass.className);
-        return studentNormalized === teacherNormalized; // ONLY exact match
+        return studentNormalized === teacherNormalized; // ONLY exact NO SPACES match
       });
+
+      // Return the class name in its original format but store normalized for matching
       return {
         ...student,
         fullName: `${student.first} ${student.last}`,
         subjects: matchedClassInfo?.subjects || ["General"],
         className:
           matchedClassInfo?.className || student.className || "Unknown Class",
-      } as Student;
+        // Add normalized version for internal use
+        normalizedClassName: studentNormalized,
+      } as Student & { normalizedClassName: string };
     });
 
     console.log(
@@ -5011,6 +5131,7 @@ const TeacherDashboard: React.FC = () => {
       enhanced.map((s) => ({
         name: s.fullName,
         class: s.className,
+        normalizedClass: (s as any).normalizedClassName,
         subjects: s.subjects,
       }))
     );
@@ -5534,6 +5655,9 @@ const TeacherDashboard: React.FC = () => {
       maxScore: number,
       targetClass: string
     ) => {
+      // Normalize the targetClass before saving
+      const normalizedTargetClass = normalizeClassName(targetClass);
+
       const totalDuration = duration + 10;
       const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
       const now = new Date();
@@ -5562,7 +5686,7 @@ const TeacherDashboard: React.FC = () => {
             status,
             subject,
             maxScore,
-            targetClass,
+            targetClass: normalizedTargetClass, // Store normalized
             updatedAt: new Date(),
           };
 
@@ -5584,7 +5708,7 @@ const TeacherDashboard: React.FC = () => {
             status,
             subject,
             maxScore,
-            targetClass,
+            targetClass: normalizedTargetClass, // Store normalized
             updatedAt: new Date(),
             active: status === "active",
           });
@@ -5604,7 +5728,7 @@ const TeacherDashboard: React.FC = () => {
             status,
             subject,
             maxScore,
-            targetClass,
+            targetClass: normalizedTargetClass, // Store normalized
             createdAt: new Date(),
             updatedAt: new Date(),
           };
@@ -5618,7 +5742,6 @@ const TeacherDashboard: React.FC = () => {
             active: status === "active",
           });
 
-          // Update local state
           console.log("✅ New quiz saved to Firestore:", quizId);
         }
 
@@ -6188,7 +6311,10 @@ const TeacherDashboard: React.FC = () => {
               <div className="teacher-classes-info">
                 <span className="classes-tag">
                   <Building size={16} />
-                  Classes: {teacherClasses.map((c) => c.className).join(", ")}
+                  Classes:{" "}
+                  {teacherClasses
+                    .map((c) => formatClassNameForDisplay(c.className))
+                    .join(", ")}
                 </span>
               </div>
             )}
@@ -6350,7 +6476,8 @@ const TeacherDashboard: React.FC = () => {
                       <div className="test-info">
                         <div className="test-title-section">
                           <h4>
-                            {quiz.name} ({quiz.targetClass})
+                            {quiz.name} (
+                            {formatClassNameForDisplay(quiz.targetClass)})
                           </h4>
                           <div className="test-actions">
                             <button
