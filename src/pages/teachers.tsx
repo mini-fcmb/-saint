@@ -1939,60 +1939,58 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
     return filtered;
   }, [students, selectedClass]);
   // Replace the current loadQuizResults function with this:
-  // REPLACE your loadQuizResults function with this FIXED version:
   const loadQuizResults = useCallback(async () => {
     if (!selectedClass || !selectedSubject || !user?.uid) return;
-
+  
     try {
-      console.log("🎯 FIXED VERSION - Loading quiz results");
-
+      console.log("🎯 Loading quiz results - FIXED VERSION");
+  
       const submissionsRef = collection(db, "quizSubmissions");
-
-      // Query 1: Get submissions with teacherId
+  
+      // Query submissions with teacherId
       const q1 = query(submissionsRef, where("teacherId", "==", user.uid));
-
-      // Query 2: Get submissions without teacherId but matching class/subject
+  
+      // Query submissions without teacherId but matching class/subject
       const q2 = query(
         submissionsRef,
         where("className", "==", selectedClass),
         where("subject", "==", selectedSubject)
       );
-
+  
       const [snapshot1, snapshot2] = await Promise.all([
         getDocs(q1),
         getDocs(q2),
       ]);
-
+  
       console.log(
         `📊 Results: ${snapshot1.docs.length} with teacherId, ${snapshot2.docs.length} without teacherId`
       );
-
+  
       // Combine results
       const allDocs = new Map();
-
+  
       // Add docs from first query
       snapshot1.docs.forEach((doc) => {
         allDocs.set(doc.id, doc.data());
       });
-
-      // Add docs from second query (if they don't have teacherId or it's undefined)
+  
+      // Add docs from second query
       snapshot2.docs.forEach((doc) => {
         const data = doc.data();
         if (!data.teacherId && !data.teacherID && !data.teacher) {
           allDocs.set(doc.id, {
             ...data,
-            teacherId: user.uid, // Add teacherId now
+            teacherId: user.uid,
             teacherName: user.displayName || "Teacher",
-            teacherEmail: user.email || "",
           });
         }
       });
-
+  
       console.log(`📦 Total unique submissions: ${allDocs.size}`);
-
+  
       // Group by student
       const submissionsByStudent = new Map();
-
+  
       allDocs.forEach((data, docId) => {
         // Try multiple student ID fields
         const studentId =
@@ -2002,65 +2000,49 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
           data.uid ||
           data.student?.id ||
           `student-${docId}`;
-
+  
         const studentName =
           data.studentName ||
           data.student ||
           (typeof data.student === "object"
             ? data.student.name
             : "Unknown Student");
-
+  
         if (!submissionsByStudent.has(studentId)) {
           submissionsByStudent.set(studentId, []);
         }
-
+  
+        // Get the ACTUAL score, not percentage
         const score = data.score || data.totalScore || data.obtainedScore || 0;
-        const maxScore =
-          data.maxScore ||
-          data.totalPossibleScore ||
-          data.maxPossibleScore ||
-          100;
-        const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
-
+        const maxScore = data.maxScore || data.totalPossibleScore || data.maxPossibleScore || 100;
+        
+        // Store the actual score data
         submissionsByStudent.get(studentId).push({
-          score: score,
-          maxScore: maxScore,
-          percentage: percentage,
+          score: score, // This is the actual score (e.g., 1)
+          maxScore: maxScore, // This is the maximum possible score (e.g., 1)
           quizName: data.quizName || "Unknown Quiz",
           studentName: studentName,
-          submittedAt:
-            data.submittedAt?.toDate?.() ||
-            data.timestamp?.toDate?.() ||
-            new Date(),
-          rawData: data,
+          submittedAt: data.submittedAt?.toDate?.() || data.timestamp?.toDate?.() || new Date(),
         });
       });
-
-      console.log(
-        `📈 Student quiz data grouped: ${submissionsByStudent.size} students`
-      );
-
+  
+      console.log(`📈 Student quiz data grouped: ${submissionsByStudent.size} students`);
+  
       // Update grade records
       setGradeRecords((prev) => {
         return prev.map((record) => {
-          console.log(
-            `👤 Checking student: ${record.studentName} (ID: ${record.studentId})`
-          );
-
           // Try to find submissions for this student
           let studentSubmissions = null;
-
+  
           // Try by ID first
           studentSubmissions = submissionsByStudent.get(record.studentId);
-
+  
           // If not found, try by name match
           if (!studentSubmissions) {
             for (const [sid, subs] of submissionsByStudent.entries()) {
-              const submissionStudentName = (
-                subs[0]?.studentName || ""
-              ).toLowerCase();
+              const submissionStudentName = (subs[0]?.studentName || "").toLowerCase();
               const recordName = record.studentName.toLowerCase();
-
+  
               if (
                 submissionStudentName === recordName ||
                 submissionStudentName.includes(recordName) ||
@@ -2072,39 +2054,54 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
               }
             }
           }
-
+  
           if (studentSubmissions && studentSubmissions.length > 0) {
-            const totalPercentage = studentSubmissions.reduce(
-              (sum: number, sub: any) => sum + sub.percentage,
+            // Calculate average actual score (not percentage)
+            const totalScore = studentSubmissions.reduce(
+              (sum: number, sub: any) => sum + sub.score,
               0
             );
-            const averagePercentage =
-              totalPercentage / studentSubmissions.length;
-            const objScore = Math.round(
-              (averagePercentage / 100) * gradeSystem.maxScores.obj
-            );
-
+            const averageScore = totalScore / studentSubmissions.length;
+            
+            // For demonstration, let's calculate what percentage of the max OBJ score this represents
+            // But keep the actual score as the OBJ score if it makes sense for your system
+            let objScore;
+            
+            if (averageScore <= gradeSystem.maxScores.obj) {
+              // If average score is already within OBJ max range (30), use it directly
+              objScore = Math.round(averageScore);
+            } else {
+              // If average score exceeds OBJ max, scale it down
+              const totalMaxScore = studentSubmissions.reduce(
+                (sum: number, sub: any) => sum + sub.maxScore,
+                0
+              );
+              const averageMaxScore = totalMaxScore / studentSubmissions.length;
+              const percentage = (averageScore / averageMaxScore) * 100;
+              objScore = Math.round((percentage / 100) * gradeSystem.maxScores.obj);
+            }
+  
             console.log(
               `📊 ${record.studentName}: ${
                 studentSubmissions.length
-              } quizzes, avg: ${averagePercentage.toFixed(
+              } quizzes, avg score: ${averageScore.toFixed(
                 1
-              )}%, OBJ: ${objScore}`
+              )}, OBJ: ${objScore}`
             );
-
+  
             return {
               ...record,
               objScore: Math.min(objScore, gradeSystem.maxScores.obj),
               quizInfo: {
                 totalQuizzes: studentSubmissions.length,
-                averagePercentage: Math.round(averagePercentage),
+                averagePercentage: Math.round((averageScore / studentSubmissions[0]?.maxScore) * 100),
                 lastQuiz: studentSubmissions[0]?.quizName,
-                lastQuizDate:
-                  studentSubmissions[0]?.submittedAt.toLocaleDateString(),
+                lastQuizDate: studentSubmissions[0]?.submittedAt.toLocaleDateString(),
+                actualAverageScore: averageScore, // For debugging
               },
             };
           }
-
+  
           return record;
         });
       });
