@@ -5975,7 +5975,6 @@ const StudentDashboard: React.FC = () => {
     setShowQuizInstructions(false);
     setQuizInProgress(true);
   };
-
   const handleQuizSubmitted = async (
     quizId: string,
     score: number,
@@ -5985,6 +5984,9 @@ const StudentDashboard: React.FC = () => {
       console.error("Cannot save quiz submission: User not authenticated");
       return;
     }
+
+    // NORMALIZE the class name here
+    const normalizedClassName = normalizeClassName(currentUserClass);
 
     const submission = {
       quizId,
@@ -5996,12 +5998,13 @@ const StudentDashboard: React.FC = () => {
       studentId: user.uid,
       studentName: userInfo.fullName,
       studentEmail: user.email || "",
-      className: currentUserClass || "Unknown Class",
+      className: normalizedClassName || "Unknown Class", // Use normalized class name
       subject: selectedQuiz?.subject || "Unknown",
-      teacherId: null, // Will be populated when teacher views it
+      teacherId: null,
       teacherName: selectedQuiz?.teacherName || "Unknown Teacher",
     };
 
+    // ... rest of the function remains the same
     // Update local state first
     setQuizSubmissions((prev) => ({
       ...prev,
