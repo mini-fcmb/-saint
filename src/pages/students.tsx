@@ -66,6 +66,18 @@ import {
 import { db } from "../firebase/config";
 import logo from "../assets/logo.png";
 
+// Centralized class name normalization function
+const normalizeClassName = (className: string | undefined): string => {
+  if (!className) return "";
+  // Convert to UPPERCASE, remove all spaces and special characters
+  return className
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/[_-]/g, "")
+    .replace(/[^A-Z0-9]/g, "") // Only keep letters and numbers
+    .trim();
+};
+
 // Types
 interface Student {
   id: string;
@@ -801,16 +813,17 @@ const ClassListPanel: React.FC<{
     // Use the exact same normalization function as teacher dashboard
     const normalizeClassName = (className: string | undefined): string => {
       if (!className) return "";
-      // Convert to lowercase, remove all spaces, hyphens, underscores
+      // Convert to UPPERCASE, remove all spaces, hyphens, underscores, and any special characters
       return className
-        .toLowerCase()
+        .toUpperCase()
         .replace(/\s+/g, "")
         .replace(/[_-]/g, "")
+        .replace(/[^A-Z0-9]/g, "") // Remove any non-alphanumeric characters
         .trim();
     };
 
+    // Replace the local normalizeClassName function with:
     const normalizedCurrentClass = normalizeClassName(currentUserClass);
-
     return students.filter((student) => {
       // Get student's class from either className or classId
       const studentClassName = student.className || student.classId || "";
@@ -3361,25 +3374,21 @@ const CheckResultsModal: React.FC<CheckResultsModalProps> = ({
   const getSchoolName = (className: string): string => {
     if (!className) return "Saints High School";
 
-    const classLower = className.toLowerCase();
+    // Normalize the class name first
+    const normalizedClass = normalizeClassName(className);
 
-    // Check for primary school classes (P5, P6, Primary 5, Primary 6)
-    if (
-      classLower.includes("p5") ||
-      classLower.includes("p6") ||
-      classLower.includes("primary 5") ||
-      classLower.includes("primary 6")
-    ) {
+    // Check for primary school classes (P5, P6)
+    if (normalizedClass.includes("P5") || normalizedClass.includes("P6")) {
       return "Little Saints Nursery and Primary School";
     }
 
-    // For JSS1-SSS3 or any other secondary classes
-    if (
-      classLower.includes("jss") ||
-      classLower.includes("sss") ||
-      classLower.includes("js") ||
-      classLower.includes("ss")
-    ) {
+    // Check for JSS classes (JSS1, JSS2, JSS3)
+    if (normalizedClass.includes("JSS")) {
+      return "Saints High School";
+    }
+
+    // Check for SSS classes (SSS1, SSS2, SSS3)
+    if (normalizedClass.includes("SSS")) {
       return "Saints High School";
     }
 
@@ -5400,15 +5409,16 @@ const StudentDashboard: React.FC = () => {
     // Apply the same normalization as in teacher dashboard
     const normalizeClassName = (className: string | undefined): string => {
       if (!className) return "";
+      // Convert to UPPERCASE, remove all spaces and special characters
       return className
-        .toLowerCase()
+        .toUpperCase()
         .replace(/\s+/g, "")
         .replace(/[_-]/g, "")
+        .replace(/[^A-Z0-9]/g, "")
         .trim();
     };
 
     const normalizedCurrentClass = normalizeClassName(currentUserClass);
-
     return students
       .map((student) => {
         // Type assertion to access properties that might exist on the data
@@ -5565,8 +5575,13 @@ const StudentDashboard: React.FC = () => {
     // Normalize class name function (same as in teacher dashboard)
     const normalizeClassName = (className: string | undefined): string => {
       if (!className) return "";
-      //remove all spaces, hyphens, underscores
-      return className.replace(/\s+/g, "").replace(/[_-]/g, "").trim();
+      // Convert to UPPERCASE, remove all spaces and special characters
+      return className
+        .toUpperCase()
+        .replace(/\s+/g, "")
+        .replace(/[_-]/g, "")
+        .replace(/[^A-Z0-9]/g, "")
+        .trim();
     };
 
     const normalizedCurrentClass = normalizeClassName(userData.className);
@@ -5854,18 +5869,16 @@ const StudentDashboard: React.FC = () => {
 
     const normalizeClassName = (className: string | undefined): string => {
       if (!className) return "";
+      // Convert to UPPERCASE, remove all spaces and special characters
       return className
-        .toLowerCase()
+        .toUpperCase()
         .replace(/\s+/g, "")
         .replace(/[_-]/g, "")
-        .replace(/class/gi, "")
-        .replace(/grade/gi, "")
-        .replace(/form/gi, "")
+        .replace(/[^A-Z0-9]/g, "")
         .trim();
     };
 
     const normalizedCurrentClass = normalizeClassName(currentUserClass);
-
     const filtered = quizzes.filter((quiz) => {
       const quizTargetClass = (quiz as any).targetClass || "All Classes";
       const normalizedQuizClass = normalizeClassName(quizTargetClass);
