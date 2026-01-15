@@ -5543,52 +5543,81 @@ const StudentDashboard: React.FC = () => {
     initializeWorkingHours();
   }, [user]);
 
-  // Load quizzes from Firestore
+  // Load quizzes from Firestore - WITH DEBUG LOGGING
   useEffect(() => {
-    if (!userData || userData.role !== "student" || !userData.className) return;
+    console.log("🔥 DEBUG: userData =", userData);
+    console.log("🔥 DEBUG: userData.className =", userData?.className);
+    console.log("🔥 DEBUG: userData.role =", userData?.role);
+    console.log("🔥 DEBUG: userData.email =", userData?.email);
+
+    if (!userData || userData.role !== "student" || !userData.className) {
+      console.log("⚠️ Skipping quiz load - conditions not met");
+      console.log("Conditions:", {
+        hasUserData: !!userData,
+        isStudent: userData?.role === "student",
+        hasClassName: !!userData?.className,
+      });
+      return;
+    }
+
+    console.log("✅ Loading quizzes for class:", userData.className);
 
     const q = query(
       collection(db, "quizzes"),
       where("targetClass", "==", userData.className)
     );
 
-    const unsub = onSnapshot(q, (snapshot) => {
-      const updatedQuizzes = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        const quiz = {
-          id: doc.id,
-          name: data.name || "Unnamed Quiz",
-          subject: data.subject || "General",
-          teacherName: data.teacherName || "Teacher",
-          scheduledDate: data.scheduledDate,
-          scheduledTime: data.scheduledTime,
-          duration: data.duration || 30,
-          totalDuration: data.totalDuration || 40,
-          questions: data.questions || [],
-          maxScore: data.maxScore || 40,
-          targetClass: data.targetClass || userData.className,
-        } as Quiz;
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        console.log("📊 Quizzes snapshot received, count:", snapshot.size);
 
-        // Calculate status
-        const now = new Date();
-        const scheduledDateTime = new Date(
-          `${quiz.scheduledDate}T${quiz.scheduledTime}`
-        );
-        const endTime = new Date(
-          scheduledDateTime.getTime() + quiz.totalDuration * 60000
-        );
+        const updatedQuizzes = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          console.log("📝 Quiz document:", doc.id, data);
 
-        let status: "upcoming" | "active" | "expired" = "upcoming";
-        if (now >= scheduledDateTime && now <= endTime) status = "active";
-        else if (now > endTime) status = "expired";
+          const quiz = {
+            id: doc.id,
+            name: data.name || "Unnamed Quiz",
+            subject: data.subject || "General",
+            teacherName: data.teacherName || "Teacher",
+            scheduledDate: data.scheduledDate,
+            scheduledTime: data.scheduledTime,
+            duration: data.duration || 30,
+            totalDuration: data.totalDuration || 40,
+            questions: data.questions || [],
+            maxScore: data.maxScore || 40,
+            targetClass: data.targetClass || userData.className,
+          } as Quiz;
 
-        return { ...quiz, status };
-      });
+          // Calculate status
+          const now = new Date();
+          const scheduledDateTime = new Date(
+            `${quiz.scheduledDate}T${quiz.scheduledTime}`
+          );
+          const endTime = new Date(
+            scheduledDateTime.getTime() + quiz.totalDuration * 60000
+          );
 
-      setQuizzes(updatedQuizzes);
-    });
+          let status: "upcoming" | "active" | "expired" = "upcoming";
+          if (now >= scheduledDateTime && now <= endTime) status = "active";
+          else if (now > endTime) status = "expired";
 
-    return () => unsub();
+          return { ...quiz, status };
+        });
+
+        console.log("✅ Final quizzes array:", updatedQuizzes);
+        setQuizzes(updatedQuizzes);
+      },
+      (error) => {
+        console.error("❌ Error loading quizzes:", error);
+      }
+    );
+
+    return () => {
+      console.log("🔄 Cleaning up quiz listener");
+      unsub();
+    };
   }, [userData]);
 
   // Initialize working hours function
