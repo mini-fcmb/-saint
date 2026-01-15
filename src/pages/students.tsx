@@ -5543,7 +5543,7 @@ const StudentDashboard: React.FC = () => {
     initializeWorkingHours();
   }, [user]);
 
-  // Load quizzes from Firestore - WITH DEBUG LOGGING
+  // Update the useEffect that loads quizzes from Firestore
   useEffect(() => {
     console.log("🔥 DEBUG: userData =", userData);
     console.log("🔥 DEBUG: userData.className =", userData?.className);
@@ -5562,16 +5562,137 @@ const StudentDashboard: React.FC = () => {
 
     console.log("✅ Loading quizzes for class:", userData.className);
 
-    const q = query(
+    // Normalize class name function (same as in teacher dashboard)
+    const normalizeClassName = (className: string | undefined): string => {
+      if (!className) return "";
+      //remove all spaces, hyphens, underscores
+      return className.replace(/\s+/g, "").replace(/[_-]/g, "").trim();
+    };
+
+    const normalizedCurrentClass = normalizeClassName(userData.className);
+    console.log("📌 Normalized class name for query:", normalizedCurrentClass);
+
+    // Create a Firestore query to get quizzes for this class
+    // We'll use multiple queries to handle different class name formats
+
+    // Query 1: Direct match (if class names are stored normalized)
+    const q1 = query(
+      collection(db, "quizzes"),
+      where("targetClass", "==", normalizedCurrentClass)
+    );
+
+    // Query 2: Case-insensitive match (if stored with different case)
+    const q2 = query(
       collection(db, "quizzes"),
       where("targetClass", "==", userData.className)
     );
 
-    const unsub = onSnapshot(
-      q,
-      (snapshot) => {
-        console.log("📊 Quizzes snapshot received, count:", snapshot.size);
+    // Query 3: For "All Classes"
+    const q3 = query(
+      collection(db, "quizzes"),
+      where("targetClass", "==", "All Classes")
+    );
 
+    // Load all queries and combine results
+    const loadAllQuizzes = async () => {
+      try {
+        const [snapshot1, snapshot2, snapshot3] = await Promise.all([
+          getDocs(q1),
+          getDocs(q2),
+          getDocs(q3),
+        ]);
+
+        console.log("📊 Quiz snapshots received:", {
+          query1: snapshot1.size,
+          query2: snapshot2.size,
+          query3: snapshot3.size,
+        });
+
+        const allDocs = new Map();
+
+        // Helper function to process quiz documents
+        const processSnapshot = (snapshot: any, queryName: string) => {
+          snapshot.forEach((doc: any) => {
+            const data = doc.data();
+            console.log(`📝 ${queryName} quiz:`, doc.id, data.targetClass);
+
+            // Check if quiz is for current student's class
+            const quizTargetClass = data.targetClass || "";
+            const normalizedQuizClass = normalizeClassName(quizTargetClass);
+
+            // Check if quiz matches student's class
+            if (
+              normalizedQuizClass === normalizedCurrentClass ||
+              data.targetClass === userData.className ||
+              data.targetClass === "All Classes" ||
+              normalizedQuizClass.includes(normalizedCurrentClass) ||
+              normalizedCurrentClass.includes(normalizedQuizClass)
+            ) {
+              const quiz = {
+                id: doc.id,
+                name: data.name || "Unnamed Quiz",
+                subject: data.subject || "General",
+                teacherName: data.teacherName || "Teacher",
+                scheduledDate: data.scheduledDate,
+                scheduledTime: data.scheduledTime,
+                duration: data.duration || 30,
+                totalDuration: data.totalDuration || 40,
+                questions: data.questions || [],
+                maxScore: data.maxScore || 40,
+                targetClass: data.targetClass || userData.className,
+              } as Quiz;
+
+              // Calculate status
+              const now = new Date();
+              const scheduledDateTime = new Date(
+                `${quiz.scheduledDate}T${quiz.scheduledTime}`
+              );
+              const endTime = new Date(
+                scheduledDateTime.getTime() + quiz.totalDuration * 60000
+              );
+
+              let status: "upcoming" | "active" | "expired" = "upcoming";
+              if (now >= scheduledDateTime && now <= endTime) status = "active";
+              else if (now > endTime) status = "expired";
+
+              allDocs.set(doc.id, { ...quiz, status });
+            }
+          });
+        };
+
+        processSnapshot(snapshot1, "Query1 (normalized)");
+        processSnapshot(snapshot2, "Query2 (exact)");
+        processSnapshot(snapshot3, "Query3 (all classes)");
+
+        const updatedQuizzes = Array.from(allDocs.values());
+        console.log("✅ Final unique quizzes:", updatedQuizzes.length);
+        setQuizzes(updatedQuizzes);
+
+        if (updatedQuizzes.length === 0) {
+          console.log("⚠️ No quizzes found. Checking Firestore manually...");
+          // Debug: Check what's actually in Firestore
+          const allQuizzesRef = collection(db, "quizzes");
+          const allQuizzesSnap = await getDocs(allQuizzesRef);
+          console.log(
+            "🔍 All quizzes in Firestore:",
+            allQuizzesSnap.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }))
+          );
+        }
+      } catch (error) {
+        console.error("❌ Error loading quizzes:", error);
+      }
+    };
+
+    loadAllQuizzes();
+
+    // Also set up a real-time listener for the normalized query
+    const unsub = onSnapshot(
+      q1,
+      (snapshot) => {
+        console.log("📊 Real-time quiz update, count:", snapshot.size);
         const updatedQuizzes = snapshot.docs.map((doc) => {
           const data = doc.data();
           console.log("📝 Quiz document:", doc.id, data);
@@ -5606,11 +5727,11 @@ const StudentDashboard: React.FC = () => {
           return { ...quiz, status };
         });
 
-        console.log("✅ Final quizzes array:", updatedQuizzes);
+        console.log("✅ Final quizzes array from listener:", updatedQuizzes);
         setQuizzes(updatedQuizzes);
       },
       (error) => {
-        console.error("❌ Error loading quizzes:", error);
+        console.error("❌ Error in quiz listener:", error);
       }
     );
 
@@ -5619,7 +5740,6 @@ const StudentDashboard: React.FC = () => {
       unsub();
     };
   }, [userData]);
-
   // Initialize working hours function
   const initializeWorkingHours = useCallback(async () => {
     if (!user?.uid) return;
@@ -5724,6 +5844,7 @@ const StudentDashboard: React.FC = () => {
     }
   }, [user]);
 
+  // Filter quizzes based on student class and subj
   // Filter quizzes based on student class and subjects
   useEffect(() => {
     if (quizzes.length === 0 || !currentUserClass) {
@@ -5731,13 +5852,31 @@ const StudentDashboard: React.FC = () => {
       return;
     }
 
+    const normalizeClassName = (className: string | undefined): string => {
+      if (!className) return "";
+      return className
+        .toLowerCase()
+        .replace(/\s+/g, "")
+        .replace(/[_-]/g, "")
+        .replace(/class/gi, "")
+        .replace(/grade/gi, "")
+        .replace(/form/gi, "")
+        .trim();
+    };
+
+    const normalizedCurrentClass = normalizeClassName(currentUserClass);
+
     const filtered = quizzes.filter((quiz) => {
       const quizTargetClass = (quiz as any).targetClass || "All Classes";
+      const normalizedQuizClass = normalizeClassName(quizTargetClass);
 
       // Check 1: Is the quiz for the student's class?
       const classMatch =
+        normalizedQuizClass === normalizedCurrentClass ||
         quizTargetClass === currentUserClass ||
-        quizTargetClass === "All Classes";
+        quizTargetClass === "All Classes" ||
+        normalizedQuizClass.includes(normalizedCurrentClass) ||
+        normalizedCurrentClass.includes(normalizedQuizClass);
 
       // Check 2: Does the student offer this subject?
       const subjectMatch =
@@ -5746,6 +5885,7 @@ const StudentDashboard: React.FC = () => {
       return classMatch && subjectMatch;
     });
 
+    console.log("🎯 Filtered quizzes:", filtered.length);
     setFilteredQuizzes(filtered);
   }, [quizzes, currentUserClass, studentSubjects]);
 
