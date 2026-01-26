@@ -460,50 +460,63 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
 
   const createEnhancedSampleMonitoringData = (): EnhancedMonitoringData[] => {
     if (students.length === 0 || activeQuizzes.length === 0) return [];
-
+  
     const sampleData: EnhancedMonitoringData[] = [];
     const activeQuiz = activeQuizzes.find((quiz) => quiz.status === "active");
     if (!activeQuiz) return [];
-
-    // Create sample data for different scenarios
-    students.slice(0, 5).forEach((student, index) => {
-      // Different scenarios for demonstration
-      const scenarios = [
-        {
-          status: "not-started" as const,
-          desc: "Accessed quiz but hasn't started",
-          activity: "idle" as const,
-        },
-        {
-          status: "in-progress" as const,
-          desc: "Just started quiz",
-          activity: "viewing-question" as const,
-          progress: 15,
-        },
-        {
-          status: "in-progress" as const,
-          desc: "Active with violations",
-          activity: "answering" as const,
-          progress: 45,
-          violations: 2,
-        },
-        {
-          status: "violation" as const,
-          desc: "Multiple violations detected",
-          activity: "emergency-exit-attempt" as const,
-          progress: 60,
-          violations: 3,
-        },
-        {
-          status: "submitted" as const,
-          desc: "Successfully submitted",
-          activity: "reviewing" as const,
-          progress: 100,
-        },
-      ];
-
+  
+    // Different scenarios with proper violation limits
+    const scenarios = [
+      {
+        status: "not-started" as const,
+        desc: "Not started yet",
+        progress: 0,
+        violations: 0,
+        timeSpent: "00:00",
+      },
+      {
+        status: "in-progress" as const,
+        desc: "Answering questions",
+        progress: 35,
+        violations: 0,
+        timeSpent: "15:30",
+      },
+      {
+        status: "violation" as const,
+        desc: "1 violation detected",
+        progress: 60,
+        violations: 1,
+        timeSpent: "25:45",
+      },
+      {
+        status: "violation" as const,
+        desc: "2 violations - warning",
+        progress: 75,
+        violations: 2,
+        timeSpent: "35:20",
+      },
+      {
+        status: "auto-submitted" as const, // MAX VIOLATIONS REACHED
+        desc: "Auto-submitted after 3 violations",
+        progress: 85,
+        violations: 3,
+        timeSpent: "40:00",
+      },
+      {
+        status: "submitted" as const,
+        desc: "Successfully submitted",
+        progress: 100,
+        violations: 0,
+        timeSpent: "45:00",
+      },
+    ];
+  
+    students.slice(0, 6).forEach((student, index) => {
       const scenario = scenarios[index] || scenarios[0];
-
+      
+      // Apply max violation rule
+      const finalStatus = scenario.violations >= 3 ? "auto-submitted" : scenario.status;
+      
       const data: EnhancedMonitoringData = {
         studentId: student.id || `student-${index}`,
         studentName: student.fullName || `Student ${index + 1}`,
@@ -511,101 +524,59 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
         quizId: activeQuiz.id,
         quizName: activeQuiz.name,
         quizClass: activeQuiz.targetClass || "Class A",
-        status: scenario.status,
-        progress: scenario.progress || 0,
-        timeSpent:
-          scenario.status === "submitted"
-            ? `${activeQuiz.duration}:00`
-            : scenario.status === "not-started"
-            ? "00:00"
-            : `${Math.floor(Math.random() * 20) + 1}:${Math.floor(
-                Math.random() * 60
-              )
-                .toString()
-                .padStart(2, "0")}`,
-        currentQuestion:
-          scenario.status === "submitted"
-            ? activeQuiz.questions.length
-            : scenario.status === "not-started"
-            ? 0
-            : Math.floor(Math.random() * activeQuiz.questions.length) + 1,
+        status: finalStatus,
+        progress: scenario.progress,
+        timeSpent: scenario.timeSpent,
+        currentQuestion: Math.floor((scenario.progress / 100) * activeQuiz.questions.length),
         totalQuestions: activeQuiz.questions.length,
-        violations: scenario.violations
-          ? Array(scenario.violations)
-              .fill(null)
-              .map((_, i) => ({
-                id: `violation-${Date.now()}-${i}`,
-                timestamp: new Date(Date.now() - Math.random() * 300000),
-                type:
-                  i === 0
-                    ? "tab-switch"
-                    : i === 1
-                    ? "emergency-exit"
-                    : "key-press",
-                description:
-                  i === 0
-                    ? "Switched to another browser tab"
-                    : i === 1
-                    ? "Attempted emergency exit"
-                    : "Pressed restricted key",
-                severity: i === 0 ? "medium" : i === 1 ? "critical" : "low",
-                studentId: student.id || `student-${index}`,
-                studentName: student.fullName || `Student ${index + 1}`,
-                studentClass: student.className || "Class A",
-                quizId: activeQuiz.id,
-                quizName: activeQuiz.name,
-                quizClass: activeQuiz.targetClass || "Class A",
-                browser: "Chrome/120.0",
-                deviceType: "Desktop",
-                ...(i === 2 ? { keyPressed: "F12" } : {}),
-              }))
+        violations: scenario.violations > 0 && finalStatus !== "auto-submitted" && finalStatus !== "submitted"
+          ? Array(Math.min(scenario.violations, 3)).fill(null).map((_, i) => ({
+              id: `violation-${Date.now()}-${index}-${i}`,
+              timestamp: new Date(Date.now() - (i + 1) * 60000),
+              type: ["tab-switch", "emergency-exit", "key-press"][i] as any,
+              description: i === 0 ? "Tab switch detected" : 
+                          i === 1 ? "Emergency exit attempt" : 
+                          "Restricted key pressed",
+              severity: i === 0 ? "medium" : i === 1 ? "high" : "critical",
+              studentId: student.id || `student-${index}`,
+              studentName: student.fullName || `Student ${index + 1}`,
+              studentClass: student.className || "Class A",
+              quizId: activeQuiz.id,
+              quizName: activeQuiz.name,
+              quizClass: activeQuiz.targetClass || "Class A",
+              browser: "Chrome/120.0",
+              deviceType: "Desktop",
+            }))
           : [],
-        lastActivity: new Date(Date.now() - Math.random() * 600000),
-        score:
-          scenario.status === "submitted"
-            ? Math.floor(Math.random() * activeQuiz.maxScore)
-            : undefined,
+        lastActivity: new Date(),
+        score: finalStatus === "submitted" || finalStatus === "auto-submitted"
+          ? Math.floor(Math.random() * (activeQuiz.maxScore * 0.8) + (activeQuiz.maxScore * 0.2))
+          : undefined,
         maxScore: activeQuiz.maxScore,
         quizStatusDetails: {
-          startedAt:
-            scenario.status === "not-started"
-              ? undefined
-              : new Date(Date.now() - Math.random() * 900000),
-          submittedAt:
-            scenario.status === "submitted"
-              ? new Date(Date.now() - Math.random() * 60000)
-              : undefined,
-          emergencyExitAttempts: scenario.violations === 3 ? 1 : 0,
-          totalKeyPresses: Math.floor(Math.random() * 50),
-          tabSwitchCount: scenario.violations || 0,
-          maxViolationsReached: scenario.status === "violation",
-          violationCount: scenario.violations || 0,
-        },
-        currentActivity: {
-          type: scenario.activity,
-          questionId:
-            scenario.status === "not-started"
-              ? undefined
-              : Math.floor(Math.random() * activeQuiz.questions.length) + 1,
-          timestamp: new Date(),
-          details: scenario.desc,
+          startedAt: scenario.status === "not-started" ? undefined : new Date(Date.now() - 1800000),
+          submittedAt: finalStatus === "submitted" || finalStatus === "auto-submitted" ? new Date() : undefined,
+          emergencyExitAttempts: scenario.violations >= 2 ? 1 : 0,
+          totalKeyPresses: Math.floor(Math.random() * 100),
+          tabSwitchCount: scenario.violations,
+          maxViolationsReached: scenario.violations >= 3,
+          violationCount: scenario.violations,
         },
         notifications: {
           quizStarted: scenario.status !== "not-started",
-          violationDetected: scenario.violations
-            ? scenario.violations > 0
-            : false,
-          maxViolationsReached: scenario.status === "violation",
-          quizSubmitted: scenario.status === "submitted",
-          emergencyExitAttempt: scenario.violations === 3,
+          violationDetected: scenario.violations > 0,
+          maxViolationsReached: scenario.violations >= 3,
+          quizSubmitted: finalStatus === "submitted" || finalStatus === "auto-submitted",
+          emergencyExitAttempt: scenario.violations >= 2,
         },
       };
-
+  
       sampleData.push(data);
     });
-
+  
     return sampleData;
   };
+  
 
   // REPLACED the existing createSampleMonitoringData function with this:
 
@@ -1052,8 +1023,8 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
   useEffect(() => {
     if (!isOpen || !user?.uid || !teacherClasses.length) return;
 
-    const teacherClassNames = teacherClasses.map(
-      (c: TeacherClassInfo) => c.className
+    const teacherClassNames = teacherClasses.map((c: TeacherClassInfo) =>
+      normalizeClassName(c.className)
     );
 
     console.log(
@@ -1061,7 +1032,6 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
       teacherClassNames
     );
 
-    // Only monitor ACTIVE quizzes
     const activeQuizIds = activeQuizzes
       .filter((quiz) => quiz.status === "active")
       .map((quiz) => quiz.id);
@@ -1074,13 +1044,13 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
 
     console.log("✅ Active quizzes to monitor:", activeQuizIds);
 
-    // Set up real-time listener - ONLY for active quizzes and specific statuses
+    // Set up real-time listener - FOR ALL STATUSES (including submitted)
     const monitoringRef = collection(db, "monitoring");
     const q = query(
       monitoringRef,
       where("quizId", "in", activeQuizIds),
-      where("quizClass", "in", teacherClassNames),
-      where("status", "in", ["in-progress", "violation"])
+      where("quizClass", "in", teacherClassNames)
+      // REMOVED: where("status", "in", ["in-progress", "violation"])
     );
 
     const unsubscribe = onSnapshot(
@@ -1097,19 +1067,9 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
         snapshot.forEach((doc) => {
           const data = doc.data();
 
-          // Check if this is relevant data (has required fields)
           if (!data.studentId || !data.quizId) {
-            console.log("Skipping document - missing studentId or quizId");
             return;
           }
-
-          // Log for debugging
-          console.log("📊 Monitoring data received:", {
-            id: doc.id,
-            student: data.studentName,
-            status: data.status,
-            violations: data.violations?.length || 0,
-          });
 
           // Convert Firestore timestamps
           const violations = (data.violations || []).map((v: any) => ({
@@ -1121,17 +1081,25 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
               : new Date(),
           }));
 
-          // Determine correct status
+          const violationCount = violations.length;
+
+          // FIXED: Apply max violation rule
           let status = data.status || "in-progress";
 
-          // If there are violations, mark as violation (unless already submitted)
+          // If violation count >= 3, status should be auto-submitted
           if (
-            violations.length > 0 &&
+            violationCount >= 3 &&
             status !== "submitted" &&
-            status !== "expired"
+            status !== "auto-submitted"
           ) {
-            status = "violation";
+            status = "auto-submitted";
           }
+
+          // If already submitted or auto-submitted, don't show violations
+          const finalViolations =
+            status === "submitted" || status === "auto-submitted"
+              ? [] // Clear violations after submission
+              : violations;
 
           monitoringData.push({
             id: doc.id,
@@ -1146,7 +1114,7 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
             timeSpent: data.timeSpent || "00:00",
             currentQuestion: data.currentQuestion || 0,
             totalQuestions: data.totalQuestions || 0,
-            violations: violations,
+            violations: finalViolations,
             lastActivity: data.lastActivity?.toDate
               ? data.lastActivity.toDate()
               : data.lastActivity
@@ -1155,18 +1123,35 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
             score: data.score,
             maxScore: data.maxScore,
             studentEmail: data.studentEmail || "",
+            // Add enhanced fields
+            quizStatusDetails: {
+              startedAt:
+                data.startedAt?.toDate?.() || data.quizStatusDetails?.startedAt,
+              submittedAt:
+                data.submittedAt?.toDate?.() ||
+                data.quizStatusDetails?.submittedAt,
+              emergencyExitAttempts: data.emergencyExitAttempts || 0,
+              totalKeyPresses: data.totalKeyPresses || 0,
+              tabSwitchCount: data.tabSwitchCount || 0,
+              maxViolationsReached: violationCount >= 3,
+              violationCount: violationCount,
+            },
+            notifications: {
+              quizStarted: status !== "not-started",
+              violationDetected: violationCount > 0,
+              maxViolationsReached: violationCount >= 3,
+              quizSubmitted:
+                status === "submitted" || status === "auto-submitted",
+              emergencyExitAttempt: data.emergencyExitAttempts > 0,
+            },
           });
         });
 
-        console.log(
-          "✅ Final active monitoring data count:",
-          monitoringData.length
-        );
+        console.log("✅ Final monitoring data count:", monitoringData.length);
 
-        // If no real data but we have active quizzes, show sample data for demo
         if (monitoringData.length === 0 && activeQuizzes.length > 0) {
-          const sampleData = createSampleMonitoringData();
-          console.log("📋 Using sample data:", sampleData.length);
+          const sampleData = createEnhancedSampleMonitoringData();
+          console.log("📋 Using enhanced sample data:", sampleData.length);
           setMonitoringData(sampleData);
         } else {
           setMonitoringData(monitoringData);
@@ -1174,10 +1159,7 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
       },
       (error) => {
         console.error("❌ Live monitoring error:", error);
-        console.error("Error details:", error.code, error.message);
-
-        // Fallback to sample data on error
-        const sampleData = createSampleMonitoringData();
+        const sampleData = createEnhancedSampleMonitoringData();
         setMonitoringData(sampleData);
       }
     );
@@ -1188,6 +1170,25 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
     };
   }, [isOpen, user, teacherClasses, activeQuizzes]);
   // Helper functions
+
+  const getAdjustedStatus = (
+    status: string,
+    violationCount: number
+  ): string => {
+    if (status === "submitted" || status === "auto-submitted") {
+      return status;
+    }
+
+    if (violationCount >= 3) {
+      return "auto-submitted";
+    }
+
+    if (violationCount > 0 && status === "in-progress") {
+      return "violation";
+    }
+
+    return status;
+  };
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "in-progress":
@@ -1257,20 +1258,88 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
       ? monitoringData
       : monitoringData.filter((data) => data.quizId === selectedQuiz);
 
-  // Calculate statistics
-  const activeStudents = filteredData.filter(
-    (d) => d.status === "in-progress"
-  ).length;
-  const submittedStudents = filteredData.filter(
-    (d) => d.status === "submitted"
-  ).length;
-  const violationStudents = filteredData.filter(
-    (d) => d.status === "violation"
-  ).length;
-  const totalViolations = filteredData.reduce(
-    (total, data) => total + data.violations.length,
-    0
-  );
+  // Calculate statistics - FIXED
+  const calculateStatistics = () => {
+    if (selectedQuiz === "all") {
+      // For "All Quizzes", just use filteredData
+      return {
+        totalStudents: filteredData.length,
+        activeStudents: filteredData.filter(
+          (d) => d.status === "in-progress" || d.status === "violation"
+        ).length,
+        submittedStudents: filteredData.filter(
+          (d) => d.status === "submitted" || d.status === "auto-submitted"
+        ).length,
+        violationStudents: filteredData.filter((d) => d.status === "violation")
+          .length,
+        totalViolations: filteredData.reduce(
+          (total, data) => total + data.violations.length,
+          0
+        ),
+      };
+    }
+
+    // For specific quiz, get actual class enrollment
+    const currentQuiz = activeQuizzes.find((q) => q.id === selectedQuiz);
+    if (!currentQuiz) {
+      return {
+        totalStudents: filteredData.length,
+        activeStudents: 0,
+        submittedStudents: 0,
+        violationStudents: 0,
+        totalViolations: 0,
+      };
+    }
+
+    // Get total students in this class from database
+    const normalizeForComparison = (className: string): string => {
+      if (!className) return "";
+      return className
+        .toUpperCase()
+        .replace(/\s+/g, "")
+        .replace(/[_-]/g, "")
+        .trim();
+    };
+
+    const quizClassNormalized = normalizeForComparison(currentQuiz.targetClass);
+
+    const allStudentsInClass = students.filter((student) => {
+      const studentClassNormalized = normalizeForComparison(
+        student.className || ""
+      );
+      return studentClassNormalized === quizClassNormalized;
+    });
+
+    const totalStudents = allStudentsInClass.length;
+
+    // Calculate from monitoring data
+    const activeStudents = filteredData.filter(
+      (d) => d.status === "in-progress" || d.status === "violation"
+    ).length;
+
+    const submittedStudents = filteredData.filter(
+      (d) => d.status === "submitted" || d.status === "auto-submitted"
+    ).length;
+
+    const violationStudents = filteredData.filter(
+      (d) => d.status === "violation"
+    ).length;
+
+    const totalViolations = filteredData.reduce(
+      (total, data) => total + data.violations.length,
+      0
+    );
+
+    return {
+      totalStudents,
+      activeStudents,
+      submittedStudents,
+      violationStudents,
+      totalViolations,
+    };
+  };
+
+  const stats = calculateStatistics();
 
   if (!isOpen) return null;
 
@@ -1334,24 +1403,33 @@ const LiveMonitoringModal: React.FC<LiveMonitoringModalProps> = ({
           {/* Monitoring Stats */}
           <div className="monitoring-stats">
             <div className="stat-card">
+              <Users size={24} color="#6b7280" />
+              <span className="stat-number">
+                {stats.totalStudents || filteredData.length}
+              </span>
+              <span className="stat-label">
+                {selectedQuiz === "all" ? "Total Monitoring" : "Total in Class"}
+              </span>
+            </div>
+            <div className="stat-card">
               <UserCheck size={24} color="#3b82f6" />
-              <span className="stat-number">{activeStudents}</span>
+              <span className="stat-number">{stats.activeStudents}</span>
               <span className="stat-label">Active</span>
             </div>
             <div className="stat-card">
               <CheckCircle size={24} color="#10b981" />
-              <span className="stat-number">{submittedStudents}</span>
+              <span className="stat-number">{stats.submittedStudents}</span>
               <span className="stat-label">Submitted</span>
             </div>
             <div className="stat-card">
               <AlertTriangle size={24} color="#ef4444" />
-              <span className="stat-number">{violationStudents}</span>
+              <span className="stat-number">{stats.violationStudents}</span>
               <span className="stat-label">Violations</span>
-            </div>
-            <div className="stat-card">
-              <Users size={24} color="#6b7280" />
-              <span className="stat-number">{filteredData.length}</span>
-              <span className="stat-label">Total</span>
+              {stats.totalViolations > 0 && (
+                <span className="stat-subnumber">
+                  ({stats.totalViolations} total)
+                </span>
+              )}
             </div>
           </div>
 
@@ -1941,39 +2019,39 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
   // Replace the current loadQuizResults function with this:
   const loadQuizResults = useCallback(async () => {
     if (!selectedClass || !selectedSubject || !user?.uid) return;
-  
+
     try {
       console.log("🎯 Loading quiz results - FIXED VERSION");
-  
+
       const submissionsRef = collection(db, "quizSubmissions");
-  
+
       // Query submissions with teacherId
       const q1 = query(submissionsRef, where("teacherId", "==", user.uid));
-  
+
       // Query submissions without teacherId but matching class/subject
       const q2 = query(
         submissionsRef,
         where("className", "==", selectedClass),
         where("subject", "==", selectedSubject)
       );
-  
+
       const [snapshot1, snapshot2] = await Promise.all([
         getDocs(q1),
         getDocs(q2),
       ]);
-  
+
       console.log(
         `📊 Results: ${snapshot1.docs.length} with teacherId, ${snapshot2.docs.length} without teacherId`
       );
-  
+
       // Combine results
       const allDocs = new Map();
-  
+
       // Add docs from first query
       snapshot1.docs.forEach((doc) => {
         allDocs.set(doc.id, doc.data());
       });
-  
+
       // Add docs from second query
       snapshot2.docs.forEach((doc) => {
         const data = doc.data();
@@ -1985,12 +2063,12 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
           });
         }
       });
-  
+
       console.log(`📦 Total unique submissions: ${allDocs.size}`);
-  
+
       // Group by student
       const submissionsByStudent = new Map();
-  
+
       allDocs.forEach((data, docId) => {
         // Try multiple student ID fields
         const studentId =
@@ -2000,49 +2078,60 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
           data.uid ||
           data.student?.id ||
           `student-${docId}`;
-  
+
         const studentName =
           data.studentName ||
           data.student ||
           (typeof data.student === "object"
             ? data.student.name
             : "Unknown Student");
-  
+
         if (!submissionsByStudent.has(studentId)) {
           submissionsByStudent.set(studentId, []);
         }
-  
+
         // Get the ACTUAL score, not percentage
         const score = data.score || data.totalScore || data.obtainedScore || 0;
-        const maxScore = data.maxScore || data.totalPossibleScore || data.maxPossibleScore || 100;
-        
+        const maxScore =
+          data.maxScore ||
+          data.totalPossibleScore ||
+          data.maxPossibleScore ||
+          100;
+
         // Store the actual score data
         submissionsByStudent.get(studentId).push({
           score: score, // This is the actual score (e.g., 1)
           maxScore: maxScore, // This is the maximum possible score (e.g., 1)
           quizName: data.quizName || "Unknown Quiz",
           studentName: studentName,
-          submittedAt: data.submittedAt?.toDate?.() || data.timestamp?.toDate?.() || new Date(),
+          submittedAt:
+            data.submittedAt?.toDate?.() ||
+            data.timestamp?.toDate?.() ||
+            new Date(),
         });
       });
-  
-      console.log(`📈 Student quiz data grouped: ${submissionsByStudent.size} students`);
-  
+
+      console.log(
+        `📈 Student quiz data grouped: ${submissionsByStudent.size} students`
+      );
+
       // Update grade records
       setGradeRecords((prev) => {
         return prev.map((record) => {
           // Try to find submissions for this student
           let studentSubmissions = null;
-  
+
           // Try by ID first
           studentSubmissions = submissionsByStudent.get(record.studentId);
-  
+
           // If not found, try by name match
           if (!studentSubmissions) {
             for (const [sid, subs] of submissionsByStudent.entries()) {
-              const submissionStudentName = (subs[0]?.studentName || "").toLowerCase();
+              const submissionStudentName = (
+                subs[0]?.studentName || ""
+              ).toLowerCase();
               const recordName = record.studentName.toLowerCase();
-  
+
               if (
                 submissionStudentName === recordName ||
                 submissionStudentName.includes(recordName) ||
@@ -2054,7 +2143,7 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
               }
             }
           }
-  
+
           if (studentSubmissions && studentSubmissions.length > 0) {
             // Calculate average actual score (not percentage)
             const totalScore = studentSubmissions.reduce(
@@ -2062,11 +2151,11 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
               0
             );
             const averageScore = totalScore / studentSubmissions.length;
-            
+
             // For demonstration, let's calculate what percentage of the max OBJ score this represents
             // But keep the actual score as the OBJ score if it makes sense for your system
             let objScore;
-            
+
             if (averageScore <= gradeSystem.maxScores.obj) {
               // If average score is already within OBJ max range (30), use it directly
               objScore = Math.round(averageScore);
@@ -2078,9 +2167,11 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
               );
               const averageMaxScore = totalMaxScore / studentSubmissions.length;
               const percentage = (averageScore / averageMaxScore) * 100;
-              objScore = Math.round((percentage / 100) * gradeSystem.maxScores.obj);
+              objScore = Math.round(
+                (percentage / 100) * gradeSystem.maxScores.obj
+              );
             }
-  
+
             console.log(
               `📊 ${record.studentName}: ${
                 studentSubmissions.length
@@ -2088,20 +2179,23 @@ const GradeManagementModal: React.FC<GradeManagementModalProps> = ({
                 1
               )}, OBJ: ${objScore}`
             );
-  
+
             return {
               ...record,
               objScore: Math.min(objScore, gradeSystem.maxScores.obj),
               quizInfo: {
                 totalQuizzes: studentSubmissions.length,
-                averagePercentage: Math.round((averageScore / studentSubmissions[0]?.maxScore) * 100),
+                averagePercentage: Math.round(
+                  (averageScore / studentSubmissions[0]?.maxScore) * 100
+                ),
                 lastQuiz: studentSubmissions[0]?.quizName,
-                lastQuizDate: studentSubmissions[0]?.submittedAt.toLocaleDateString(),
+                lastQuizDate:
+                  studentSubmissions[0]?.submittedAt.toLocaleDateString(),
                 actualAverageScore: averageScore, // For debugging
               },
             };
           }
-  
+
           return record;
         });
       });
@@ -10857,6 +10951,12 @@ width:99px;
   background: #fce7f3;
   color: #be185d;
   border: 1px solid #f9a8d4;
+}
+.stat-subnumber {
+  font-size: 11px;
+  color: #ef4444;
+  font-weight: 600;
+  margin-top: 2px;
 }
         
 
