@@ -1379,50 +1379,6 @@ const StrictQuizInterface: React.FC<{
   const [isAutoSubmitting, setIsAutoSubmitting] = useState(false);
   const [emergencyExitActive, setEmergencyExitActive] = useState(false);
 
-  // Add this shuffle function at the top of StrictQuizInterface component
-  const shuffleQuestions = useCallback((questions: Question[]): Question[] => {
-    // Create a copy of the questions array
-    const shuffled = [...questions];
-
-    // Use Fisher-Yates shuffle algorithm
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-
-    return shuffled;
-  }, []);
-
-  // Create a shuffled version of the quiz questions
-  const [shuffledQuestions, setShuffledQuestions] = useState<Question[]>([]);
-
-  // Initialize shuffled questions when quiz starts
-  useEffect(() => {
-    if (quizStarted && quiz.questions.length > 0) {
-      // Generate a seed based on studentId for consistent shuffling per student
-      // This ensures same student gets same order if they restart
-      const seed = studentId ? parseInt(studentId.slice(-4), 16) || 0 : 0;
-      const seededShuffle = (questions: Question[]): Question[] => {
-        const shuffled = [...questions];
-
-        // Seeded shuffle for consistency
-        let random = seed;
-        for (let i = shuffled.length - 1; i > 0; i--) {
-          // Simple pseudo-random generator using seed
-          random = (random * 9301 + 49297) % 233280;
-          const j = Math.floor((random / 233280) * (i + 1));
-          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-
-        return shuffled;
-      };
-
-      // Use seeded shuffle for consistency
-      const shuffled = seededShuffle(quiz.questions);
-      setShuffledQuestions(shuffled);
-    }
-  }, [quizStarted, quiz.questions, studentId]);
-
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -1433,20 +1389,9 @@ const StrictQuizInterface: React.FC<{
 
   const calculateResults = () => {
     let correctAnswers = 0;
-
-    // We need to map answers back to original question indices
-    shuffledQuestions.forEach((shuffledQuestion, shuffledIndex) => {
-      // Find the original index of this question
-      const originalIndex = quiz.questions.findIndex(
-        (originalQuestion) => originalQuestion.id === shuffledQuestion.id
-      );
-
-      // If student answered this question and it's correct
-      if (answers[shuffledIndex] !== undefined) {
-        const originalQuestion = quiz.questions[originalIndex];
-        if (answers[shuffledIndex] === originalQuestion.correctAnswer) {
-          correctAnswers++;
-        }
+    quiz.questions.forEach((question, index) => {
+      if (answers[index] === question.correctAnswer) {
+        correctAnswers++;
       }
     });
 
@@ -1635,9 +1580,8 @@ const StrictQuizInterface: React.FC<{
       const monitoringId = `${quiz.id}_${studentId}`;
       const monitoringRef = doc(db, "monitoring", monitoringId);
 
-      // Calculate progress based on shuffled questions
       const progress = Math.round(
-        ((currentQuestion + 1) / shuffledQuestions.length) * 100
+        ((currentQuestion + 1) / quiz.questions.length) * 100
       );
       const timeElapsed = quiz.duration * 60 - timeLeft;
 
@@ -1654,14 +1598,11 @@ const StrictQuizInterface: React.FC<{
           progress: progress,
           timeSpent: formatTime(timeElapsed),
           currentQuestion: currentQuestion + 1,
-          totalQuestions: shuffledQuestions.length,
+          totalQuestions: quiz.questions.length,
           violations: violations,
           lastActivity: new Date(),
           updatedAt: new Date(),
           studentEmail: user?.email || "",
-          // Add a flag to indicate questions were shuffled
-          questionsShuffled: true,
-          shuffleSeed: studentId ? parseInt(studentId.slice(-4), 16) || 0 : 0,
         },
         { merge: true }
       );
@@ -1681,7 +1622,6 @@ const StrictQuizInterface: React.FC<{
     quizStarted,
     violations,
     emergencyExitActive,
-    shuffledQuestions,
   ]);
 
   // Call this function periodically
@@ -2029,9 +1969,8 @@ const StrictQuizInterface: React.FC<{
   };
 
   const answeredQuestions = Object.keys(answers).length;
-  const totalQuestions = shuffledQuestions.length;
-
-  const currentQuestionData = shuffledQuestions[currentQuestion];
+  const totalQuestions = quiz.questions.length;
+  const currentQuestionData = quiz.questions[currentQuestion];
 
   // Show score modal
   if (showScoreModal) {
@@ -2203,15 +2142,6 @@ const StrictQuizInterface: React.FC<{
             <p className="quiz-title">
               {quiz.name} - {quiz.subject}
             </p>
-            {/* In the quiz start screen, add this warning: */}
-            <div className="shuffle-notice">
-              <AlertCircle size={20} />
-              <span>
-                <strong>Note:</strong> Questions will be presented in a random
-                order unique to you. Each student receives questions in a
-                different sequence.
-              </span>
-            </div>
 
             <div className="quiz-details-start">
               <div className="detail-item">
@@ -2334,7 +2264,7 @@ const StrictQuizInterface: React.FC<{
       {/* Progress Navigation */}
       <div className="progress-nav">
         <div className="question-grid">
-          {shuffledQuestions.map((_, index) => (
+          {quiz.questions.map((_, index) => (
             <button
               key={index}
               className={`question-indicator ${
@@ -2424,7 +2354,7 @@ const StrictQuizInterface: React.FC<{
             )}
           </div>
 
-          {currentQuestion === shuffledQuestions.length - 1 ? (
+          {currentQuestion === quiz.questions.length - 1 ? (
             <button
               className="nav-btn-submit"
               onClick={handleSubmitClick}
@@ -2437,7 +2367,7 @@ const StrictQuizInterface: React.FC<{
               className="nav-btn-next"
               onClick={() =>
                 setCurrentQuestion((prev) =>
-                  Math.min(shuffledQuestions.length - 1, prev + 1)
+                  Math.min(quiz.questions.length - 1, prev + 1)
                 )
               }
               disabled={emergencyExitActive}
@@ -10951,28 +10881,6 @@ const StudentDashboard: React.FC = () => {
 /* For the modal structure in your StrictQuizInterface component */
 .confirmation-modal {
   z-index: 3001 !important;
-}
-// Add CSS for the shuffle notice:
-.shuffle-notice {
-  background: #f0f9ff;
-  border: 2px solid #bae6fd;
-  border-radius: 12px;
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  color: #0369a1;
-}
-
-.shuffle-notice svg {
-  color: #0369a1;
-  flex-shrink: 0;
-}
-
-.shuffle-notice span {
-  font-size: 14px;
-  line-height: 1.4;
 }
         
       `}</style>
