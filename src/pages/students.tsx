@@ -1379,6 +1379,57 @@ const StrictQuizInterface: React.FC<{
   const [isAutoSubmitting, setIsAutoSubmitting] = useState(false);
   const [emergencyExitActive, setEmergencyExitActive] = useState(false);
 
+  // Create a shuffled version of the quiz questions
+  const [shuffledQuestions, setShuffledQuestions] = useState<Question[]>([]);
+
+  // Initialize shuffled questions when quiz starts - FIXED VERSION
+  useEffect(() => {
+    if (quizStarted && quiz.questions && quiz.questions.length > 0) {
+      // Check if already initialized to avoid re-shuffling
+      if (shuffledQuestions.length === 0) {
+        console.log("🃏 Initializing shuffled questions...");
+        // Simple shuffle - creates a new order for each student
+        const shuffled = [...quiz.questions].sort(() => Math.random() - 0.5);
+        console.log(
+          "✅ Shuffled questions initialized:",
+          shuffled.length,
+          "questions"
+        );
+
+        // Set all states in a batch to avoid race conditions
+        setShuffledQuestions(shuffled);
+        setCurrentQuestion(0);
+
+        // Initialize answers object with empty values
+        const initialAnswers: { [key: number]: number } = {};
+        shuffled.forEach((_, index) => {
+          initialAnswers[index] = -1; // -1 means not answered
+        });
+        setAnswers(initialAnswers);
+      }
+    } else if (quizStarted && quiz.questions && quiz.questions.length === 0) {
+      console.error("❌ No questions available in quiz");
+      alert("Quiz has no questions available. Please contact your teacher.");
+      onClose();
+    }
+  }, [quizStarted, quiz.questions, onClose, shuffledQuestions.length]);
+  // Debug useEffect
+  useEffect(() => {
+    console.log("🔍 Debug Quiz State:", {
+      quizStarted,
+      shuffledQuestionsLength: shuffledQuestions.length,
+      currentQuestion,
+      currentQuestionData: shuffledQuestions[currentQuestion],
+      quizQuestionsLength: quiz.questions.length,
+      answersCount: Object.keys(answers).length,
+    });
+  }, [
+    quizStarted,
+    shuffledQuestions,
+    currentQuestion,
+    answers,
+    quiz.questions.length,
+  ]);
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -1389,9 +1440,29 @@ const StrictQuizInterface: React.FC<{
 
   const calculateResults = () => {
     let correctAnswers = 0;
-    quiz.questions.forEach((question, index) => {
-      if (answers[index] === question.correctAnswer) {
-        correctAnswers++;
+
+    // Check if we have valid shuffled questions
+    if (!shuffledQuestions || shuffledQuestions.length === 0) {
+      console.error("No questions available for scoring");
+      return 0;
+    }
+
+    // We need to map answers back to original question indices
+    shuffledQuestions.forEach((shuffledQuestion, shuffledIndex) => {
+      // Find the original index of this question
+      const originalIndex = quiz.questions.findIndex(
+        (originalQuestion) => originalQuestion.id === shuffledQuestion.id
+      );
+
+      // If student answered this question and it's correct
+      if (
+        answers[shuffledIndex] !== undefined &&
+        answers[shuffledIndex] !== -1
+      ) {
+        const originalQuestion = quiz.questions[originalIndex];
+        if (answers[shuffledIndex] === originalQuestion.correctAnswer) {
+          correctAnswers++;
+        }
       }
     });
 
@@ -1399,7 +1470,6 @@ const StrictQuizInterface: React.FC<{
     const finalScore = Math.round(score);
     return finalScore;
   };
-
   // Save to teacher monitoring function
   const saveToTeacherMonitoring = useCallback(async () => {
     if (
@@ -1580,8 +1650,9 @@ const StrictQuizInterface: React.FC<{
       const monitoringId = `${quiz.id}_${studentId}`;
       const monitoringRef = doc(db, "monitoring", monitoringId);
 
+      // Calculate progress based on shuffled questions
       const progress = Math.round(
-        ((currentQuestion + 1) / quiz.questions.length) * 100
+        ((currentQuestion + 1) / shuffledQuestions.length) * 100
       );
       const timeElapsed = quiz.duration * 60 - timeLeft;
 
@@ -1598,11 +1669,14 @@ const StrictQuizInterface: React.FC<{
           progress: progress,
           timeSpent: formatTime(timeElapsed),
           currentQuestion: currentQuestion + 1,
-          totalQuestions: quiz.questions.length,
+          totalQuestions: shuffledQuestions.length,
           violations: violations,
           lastActivity: new Date(),
           updatedAt: new Date(),
           studentEmail: user?.email || "",
+          // Add a flag to indicate questions were shuffled
+          questionsShuffled: true,
+          shuffleSeed: studentId ? parseInt(studentId.slice(-4), 16) || 0 : 0,
         },
         { merge: true }
       );
@@ -1622,6 +1696,7 @@ const StrictQuizInterface: React.FC<{
     quizStarted,
     violations,
     emergencyExitActive,
+    shuffledQuestions,
   ]);
 
   // Call this function periodically
@@ -1820,10 +1895,20 @@ const StrictQuizInterface: React.FC<{
         reportViolation("dev-tools", "Developer tools opened");
       };
 
-      // Request fullscreen
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(console.error);
-      }
+      // Request fullscreen after a short delay to ensure it's from user interaction
+      setTimeout(() => {
+        if (
+          document.documentElement.requestFullscreen &&
+          !document.fullscreenElement
+        ) {
+          document.documentElement.requestFullscreen().catch((err) => {
+            console.log(
+              "Fullscreen request failed (this is normal in some browsers):",
+              err
+            );
+          });
+        }
+      }, 100);
 
       document.addEventListener("keydown", preventAllKeys, true);
       document.addEventListener("contextmenu", preventContextMenu, true);
@@ -1969,8 +2054,54 @@ const StrictQuizInterface: React.FC<{
   };
 
   const answeredQuestions = Object.keys(answers).length;
-  const totalQuestions = quiz.questions.length;
-  const currentQuestionData = quiz.questions[currentQuestion];
+  const totalQuestions = shuffledQuestions.length;
+  const currentQuestionData =
+    shuffledQuestions && shuffledQuestions.length > 0
+      ? shuffledQuestions[currentQuestion]
+      : null;
+
+  // Add this safety check immediately after the declaration
+  if (!currentQuestionData && quizStarted && shuffledQuestions.length === 0) {
+    // Still loading, show loading state
+    return (
+      <div className="quiz-interface">
+        <div className="quiz-start-screen">
+          <div className="start-screen-content">
+            <RefreshCw className="animate-spin" size={64} color="#3b82f6" />
+            <h1>Loading Quiz...</h1>
+            <p className="quiz-title">
+              Please wait while we prepare your quiz questions.
+            </p>
+            <div className="loading-spinner"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentQuestionData && quizStarted) {
+    // Error state
+    return (
+      <div className="quiz-interface">
+        <div className="quiz-start-screen">
+          <div className="start-screen-content">
+            <AlertTriangle size={64} color="#ef4444" />
+            <h1>Quiz Error</h1>
+            <p className="quiz-title">
+              Unable to load quiz questions. Please try again or contact your
+              teacher.
+            </p>
+            <div className="start-buttons">
+              <button className="nav-btn cancel" onClick={onClose}>
+                <ChevronLeft size={20} />
+                Close Quiz
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Show score modal
   if (showScoreModal) {
@@ -2142,6 +2273,15 @@ const StrictQuizInterface: React.FC<{
             <p className="quiz-title">
               {quiz.name} - {quiz.subject}
             </p>
+            {/* In the quiz start screen, add this warning: */}
+            <div className="shuffle-notice">
+              <AlertCircle size={20} />
+              <span>
+                <strong>Note:</strong> Questions will be presented in a random
+                order unique to you. Each student receives questions in a
+                different sequence.
+              </span>
+            </div>
 
             <div className="quiz-details-start">
               <div className="detail-item">
@@ -2264,7 +2404,7 @@ const StrictQuizInterface: React.FC<{
       {/* Progress Navigation */}
       <div className="progress-nav">
         <div className="question-grid">
-          {quiz.questions.map((_, index) => (
+          {shuffledQuestions.map((_, index) => (
             <button
               key={index}
               className={`question-indicator ${
@@ -2299,10 +2439,10 @@ const StrictQuizInterface: React.FC<{
               : "🏴 Flag Question"}
           </button>
           <div className="question-header">
-            <h2>{currentQuestionData.text}</h2>
+            <h2>{currentQuestionData?.text || "Question not available"}</h2>
           </div>
 
-          {currentQuestionData.imageUrl && (
+          {currentQuestionData?.imageUrl && (
             <div className="diagram-container">
               <img
                 src={currentQuestionData.imageUrl}
@@ -2313,7 +2453,7 @@ const StrictQuizInterface: React.FC<{
           )}
 
           <div className="options-grid">
-            {currentQuestionData.options.map((option, index) => (
+            {currentQuestionData?.options?.map((option, index) => (
               <button
                 key={index}
                 className={`option-btn ${
@@ -2327,7 +2467,12 @@ const StrictQuizInterface: React.FC<{
                 </span>
                 <span className="option-text">{option}</span>
               </button>
-            ))}
+            )) || (
+              <div className="no-options">
+                <AlertTriangle size={20} />
+                <span>No options available for this question</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -2354,7 +2499,7 @@ const StrictQuizInterface: React.FC<{
             )}
           </div>
 
-          {currentQuestion === quiz.questions.length - 1 ? (
+          {currentQuestion === shuffledQuestions.length - 1 ? (
             <button
               className="nav-btn-submit"
               onClick={handleSubmitClick}
@@ -2367,7 +2512,7 @@ const StrictQuizInterface: React.FC<{
               className="nav-btn-next"
               onClick={() =>
                 setCurrentQuestion((prev) =>
-                  Math.min(quiz.questions.length - 1, prev + 1)
+                  Math.min(shuffledQuestions.length - 1, prev + 1)
                 )
               }
               disabled={emergencyExitActive}
@@ -5804,11 +5949,20 @@ const StudentDashboard: React.FC = () => {
   }, [user]);
 
   // Save working hours to Firestore
+  // Save working hours to Firestore
   useEffect(() => {
     const saveWorkingHours = async () => {
       if (workingHours.length > 0 && user?.uid) {
         const todayStr = new Date().toDateString();
         try {
+          // Filter out any undefined values
+          const cleanWorkingHours = workingHours.map((hour) => ({
+            day: hour.day || "",
+            minutes: hour.minutes || 0,
+            online: hour.online || false,
+            startTime: hour.startTime || null,
+          }));
+
           const workingHoursRef = doc(
             db,
             "studentWorkingHours",
@@ -5819,7 +5973,7 @@ const StudentDashboard: React.FC = () => {
             {
               studentId: user.uid,
               date: todayStr,
-              hours: workingHours,
+              hours: cleanWorkingHours,
               updatedAt: serverTimestamp(),
             },
             { merge: true }
@@ -10881,6 +11035,59 @@ const StudentDashboard: React.FC = () => {
 /* For the modal structure in your StrictQuizInterface component */
 .confirmation-modal {
   z-index: 3001 !important;
+}
+// Add CSS for the shuffle notice:
+.shuffle-notice {
+  background: #f0f9ff;
+  border: 2px solid #bae6fd;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  color: #0369a1;
+}
+
+.shuffle-notice svg {
+  color: #0369a1;
+  flex-shrink: 0;
+}
+
+.shuffle-notice span {
+  font-size: 14px;
+  line-height: 1.4;
+}
+.no-options {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 20px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #92400e;
+}
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f4f6;
+  border-top: 4px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 20px auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
 }
         
       `}</style>
