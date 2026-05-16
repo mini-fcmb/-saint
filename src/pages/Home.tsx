@@ -153,10 +153,18 @@ const GetStartedDashboard: React.FC = () => {
                 <div className="progress-dots mobile-dots">{progressDots}</div>
               </div>
               <div className="mobile-auth-buttons">
-                <Link to="/login" onClick={() => setIsMobileMenuOpen(false)}>
+                <Link
+                  to="/login"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="mobile-cta"
+                >
                   <button className="mobile-auth-btn login-btn">Login</button>
                 </Link>
-                <Link to="/signup" onClick={() => setIsMobileMenuOpen(false)}>
+                <Link
+                  to="/signup"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="mobile-cta"
+                >
                   <button className="mobile-auth-btn signup-btn">
                     Get Started
                   </button>
