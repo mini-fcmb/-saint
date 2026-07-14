@@ -3,20 +3,20 @@
 
 import React from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import Home from "./pages/Home";
-import Signup from "./pages/signup";
-import Login from "./pages/login";
-import TeacherDashboard from "./pages/teachers";
-import StudentDashboard from "./pages/students";
-import AdminDashboard from "./pages/admin";
-import QuizDashboard from "./pages/quiz";
-import QuizSubjects from "./pages/QuizSubject";
-import QuizResults from "./pages/QuizResults";
-import LoadingOverlay from "./components/LoadingOverlay";
-import { useLoading } from "./hooks/useLoading";
+//import Home from "./pages/Home";
+import Signup from "./pages/GetStarted Page/page";
+import Login from "./pages/Login Page/page";
+import TeacherDashboard from "./pages/Teachers Dashboard/page";
+import StudentDashboard from "./pages/Student Dashboard/page";
+import AdminDashboard from "./pages/Admin Dashboard/page";
+import QuizDashboard from "./pages/Quizes/quiz";
+import QuizSubjects from "./pages/Quizes/QuizSubject";
+import QuizResults from "./pages/Quizes/QuizResults";
+//import LoadingOverlay from "./components/LoadingOverlay";
+//import { useLoading } from "./hooks/useLoading";
 import { useFirebaseStore } from "./stores/useFirebaseStore";
-
-function useRouteLoading() {
+import Homepage from "./pages/landing  page/page";
+/*function useRouteLoading() {
   const location = useLocation();
   const { setLoading } = useLoading();
 
@@ -25,7 +25,7 @@ function useRouteLoading() {
     const timer = setTimeout(() => setLoading(false), 200);
     return () => clearTimeout(timer);
   }, [location.pathname, setLoading]);
-}
+}*/
 
 // FIXED: AuthInitializer doesn't call unsubscribe
 function AuthInitializer() {
@@ -70,7 +70,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   // Show loading overlay ONLY during initial auth check
   if (loading && !user) {
     console.log("⏳ PrivateRoute: Initial auth loading");
-    return <LoadingOverlay />;
+    return; //<LoadingOverlay />;
   }
 
   // No user after loading is complete
@@ -224,7 +224,7 @@ function SmartRedirect() {
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, userData, loading } = useFirebaseStore();
 
-  if (loading) return <LoadingOverlay />;
+  if (loading) return; //<LoadingOverlay />;
 
   if (!user) return <Navigate to="/login" replace />;
 
@@ -243,22 +243,25 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { isLoading } = useLoading();
+  /* const { isLoading } = useLoading();
   useRouteLoading();
 
-  console.log("🎬 App component rendering, global loading:", isLoading);
+  console.log("🎬 App component rendering, global loading:", isLoading);*/
 
   return (
     <>
       {/* Only show LoadingOverlay when route is changing */}
-      {isLoading && <LoadingOverlay />}
+      {/*{isLoading &&
+        {
+          //<LoadingOverlay />
+        }}*/}
 
       {/* Initialize auth once */}
       <AuthInitializer />
 
       <Routes>
         {/* Public routes */}
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Homepage />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
 

@@ -8,5 +8,5 @@ import "boxicons/css/boxicons.min.css";
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <BrowserRouter>
     <App />
-  </BrowserRouter>
+  </BrowserRouter>,
 );
