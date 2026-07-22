@@ -1,7 +1,7 @@
 // src/pages/signup.tsx
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, Check } from "lucide-react";
 import {
   createUserWithEmailAndPassword,
   signInWithPopup,
@@ -11,7 +11,8 @@ import {
 } from "firebase/auth";
 import { doc, setDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { auth, db, googleProvider, appleProvider } from "../../firebase/config";
-import "./page.css";
+import auth_wallpaper from "../../assets/auth_wallpaper.mp4";
+import Logo from "../../assets/logo.png";
 
 const ADMIN_CODE = "mini-fcmb";
 const MAX_ADMIN_ATTEMPTS = 3;
@@ -25,17 +26,11 @@ const DASHBOARD_ROUTES = {
 // Helper function to normalize class names
 const normalizeClassName = (className: string): string => {
   if (!className) return "";
-
   const trimmed = className.trim();
-
-  // Add space between letters and numbers if missing
-  // Matches patterns like: "JSS1", "Primary5", "SSS2"
   const match = trimmed.match(/^([A-Za-z]+)(\d+)$/);
-
   if (match) {
     return `${match[1]} ${match[2]}`;
   }
-
   return trimmed;
 };
 
@@ -127,6 +122,9 @@ export default function Signup() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // ───── Custom Select State ─────
+  const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
+
   // ───── Google/Apple Info Modal ─────
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [info, setInfo] = useState({
@@ -180,7 +178,6 @@ export default function Signup() {
   const saveUserToFirestore = async (uid: string, data: any) => {
     const collection = userType === "teacher" ? "teachers" : "students";
 
-    // Normalize class name before saving
     const normalizedData = {
       ...data,
       className: data.className ? normalizeClassName(data.className) : "",
@@ -199,7 +196,6 @@ export default function Signup() {
         ? prev.filter((c) => c !== className)
         : [...prev, className];
 
-      // Initialize subjects for newly selected classes
       const newTeacherSubjects = { ...teacherSubjects };
       if (!prev.includes(className)) {
         newTeacherSubjects[className] = [];
@@ -214,11 +210,9 @@ export default function Signup() {
 
   const handleSelectAllClasses = () => {
     if (selectedClasses.length === ALL_CLASSES.length) {
-      // Deselect all
       setSelectedClasses([]);
       setTeacherSubjects({});
     } else {
-      // Select all
       setSelectedClasses(ALL_CLASSES);
       const newTeacherSubjects: { [key: string]: string[] } = {};
       ALL_CLASSES.forEach((cls) => {
@@ -250,19 +244,17 @@ export default function Signup() {
       ...prev,
       [className]:
         currentSubjects.length === availableSubjects.length
-          ? [] // Deselect all
-          : availableSubjects, // Select all
+          ? []
+          : availableSubjects,
     }));
   };
 
   const handleTeacherClassesSubmit = async () => {
-    // Validate that at least one class is selected
     if (selectedClasses.length === 0) {
       alert("Please select at least one class to teach.");
       return;
     }
 
-    // Validate that each selected class has at least one subject
     for (const className of selectedClasses) {
       if (
         !teacherSubjects[className] ||
@@ -275,11 +267,9 @@ export default function Signup() {
 
     setIsLoading(true);
     try {
-      // For email/password signup - create teacher account
       if (tempUserData && tempUserData.type === "email") {
         const { email, password, userData } = tempUserData;
 
-        // Create the user account
         const cred = await createUserWithEmailAndPassword(
           auth,
           email,
@@ -287,10 +277,8 @@ export default function Signup() {
         );
         const user = cred.user;
 
-        // Update display name
         await updateProfile(user, { displayName: userData.fullName });
 
-        // Prepare teacher data with classes and subjects
         const teacherData = {
           ...userData,
           classes: selectedClasses,
@@ -298,10 +286,8 @@ export default function Signup() {
           createdAt: serverTimestamp(),
         };
 
-        // Save to Firestore
         await saveUserToFirestore(user.uid, teacherData);
 
-        // Send verification email
         await sendEmailVerification(user);
         console.log("[Email] Verification email sent");
 
@@ -314,7 +300,6 @@ export default function Signup() {
         return;
       }
 
-      // For provider signup - update existing teacher with classes and subjects
       const user = auth.currentUser;
       if (!user) {
         alert("Session expired. Please try again.");
@@ -322,7 +307,6 @@ export default function Signup() {
         return;
       }
 
-      // Update Firestore with classes and subjects
       await updateDoc(doc(db, "teachers", user.uid), {
         classes: selectedClasses,
         subjects: teacherSubjects,
@@ -339,7 +323,6 @@ export default function Signup() {
       setTeacherSubjects({});
 
       if (user.emailVerified) {
-        // If already verified, go to dashboard
         navigate(DASHBOARD_ROUTES.teacher);
       } else {
         alert("Please verify your email before accessing the dashboard.");
@@ -367,10 +350,8 @@ export default function Signup() {
     const availableSubjects = SUBJECTS_BY_LEVEL[currentLevel];
 
     if (selectedSubjects.length === availableSubjects.length) {
-      // Deselect all
       setSelectedSubjects([]);
     } else {
-      // Select all
       setSelectedSubjects([...availableSubjects]);
     }
   };
@@ -383,11 +364,9 @@ export default function Signup() {
 
     setIsLoading(true);
     try {
-      // For email/password signup - create user after subject selection
       if (tempUserData && tempUserData.type === "email") {
         const { email, password, userData } = tempUserData;
 
-        // Create the user account
         const cred = await createUserWithEmailAndPassword(
           auth,
           email,
@@ -395,17 +374,14 @@ export default function Signup() {
         );
         const user = cred.user;
 
-        // Update display name
         await updateProfile(user, { displayName: userData.fullName });
 
-        // Save to Firestore with subjects
         await saveUserToFirestore(user.uid, {
           ...userData,
           subjects: selectedSubjects,
           createdAt: serverTimestamp(),
         });
 
-        // Send verification email
         await sendEmailVerification(user);
         console.log("[Email] Verification email sent");
 
@@ -418,7 +394,6 @@ export default function Signup() {
         return;
       }
 
-      // For provider signup - update existing user with subjects
       const user = auth.currentUser;
       if (!user) {
         alert("Session expired. Please try again.");
@@ -426,7 +401,6 @@ export default function Signup() {
         return;
       }
 
-      // Update Firestore with subjects
       await updateDoc(doc(db, "students", user.uid), {
         subjects: selectedSubjects,
         updatedAt: serverTimestamp(),
@@ -438,7 +412,6 @@ export default function Signup() {
       setSelectedSubjects([]);
 
       if (user.emailVerified) {
-        // If already verified, go to dashboard
         navigate(DASHBOARD_ROUTES.student);
       } else {
         alert("Please verify your email before accessing the dashboard.");
@@ -473,7 +446,6 @@ export default function Signup() {
       return;
     }
 
-    // For social signup, show teacher classes modal
     setShowAdminModal(false);
     setShowTeacherClassesModal(true);
   };
@@ -502,10 +474,8 @@ export default function Signup() {
       const res = await signInWithPopup(auth, provider);
       const user = res.user;
 
-      // Check if email already exists with any sign-in method
       const methods = await fetchSignInMethodsForEmail(auth, user.email!);
 
-      // If email already registered with any method (password or provider)
       if (methods.length > 0) {
         alert("This email is already registered. Please sign in instead.");
         await auth.signOut();
@@ -513,7 +483,6 @@ export default function Signup() {
         return;
       }
 
-      // Populate modal
       const [first = "", ...lastParts] = (user.displayName ?? "").split(" ");
       const last = lastParts.join(" ");
       setFirstName(first);
@@ -553,11 +522,9 @@ export default function Signup() {
     };
 
     try {
-      // Save basic user data first
       await saveUserToFirestore(user.uid, baseData);
       console.log("[Provider] Profile saved to Firestore");
 
-      // Send verification email if not verified
       if (!user.emailVerified) {
         await sendEmailVerification(user);
         console.log("[Provider] Verification email sent");
@@ -566,7 +533,6 @@ export default function Signup() {
       setShowInfoModal(false);
 
       if (userType === "teacher") {
-        // For social signup teachers, pre-select the class they chose
         const normalizedClass = normalizeClassName(info.className);
         setSelectedClasses([normalizedClass]);
         setTeacherSubjects({
@@ -576,7 +542,6 @@ export default function Signup() {
         return;
       }
 
-      // For students - show subject selection modal
       setClassName(info.className);
       setShowSubjectsModal(true);
     } catch (err: any) {
@@ -590,11 +555,9 @@ export default function Signup() {
     e.preventDefault();
     setIsLoading(true);
 
-    // First check if email already exists with any sign-in method
     try {
       const methods = await fetchSignInMethodsForEmail(auth, email);
 
-      // If email already registered with any method
       if (methods.length > 0) {
         alert("This email is already registered. Please sign in instead.");
         navigate("/login");
@@ -603,10 +566,8 @@ export default function Signup() {
       }
     } catch (error: any) {
       console.error("[Email Check] Error:", error);
-      // Continue with signup if check fails (network issue, etc.)
     }
 
-    // For teachers, validate admin code
     if (userType === "teacher") {
       if (adminCodeInput !== ADMIN_CODE) {
         handleWrongAdminCode();
@@ -625,8 +586,6 @@ export default function Signup() {
         subjects: userType === "student" ? [] : undefined,
       };
       if (userType === "teacher") {
-        // For teachers - store data and go to class selection
-        // Pre-select the class they chose in the form
         const normalizedClass = normalizeClassName(className);
         setSelectedClasses([normalizedClass]);
         setTeacherSubjects({
@@ -641,7 +600,6 @@ export default function Signup() {
         });
         setShowTeacherClassesModal(true);
       } else {
-        // For students - store data and show subject selection
         setTempUserData({
           type: "email",
           email,
@@ -666,152 +624,768 @@ export default function Signup() {
   // ───── UI ─────
   return (
     <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+
+        :root {
+          --accent: #2563eb;
+          --accent-dark: #141d4d;
+          --accent-soft: #eef1fb;
+          --ink: #0f1226;
+          --ink-soft: #6b7280;
+          --line: #e6e8f0;
+          --field-bg: #f7f8fb;
+          --success: #10b981;
+          --danger: #ef4444;
+          --radius-xl: 30px;
+          --radius-lg: 18px;
+          --radius-md: 14px;
+          --radius-sm: 10px;
+          --shadow-card: 0 40px 80px -20px rgba(10, 14, 45, 0.45);
+        }
+
+        * { box-sizing: border-box; }
+
+        .modal-backdrop {
+          position: absolute;
+          inset: 0;
+          background: rgba(8, 10, 30, 0.4);
+          backdrop-filter: blur(8px);
+        }
+
+        .signup-modal {
+          position: relative;
+          width: 100%;
+          max-width: 980px;
+          z-index: 1;
+        }
+
+        .signup-card {
+          position:fixed;
+          display: flex;
+          width: 100%;
+          min-height: 640px;
+          max-height: 8vh;
+          background: #ffffff;
+          border-radius: var(--radius-xl);
+          box-shadow: var(--shadow-card);
+          overflow: hidden;
+        }
+
+        /* ───── Left panel: form ───── */
+        .form-panel {
+          flex: 1 1 52%;
+          padding: 44px 48px;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+        }
+        .form-panel::-webkit-scrollbar { width: 6px; }
+        .form-panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
+
+        .brand-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 22px;
+        }
+        .brand-mark {
+          width: 38px;
+          height: 38px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 18px;
+          cursor: pointer;
+          transition: opacity 0.2s ease;
+        }
+        .brand-mark:hover {
+          opacity: 0.8;
+        }
+        .brand-name {
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-weight: 700;
+          font-size: 15px;
+          color: var(--ink);
+          letter-spacing: 0.2px;
+        }
+
+        .tabs {
+          display: flex;
+          gap: 4px;
+          padding: 4px;
+          background: var(--field-bg);
+          border-radius: 999px;
+          margin-bottom: 26px;
+        }
+        .tab {
+          flex: 1;
+          padding: 11px 0;
+          border: none;
+          background: transparent;
+          border-radius: 999px;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-weight: 600;
+          font-size: 14px;
+          color: var(--ink-soft);
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .tab.active {
+          background: #1A1D21;
+          color: #fff;
+          box-shadow: 0 8px 18px -6px rgba(29, 42, 107, 0.55);
+        }
+
+        .signup-form h2 {
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-size: 26px;
+          font-weight: 800;
+          color: var(--ink);
+          margin: 0 0 6px;
+          letter-spacing: -0.3px;
+        }
+        .form-subtitle {
+          font-size: 14px;
+          color: var(--ink-soft);
+          margin: 0 0 24px;
+        }
+
+        .signup-form {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+
+        .name-row { display: flex; gap: 12px; }
+
+        input {
+          width: 100%;
+          padding: 14px 16px;
+          font-size: 14.5px;
+          font-family: 'Inter', sans-serif;
+          color: var(--ink);
+          background: var(--field-bg);
+          border: 1.5px solid transparent;
+          border-radius: var(--radius-md);
+          outline: none;
+          transition: border-color 0.2s ease, background 0.2s ease;
+        }
+        input::placeholder { color: #9aa0ae; }
+        input:focus {
+          background: #fff;
+          border-color: var(--accent);
+          box-shadow: 0 0 0 4px var(--accent-soft);
+        }
+        input:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .phone-row {
+          display: flex;
+        }
+        .country {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 0 14px;
+          background: var(--field-bg);
+          border: 1.5px solid transparent;
+          border-right: 1px solid var(--line);
+          border-radius: var(--radius-md) 0 0 var(--radius-md);
+          white-space: nowrap;
+          font-size: 14.5px;
+          color: var(--ink);
+        }
+        .country img { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
+        .phone-row input { border-radius: 0 var(--radius-md) var(--radius-md) 0; }
+
+        .password-input-container { position: relative; }
+        .password-input-container input { padding-right: 46px; }
+        .password-toggle {
+          position: absolute;
+          right: 6px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 34px;
+          height: 34px;
+          border: none;
+          background: transparent;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        }
+        .password-toggle:hover { background: var(--line); }
+
+        /* ───── Custom Select Styles ───── */
+        .custom-select {
+          position: relative;
+          width: 100%;
+        }
+
+        .select-trigger {
+          width: 100%;
+          padding: 14px 16px;
+          font-size: 14.5px;
+          font-family: 'Inter', sans-serif;
+          color: var(--ink);
+          background: var(--field-bg);
+          border: 1.5px solid transparent;
+          border-radius: var(--radius-md);
+          outline: none;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          cursor: pointer;
+          text-align: left;
+          transition: border-color 0.2s ease, background 0.2s ease;
+        }
+
+        
+
+        .select-trigger:focus {
+          background: #fff;
+          border-color: var(--accent);
+          box-shadow: 0 0 0 4px var(--accent-soft);
+        }
+
+        .select-trigger .arrow {
+          transition: transform 0.2s ease;
+          font-size: 16px;
+          color: var(--ink-soft);
+        }
+
+        .select-trigger .arrow.open {
+          transform: rotate(180deg);
+        }
+
+        .select-dropdown {
+          position: absolute;
+          top: calc(100% + 5px);
+          left: 0;
+          width: 100%;
+          background: white;
+          border: 1.5px solid var(--accent);
+          border-radius: var(--radius-md);
+          padding: 5px;
+          z-index: 100;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+          max-height: 200px;
+          overflow-y: auto;
+        }
+
+        .select-dropdown::-webkit-scrollbar {
+          width: 4px;
+        }
+
+        .select-dropdown::-webkit-scrollbar-thumb {
+          background: var(--line);
+          border-radius: 10px;
+        }
+
+        .select-option {
+          padding: 10px 12px;
+          border-radius: var(--radius-sm);
+          cursor: pointer;
+          font-size: 14px;
+          font-family: 'Inter', sans-serif;
+          color: var(--ink);
+          transition: all 0.15s ease;
+        }
+
+        .select-option:hover {
+          background-color: var(--accent);
+          color: white;
+        }
+
+        .create-btn {
+          margin-top: 6px;
+          padding: 15px;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-size: 15px;
+          font-weight: 700;
+          color: #fff;
+          background: #1A1D21;
+          border: none;
+          border-radius: var(--radius-md);
+          cursor: pointer;
+          transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+          box-shadow: 0 14px 28px -10px rgba(29, 42, 107, 0.55);
+        }
+        .create-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 18px 32px -10px rgba(29, 42, 107, 0.6); }
+        .create-btn:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
+
+        .divider {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin: 22px 0 18px;
+          font-size: 11.5px;
+          font-weight: 600;
+          letter-spacing: 0.08em;
+          color: #a7acb9;
+        }
+        .divider::before, .divider::after {
+          content: "";
+          flex: 1;
+          height: 1px;
+          background: var(--line);
+        }
+
+        .social-row { display: flex; justify-content: center; gap: 14px; }
+        .social {
+          width: 50px;
+          height: 50px;
+          border-radius: 50%;
+          border: 1.5px solid var(--line);
+          background: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .social img { width: 20px; height: 20px; }
+        .social:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 20px -8px rgba(15, 18, 38, 0.25); border-color: var(--accent); }
+        .social:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .terms {
+          text-align: center;
+          font-size: 12.5px;
+          color: var(--ink-soft);
+          margin: 22px 0 0;
+        }
+        .terms a { color: var(--accent); font-weight: 600; text-decoration: none; }
+        .terms a:hover { text-decoration: underline; }
+
+        /* ───── Right panel: media / wallpaper ───── */
+        .wallpaper-panel {
+          flex: 1 1 48%;
+          position: relative;
+          width:20%;
+          margin: 12px;
+          border-radius: 50px;
+          overflow: hidden;
+          background:
+            radial-gradient(circle at 25% 20%, #6a5cf0 0%, transparent 55%),
+            radial-gradient(circle at 75% 80%, #2f3aa8 0%, transparent 55%),
+            linear-gradient(160deg, #262c8f 0%, #10143f 100%);
+        }
+
+        .wallpaper-media {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .wallpaper-fade {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(0deg, rgba(10, 12, 40, 0.35) 0%, transparent 35%);
+          pointer-events: none;
+        }
+
+        .float-controls {
+          position: absolute;
+          right: 18px;
+          bottom: 18px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .float-btn {
+          width: 42px;
+          height: 42px;
+          border-radius: 50%;
+          border: none;
+          background: rgba(255, 255, 255, 0.16);
+          backdrop-filter: blur(6px);
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: background 0.2s ease;
+        }
+        .float-btn:hover { background: rgba(255, 255, 255, 0.28); }
+
+        @media (max-width: 860px) {
+          .wallpaper-panel { display: none; }
+          .form-panel { flex: 1 1 100%; padding: 36px 24px; }
+          .signup-card { min-height: auto; max-height: none; }
+        }
+
+        /* ───── Shared dialog styles (info / admin / subjects / teacher classes) ───── */
+        .dialog-card {
+          position: relative;
+          width: 100%;
+          background: #fff;
+          border-radius: var(--radius-lg);
+          box-shadow: var(--shadow-card);
+          padding: 30px;
+          max-height: 88vh;
+          overflow-y: auto;
+        }
+        .dialog-card.dialog-sm { max-width: 440px; }
+        .dialog-card.dialog-md { max-width: 520px; }
+        .dialog-card.dialog-lg { max-width: 860px; }
+        .dialog-card.dialog-xl { max-width: 1040px; }
+
+        .dialog-title {
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-size: 20px;
+          font-weight: 800;
+          color: var(--ink);
+          text-align: center;
+          margin: 0 0 8px;
+        }
+        .dialog-subtitle {
+          font-size: 13.5px;
+          color: var(--ink-soft);
+          text-align: center;
+          margin: 0 0 22px;
+          line-height: 1.5;
+        }
+        .dialog-subtitle strong { color: var(--ink); }
+
+        .dialog-field { margin-bottom: 12px; }
+
+        .dialog-actions { display: flex; gap: 12px; margin-top: 8px; }
+        .btn-primary, .btn-secondary {
+          flex: 1;
+          padding: 14px;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-size: 14.5px;
+          font-weight: 700;
+          border-radius: var(--radius-md);
+          cursor: pointer;
+          transition: all 0.15s ease;
+          border: none;
+        }
+        .btn-primary {
+          color: #fff;
+          background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+          box-shadow: 0 14px 28px -10px rgba(29, 42, 107, 0.5);
+        }
+        .btn-primary:hover:not(:disabled) { transform: translateY(-1px); }
+        .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; background: #c6cadb; box-shadow: none; }
+        .btn-secondary {
+          color: var(--ink);
+          background: var(--field-bg);
+          border: 1.5px solid var(--line);
+        }
+        .btn-secondary:hover:not(:disabled) { background: #eef0f5; }
+        .btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .section-block {
+          padding: 18px;
+          border-radius: var(--radius-md);
+          border: 1px solid var(--line);
+          background: var(--field-bg);
+          margin-bottom: 18px;
+        }
+        .section-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 14px;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        .section-head span { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 14.5px; color: var(--ink); }
+        .chip-btn {
+          padding: 8px 14px;
+          font-size: 12.5px;
+          font-weight: 700;
+          color: #fff;
+          background: var(--accent);
+          border: none;
+          border-radius: 999px;
+          cursor: pointer;
+        }
+        .chip-btn.alt { background: var(--success); }
+
+        .grid { display: grid; gap: 10px; }
+        .grid-subjects { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); max-height: 360px; overflow-y: auto; padding: 4px; }
+        .grid-classes { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+
+        .option-chip {
+          position: relative;
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          padding: 12px;
+          border-radius: var(--radius-sm);
+          border: 1.5px solid var(--line);
+          background: #fff;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          font-size: 13.5px;
+          font-weight: 500;
+          color: var(--ink);
+        }
+        .option-chip:hover { border-color: #c7cbe6; }
+        .option-chip.selected {
+          background: var(--accent-soft);
+          border-color: var(--accent);
+        }
+        .option-chip input { width: 15px; height: 15px; margin: 0; padding: 0; flex-shrink: 0; accent-color: var(--accent); }
+
+        .class-chip {
+          flex-direction: column;
+          justify-content: center;
+          text-align: center;
+          min-height: 62px;
+          gap: 6px;
+        }
+        .class-chip.selected { background: var(--accent-soft); border-color: var(--accent); }
+        .class-chip .pin-badge {
+          position: absolute;
+          top: -8px;
+          right: -8px;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: var(--success);
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .selection-note {
+          text-align: center;
+          font-size: 12.5px;
+          color: var(--ink-soft);
+          margin-top: 14px;
+        }
+        .selection-note .ok { color: var(--success); font-weight: 600; margin-left: 6px; }
+
+        .subject-block {
+          margin-bottom: 16px;
+          padding: 16px;
+          border-radius: var(--radius-md);
+          border: 1px solid var(--line);
+          background: #fff;
+        }
+        .subject-block:last-child { margin-bottom: 0; }
+        .subject-block .grid-subjects { max-height: none; overflow: visible; }
+        .subject-count { text-align: right; font-size: 12px; color: var(--ink-soft); margin-top: 10px; }
+      `}</style>
+
       {/* MAIN SIGNUP FORM */}
+
       <div className="signup-page">
         <div className="signup-modal">
-          <div className="modal-backdrop" />
           <div className="signup-card">
-            <button className="close-btn" onClick={() => navigate(-1)}>
-              ×
-            </button>
-
-            <div className="tabs">
-              <button
-                className={`tab ${userType === "teacher" ? "active" : ""}`}
-                onClick={() => setUserType("teacher")}
-              >
-                Teacher
-              </button>
-              <button
-                className={`tab ${userType === "student" ? "active" : ""}`}
-                onClick={() => setUserType("student")}
-              >
-                Student
-              </button>
-            </div>
-
-            <form onSubmit={handleEmailSignup} className="signup-form">
-              <h2>Create an account</h2>
-
-              <div className="name-row">
-                <input
-                  placeholder="First name"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  required
-                  disabled={isLoading}
-                />
-                <input
-                  placeholder="Last name"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  required
-                  disabled={isLoading}
-                />
-              </div>
-
-              <input
-                type="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={isLoading}
-              />
-
-              <div className="phone-row">
-                <div className="country">
-                  <img src="/flags/ng.svg" alt="NG" />
-                  <span>+234</span>
-                </div>
-                <input
-                  type="tel"
-                  placeholder="775-351-6501"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  disabled={isLoading}
-                />
-              </div>
-
-              <div className="password-input-container">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  disabled={isLoading}
-                  className="text-input"
-                />
-
-                <button
-                  type="button"
-                  className="password-toggle"
-                  onClick={() => setShowPassword(!showPassword)}
-                  tabIndex={-1}
+            {/* Left: form panel */}
+            <div className="form-panel">
+              <div className="brand-row">
+                <div
+                  className="brand-mark"
+                  onClick={() => navigate("/")}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === "Enter" && navigate("/")}
                 >
-                  {showPassword ? (
-                    <EyeOff size={18} color="#6b7280" />
-                  ) : (
-                    <Eye size={18} color="#6b7280" />
-                  )}
+                  <img
+                    src={Logo}
+                    style={{
+                      borderRadius: "50%",
+                      width: "38px",
+                      height: "38px",
+                    }}
+                    alt="SXaint Logo"
+                  />
+                </div>
+                <span className="brand-name">SXaint</span>
+              </div>
+
+              <div className="tabs">
+                <button
+                  className={`tab ${userType === "teacher" ? "active" : ""}`}
+                  onClick={() => setUserType("teacher")}
+                  type="button"
+                >
+                  Teacher
+                </button>
+                <button
+                  className={`tab ${userType === "student" ? "active" : ""}`}
+                  onClick={() => setUserType("student")}
+                  type="button"
+                >
+                  Student
                 </button>
               </div>
 
-              <select
-                value={className}
-                onChange={(e) => setClassName(e.target.value)}
-                required
-                className="input-select"
-                disabled={isLoading}
-              >
-                <option value="">Select Class</option>
-                {ALL_CLASSES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+              <form onSubmit={handleEmailSignup} className="signup-form">
+                <h2>Create an account</h2>
+                <p className="form-subtitle">
+                  Please enter your details to get started.
+                </p>
 
-              {userType === "teacher" && (
+                <div className="name-row">
+                  <input
+                    placeholder="First name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                  <input
+                    placeholder="Last name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+
                 <input
-                  type="password"
-                  placeholder="Admin Code"
-                  value={adminCodeInput}
-                  onChange={(e) => setAdminCodeInput(e.target.value)}
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                   disabled={isLoading}
                 />
-              )}
 
-              <button type="submit" className="create-btn" disabled={isLoading}>
-                {isLoading ? "Creating Account..." : "Create Account"}
-              </button>
-            </form>
+                <div className="phone-row">
+                  <div className="country">
+                    <img src="/flags/ng.svg" alt="NG" />
+                    <span>+234</span>
+                  </div>
+                  <input
+                    type="tel"
+                    placeholder="775-351-6501"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    disabled={isLoading}
+                  />
+                </div>
 
-            <div className="divider">OR SIGN UP WITH</div>
+                <div className="password-input-container">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword(!showPassword)}
+                    tabIndex={-1}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
+                  >
+                    {showPassword ? (
+                      <EyeOff size={18} color="#6b7280" />
+                    ) : (
+                      <Eye size={18} color="#6b7280" />
+                    )}
+                  </button>
+                </div>
 
-            <div className="social-row">
-              <button
-                onClick={() => handleProvider(googleProvider)}
-                className="social google"
-                disabled={isLoading}
-              >
-                <img src="/icons/google.svg" alt="Google" />
-              </button>
-              <button
-                onClick={() => handleProvider(appleProvider)}
-                className="social apple"
-                disabled={isLoading}
-              >
-                <img src="/icons/apple.svg" alt="Apple" />
-              </button>
+                {/* Custom Class Selection Dropdown */}
+                <div className="custom-select">
+                  <button
+                    type="button"
+                    className="select-trigger"
+                    onClick={() => setIsClassDropdownOpen(!isClassDropdownOpen)}
+                    disabled={isLoading}
+                  >
+                    {className || "Select Class"}
+                    <span
+                      className={`arrow ${isClassDropdownOpen ? "open" : ""}`}
+                    ></span>
+                  </button>
+
+                  {isClassDropdownOpen && (
+                    <div className="select-dropdown">
+                      {ALL_CLASSES.map((c) => (
+                        <div
+                          key={c}
+                          className="select-option"
+                          onClick={() => {
+                            setClassName(c);
+                            setIsClassDropdownOpen(false);
+                          }}
+                        >
+                          {c}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Admin Code Input (only for teachers) */}
+                {userType === "teacher" && (
+                  <input
+                    type="password"
+                    placeholder="Admin Code"
+                    value={adminCodeInput}
+                    onChange={(e) => setAdminCodeInput(e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                )}
+
+                <button
+                  type="submit"
+                  className="create-btn"
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Creating Account..." : "Create Account"}
+                </button>
+              </form>
+
+              <div className="divider">OR SIGN UP WITH</div>
+
+              <div className="social-row">
+                <button
+                  onClick={() => handleProvider(googleProvider)}
+                  className="social"
+                  disabled={isLoading}
+                  aria-label="Sign up with Google"
+                >
+                  <img src="/icons/google.svg" alt="Google" />
+                </button>
+                <button
+                  onClick={() => handleProvider(appleProvider)}
+                  className="social"
+                  disabled={isLoading}
+                  aria-label="Sign up with Apple"
+                >
+                  <img src="/icons/apple.svg" alt="Apple" />
+                </button>
+              </div>
+
+              <p className="terms">
+                By creating an account, you agree to our{" "}
+                <a href="#">Terms &amp; Service</a>
+              </p>
             </div>
 
-            <p className="terms">
-              By creating an account, you agree to our{" "}
-              <a href="#">Terms &amp; Service</a>
-            </p>
+            {/* Right: media / wallpaper panel */}
+            <div className="wallpaper-panel">
+              <video
+                className="wallpaper-media"
+                autoPlay
+                loop
+                muted
+                playsInline
+                src={auth_wallpaper}
+              />
+              <div className="wallpaper-fade" />
+              <div className="float-controls"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -819,32 +1393,14 @@ export default function Signup() {
       {/* GOOGLE/APPLE INFO MODAL */}
       {showInfoModal && (
         <div className="signup-page" style={{ zIndex: 1100 }}>
-          <div className="signup-modal">
-            <div className="modal-backdrop" />
-            <div
-              className="signup-card"
-              style={{ maxWidth: 460, padding: "24px" }}
-            >
-              <h3
-                style={{
-                  margin: "0 0 12px",
-                  textAlign: "center",
-                  fontSize: 20,
-                }}
-              >
-                Confirm your details
-              </h3>
-              <p
-                style={{
-                  textAlign: "center",
-                  margin: "0 0 20px",
-                  fontSize: 14,
-                  color: "#555",
-                }}
-              >
-                We pulled this from your account. Please verify.
-              </p>
+          <div className="modal-backdrop" />
+          <div className="dialog-card dialog-sm">
+            <h3 className="dialog-title">Confirm your details</h3>
+            <p className="dialog-subtitle">
+              We pulled this from your account. Please verify.
+            </p>
 
+            <div className="dialog-field">
               <input
                 type="text"
                 placeholder="Full name"
@@ -852,15 +1408,9 @@ export default function Signup() {
                 onChange={(e) =>
                   setInfo((s) => ({ ...s, fullName: e.target.value }))
                 }
-                style={{
-                  width: "100%",
-                  padding: "14px",
-                  fontSize: 16,
-                  borderRadius: 8,
-                  border: "1px solid #ccc",
-                  marginBottom: 12,
-                }}
               />
+            </div>
+            <div className="dialog-field">
               <input
                 type="email"
                 placeholder="Email"
@@ -868,49 +1418,28 @@ export default function Signup() {
                 onChange={(e) =>
                   setInfo((s) => ({ ...s, email: e.target.value }))
                 }
-                style={{
-                  width: "100%",
-                  padding: "14px",
-                  fontSize: 16,
-                  borderRadius: 8,
-                  border: "1px solid #ccc",
-                  marginBottom: 12,
-                }}
               />
-              <div className="phone-row" style={{ marginBottom: 12 }}>
-                <div className="country">
-                  <img src="/flags/ng.svg" alt="NG" />
-                  <span>+234</span>
-                </div>
-                <input
-                  type="tel"
-                  placeholder="775-351-6501"
-                  value={info.phone}
-                  onChange={(e) =>
-                    setInfo((s) => ({ ...s, phone: e.target.value }))
-                  }
-                  style={{
-                    flex: 1,
-                    padding: "14px",
-                    fontSize: 16,
-                    borderRadius: 8,
-                    border: "1px solid #ccc",
-                  }}
-                />
+            </div>
+            <div className="phone-row dialog-field">
+              <div className="country">
+                <img src="/flags/ng.svg" alt="NG" />
+                <span>+234</span>
               </div>
+              <input
+                type="tel"
+                placeholder="775-351-6501"
+                value={info.phone}
+                onChange={(e) =>
+                  setInfo((s) => ({ ...s, phone: e.target.value }))
+                }
+              />
+            </div>
+            <div className="dialog-field">
               <select
                 value={info.className}
                 onChange={(e) =>
                   setInfo((s) => ({ ...s, className: e.target.value }))
                 }
-                style={{
-                  width: "100%",
-                  padding: "14px",
-                  fontSize: 16,
-                  borderRadius: 8,
-                  border: "1px solid #ccc",
-                  marginBottom: 16,
-                }}
                 required
               >
                 <option value="">Select Class</option>
@@ -920,38 +1449,15 @@ export default function Signup() {
                   </option>
                 ))}
               </select>
+            </div>
 
-              <div style={{ display: "flex", gap: 12 }}>
-                <button
-                  onClick={confirmInfo}
-                  style={{
-                    flex: 1,
-                    padding: "14px",
-                    background: "#007bff",
-                    color: "white",
-                    border: "none",
-                    borderRadius: 8,
-                    fontSize: 16,
-                    cursor: "pointer",
-                  }}
-                >
-                  Confirm
-                </button>
-                <button
-                  onClick={resetAndRedirect}
-                  style={{
-                    flex: 1,
-                    padding: "14px",
-                    background: "#f8f9fa",
-                    border: "1px solid #ddd",
-                    borderRadius: 8,
-                    fontSize: 16,
-                    cursor: "pointer",
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
+            <div className="dialog-actions">
+              <button className="btn-primary" onClick={confirmInfo}>
+                Confirm
+              </button>
+              <button className="btn-secondary" onClick={resetAndRedirect}>
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -960,78 +1466,31 @@ export default function Signup() {
       {/* ADMIN CODE MODAL (only for social signup teachers) */}
       {showAdminModal && (
         <div className="signup-page" style={{ zIndex: 1200 }}>
-          <div className="signup-modal">
-            <div className="modal-backdrop" />
-            <div
-              className="signup-card"
-              style={{ maxWidth: 420, padding: "24px" }}
-            >
-              <h3
-                style={{
-                  margin: "0 0 12px",
-                  textAlign: "center",
-                  fontSize: 20,
-                }}
-              >
-                Admin Access Required
-              </h3>
-              <p
-                style={{
-                  textAlign: "center",
-                  margin: "0 0 20px",
-                  fontSize: 14,
-                  color: "#555",
-                }}
-              >
-                Enter the admin code to complete teacher signup.
-              </p>
+          <div className="modal-backdrop" />
+          <div className="dialog-card dialog-sm" style={{ maxWidth: 420 }}>
+            <h3 className="dialog-title">Admin Access Required</h3>
+            <p className="dialog-subtitle">
+              Enter the admin code to complete teacher signup.
+            </p>
+
+            <div className="dialog-field">
               <input
                 type="password"
                 placeholder="Admin Code"
                 value={adminCodeInput}
                 onChange={(e) => setAdminCodeInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && confirmAdminCode()}
-                style={{
-                  width: "100%",
-                  padding: "14px",
-                  fontSize: 16,
-                  borderRadius: 8,
-                  border: "1px solid #ccc",
-                  marginBottom: 16,
-                }}
                 autoFocus
               />
-              <div style={{ display: "flex", gap: 12 }}>
-                <button
-                  onClick={confirmAdminCode}
-                  style={{
-                    flex: 1,
-                    padding: "14px",
-                    background: "#007bff",
-                    color: "white",
-                    border: "none",
-                    borderRadius: 8,
-                    fontSize: 16,
-                    cursor: "pointer",
-                  }}
-                >
-                  Confirm
-                </button>
-                <button
-                  onClick={resetAndRedirect}
-                  style={{
-                    flex: 1,
-                    padding: "14px",
-                    background: "#f8f9fa",
-                    border: "1px solid #ddd",
-                    borderRadius: 8,
-                    fontSize: 16,
-                    cursor: "pointer",
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
+            </div>
+
+            <div className="dialog-actions">
+              <button className="btn-primary" onClick={confirmAdminCode}>
+                Confirm
+              </button>
+              <button className="btn-secondary" onClick={resetAndRedirect}>
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -1040,161 +1499,71 @@ export default function Signup() {
       {/* STUDENT SUBJECT SELECTION MODAL */}
       {showSubjectsModal && (
         <div className="signup-page" style={{ zIndex: 1300 }}>
-          <div className="signup-modal">
-            <div className="modal-backdrop" />
+          <div className="modal-backdrop" />
+          <div className="dialog-card dialog-lg">
+            <h3 className="dialog-title">Select Your Subjects</h3>
+            <p className="dialog-subtitle">
+              Choose the subjects you offer for <strong>{className}</strong>.
+              You can change this later in your profile.
+            </p>
+
+            <div className="section-head">
+              <span>Available subjects for {getClassLevel(className)}</span>
+              <button
+                className="chip-btn"
+                onClick={handleSelectAllSubjects}
+                type="button"
+              >
+                {selectedSubjects.length ===
+                getSubjectsForClass(className).length
+                  ? "Deselect All"
+                  : "Select All"}
+              </button>
+            </div>
+
             <div
-              className="signup-card"
-              style={{ maxWidth: 800, padding: "24px" }}
+              className="grid grid-subjects"
+              style={{
+                border: "1px solid var(--line)",
+                borderRadius: "var(--radius-md)",
+                padding: 14,
+                marginBottom: 18,
+              }}
             >
-              <h3
-                style={{
-                  margin: "0 0 12px",
-                  textAlign: "center",
-                  fontSize: 20,
-                }}
-              >
-                Select Your Subjects
-              </h3>
-              <p
-                style={{
-                  textAlign: "center",
-                  margin: "0 0 20px",
-                  fontSize: 14,
-                  color: "#555",
-                }}
-              >
-                Choose the subjects you offer for {className}. You can change
-                this later in your profile.
-              </p>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "16px",
-                }}
-              >
-                <span style={{ fontSize: "14px", fontWeight: "500" }}>
-                  Available subjects for {getClassLevel(className)}
-                </span>
-                <button
-                  onClick={handleSelectAllSubjects}
-                  style={{
-                    padding: "8px 16px",
-                    background: "#007bff",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                  }}
+              {getSubjectsForClass(className).map((subject) => (
+                <label
+                  key={subject}
+                  className={`option-chip ${selectedSubjects.includes(subject) ? "selected" : ""}`}
                 >
-                  {selectedSubjects.length ===
-                  getSubjectsForClass(className).length
-                    ? "Deselect All"
-                    : "Select All"}
-                </button>
-              </div>
+                  <input
+                    type="checkbox"
+                    checked={selectedSubjects.includes(subject)}
+                    onChange={() => handleSubjectToggle(subject)}
+                  />
+                  <span>{subject}</span>
+                </label>
+              ))}
+            </div>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-                  gap: "12px",
-                  maxHeight: "400px",
-                  overflowY: "auto",
-                  marginBottom: "20px",
-                  padding: "12px",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                }}
+            <p className="selection-note">
+              Selected: {selectedSubjects.length} subject(s)
+            </p>
+
+            <div className="dialog-actions">
+              <button
+                className="btn-primary"
+                onClick={handleSubjectsSubmit}
+                disabled={selectedSubjects.length === 0 || isLoading}
               >
-                {getSubjectsForClass(className).map((subject) => (
-                  <label
-                    key={subject}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      padding: "12px",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                      backgroundColor: selectedSubjects.includes(subject)
-                        ? "#eff6ff"
-                        : "white",
-                      borderColor: selectedSubjects.includes(subject)
-                        ? "#3b82f6"
-                        : "#e2e8f0",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedSubjects.includes(subject)}
-                      onChange={() => handleSubjectToggle(subject)}
-                      style={{
-                        width: "16px",
-                        height: "16px",
-                        cursor: "pointer",
-                      }}
-                    />
-                    <span style={{ fontSize: "14px", fontWeight: "500" }}>
-                      {subject}
-                    </span>
-                  </label>
-                ))}
-              </div>
-
-              <div style={{ textAlign: "center", marginBottom: "16px" }}>
-                <small style={{ color: "#64748b" }}>
-                  Selected: {selectedSubjects.length} subject(s)
-                </small>
-              </div>
-
-              <div style={{ display: "flex", gap: "12px" }}>
-                <button
-                  onClick={handleSubjectsSubmit}
-                  disabled={selectedSubjects.length === 0 || isLoading}
-                  style={{
-                    flex: 1,
-                    padding: "14px",
-                    background:
-                      selectedSubjects.length === 0 || isLoading
-                        ? "#cbd5e1"
-                        : "#007bff",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    fontSize: "16px",
-                    cursor:
-                      selectedSubjects.length === 0 || isLoading
-                        ? "not-allowed"
-                        : "pointer",
-                    opacity:
-                      selectedSubjects.length === 0 || isLoading ? 0.6 : 1,
-                  }}
-                >
-                  {isLoading ? "Saving..." : "Save Subjects & Continue"}
-                </button>
-                <button
-                  onClick={resetAndRedirect}
-                  disabled={isLoading}
-                  style={{
-                    flex: 1,
-                    padding: "14px",
-                    background: "#f8f9fa",
-                    border: "1px solid #ddd",
-                    borderRadius: "8px",
-                    fontSize: "16px",
-                    cursor: isLoading ? "not-allowed" : "pointer",
-                    opacity: isLoading ? 0.6 : 1,
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
+                {isLoading ? "Saving..." : "Save Subjects & Continue"}
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={resetAndRedirect}
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -1203,312 +1572,122 @@ export default function Signup() {
       {/* TEACHER CLASSES & SUBJECTS MODAL */}
       {showTeacherClassesModal && (
         <div className="signup-page" style={{ zIndex: 1400 }}>
-          <div className="signup-modal">
-            <div className="modal-backdrop" />
-            <div
-              className="signup-card"
-              style={{ maxWidth: 1000, padding: "24px" }}
-            >
-              <h3
-                style={{
-                  margin: "0 0 12px",
-                  textAlign: "center",
-                  fontSize: 20,
-                }}
-              >
-                Select Classes You Teach
-              </h3>
-              <p
-                style={{
-                  textAlign: "center",
-                  margin: "0 0 20px",
-                  fontSize: 14,
-                  color: "#555",
-                }}
-              >
-                <strong>Note:</strong> Your selected class "{className}" is
-                already pre-selected.
-                <br />
-                You can add more classes or remove it if needed.
-              </p>
+          <div className="modal-backdrop" />
+          <div className="dialog-card dialog-xl">
+            <h3 className="dialog-title">Select Classes You Teach</h3>
+            <p className="dialog-subtitle">
+              <strong>Note:</strong> Your selected class "{className}" is
+              already pre-selected.
+              <br />
+              You can add more classes or remove it if needed.
+            </p>
 
-              {/* Class Selection Section */}
-              <div
-                style={{
-                  marginBottom: "24px",
-                  padding: "16px",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  backgroundColor: "#f8fafc",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "16px",
-                  }}
+            <div className="section-block">
+              <div className="section-head">
+                <span>Available Classes</span>
+                <button
+                  className="chip-btn"
+                  onClick={handleSelectAllClasses}
+                  type="button"
                 >
-                  <span style={{ fontSize: "16px", fontWeight: "600" }}>
-                    Available Classes
-                  </span>
-                  <button
-                    onClick={handleSelectAllClasses}
-                    style={{
-                      padding: "8px 16px",
-                      background: "#007bff",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontSize: "14px",
-                    }}
+                  {selectedClasses.length === ALL_CLASSES.length
+                    ? "Deselect All Classes"
+                    : "Select All Classes"}
+                </button>
+              </div>
+
+              <div className="grid grid-classes">
+                {ALL_CLASSES.map((cls) => (
+                  <label
+                    key={cls}
+                    className={`option-chip class-chip ${selectedClasses.includes(cls) ? "selected" : ""}`}
                   >
-                    {selectedClasses.length === ALL_CLASSES.length
-                      ? "Deselect All Classes"
-                      : "Select All Classes"}
-                  </button>
-                </div>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(120px, 1fr))",
-                    gap: "12px",
-                  }}
-                >
-                  {ALL_CLASSES.map((cls) => (
-                    <label
-                      key={cls}
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: "12px",
-                        border: "2px solid",
-                        borderRadius: "8px",
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
-                        backgroundColor: selectedClasses.includes(cls)
-                          ? "#eff6ff"
-                          : "white",
-                        borderColor: selectedClasses.includes(cls)
-                          ? "#3b82f6"
-                          : "#e2e8f0",
-                        minHeight: "60px",
-                        position: "relative",
-                      }}
-                    >
-                      {cls === className && selectedClasses.includes(cls) && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            top: "-8px",
-                            right: "-8px",
-                            background: "#10b981",
-                            color: "white",
-                            borderRadius: "50%",
-                            width: "20px",
-                            height: "20px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "12px",
-                          }}
-                        >
-                          ✓
-                        </div>
-                      )}
-                      <input
-                        type="checkbox"
-                        checked={selectedClasses.includes(cls)}
-                        onChange={() => handleTeacherClassToggle(cls)}
-                        style={{
-                          width: "16px",
-                          height: "16px",
-                          cursor: "pointer",
-                          marginBottom: "8px",
-                        }}
-                      />
-                      <span style={{ fontSize: "14px", fontWeight: "500" }}>
-                        {cls}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-
-                <div style={{ textAlign: "center", marginTop: "16px" }}>
-                  <small style={{ color: "#64748b" }}>
-                    Selected: {selectedClasses.length} class(es)
-                    {selectedClasses.includes(className) && (
-                      <span style={{ color: "#10b981", marginLeft: "8px" }}>
-                        ✓ Includes your selected class
+                    {cls === className && selectedClasses.includes(cls) && (
+                      <span className="pin-badge">
+                        <Check size={12} />
                       </span>
                     )}
-                  </small>
-                </div>
+                    <input
+                      type="checkbox"
+                      checked={selectedClasses.includes(cls)}
+                      onChange={() => handleTeacherClassToggle(cls)}
+                    />
+                    <span>{cls}</span>
+                  </label>
+                ))}
               </div>
 
-              {/* Subjects Selection for Each Selected Class */}
-              {selectedClasses.length > 0 && (
-                <div
-                  style={{
-                    marginBottom: "24px",
-                    maxHeight: "400px",
-                    overflowY: "auto",
-                  }}
-                >
-                  {selectedClasses.map((className) => (
-                    <div
-                      key={className}
-                      style={{
-                        marginBottom: "20px",
-                        padding: "16px",
-                        border: "1px solid #e2e8f0",
-                        borderRadius: "8px",
-                        backgroundColor: "white",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          marginBottom: "12px",
-                        }}
-                      >
-                        <span style={{ fontSize: "16px", fontWeight: "600" }}>
-                          Subjects for {className}
-                        </span>
-                        <button
-                          onClick={() =>
-                            handleSelectAllSubjectsForClass(className)
-                          }
-                          style={{
-                            padding: "6px 12px",
-                            background: "#10b981",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                            fontSize: "12px",
-                          }}
-                        >
-                          {teacherSubjects[className]?.length ===
-                          getSubjectsForClass(className).length
-                            ? "Deselect All"
-                            : "Select All"}
-                        </button>
-                      </div>
+              <p className="selection-note">
+                Selected: {selectedClasses.length} class(es)
+                {selectedClasses.includes(className) && (
+                  <span className="ok">✓ Includes your selected class</span>
+                )}
+              </p>
+            </div>
 
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "repeat(auto-fill, minmax(180px, 1fr))",
-                          gap: "10px",
-                        }}
+            {selectedClasses.length > 0 && (
+              <div
+                style={{ maxHeight: 360, overflowY: "auto", marginBottom: 20 }}
+              >
+                {selectedClasses.map((cls) => (
+                  <div key={cls} className="subject-block">
+                    <div className="section-head">
+                      <span>Subjects for {cls}</span>
+                      <button
+                        className="chip-btn alt"
+                        onClick={() => handleSelectAllSubjectsForClass(cls)}
+                        type="button"
                       >
-                        {getSubjectsForClass(className).map((subject) => (
-                          <label
-                            key={subject}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "8px",
-                              padding: "10px",
-                              border: "1px solid #e2e8f0",
-                              borderRadius: "6px",
-                              cursor: "pointer",
-                              transition: "all 0.2s ease",
-                              backgroundColor: teacherSubjects[
-                                className
-                              ]?.includes(subject)
-                                ? "#d1fae5"
-                                : "#f8fafc",
-                              borderColor: teacherSubjects[className]?.includes(
-                                subject,
-                              )
-                                ? "#10b981"
-                                : "#e2e8f0",
-                            }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={
-                                teacherSubjects[className]?.includes(subject) ||
-                                false
-                              }
-                              onChange={() =>
-                                handleTeacherSubjectToggle(className, subject)
-                              }
-                              style={{
-                                width: "14px",
-                                height: "14px",
-                                cursor: "pointer",
-                              }}
-                            />
-                            <span style={{ fontSize: "13px" }}>{subject}</span>
-                          </label>
-                        ))}
-                      </div>
-
-                      <div style={{ textAlign: "right", marginTop: "12px" }}>
-                        <small style={{ color: "#64748b" }}>
-                          Selected: {teacherSubjects[className]?.length || 0}{" "}
-                          subject(s)
-                        </small>
-                      </div>
+                        {teacherSubjects[cls]?.length ===
+                        getSubjectsForClass(cls).length
+                          ? "Deselect All"
+                          : "Select All"}
+                      </button>
                     </div>
-                  ))}
-                </div>
-              )}
 
-              <div style={{ display: "flex", gap: "12px" }}>
-                <button
-                  onClick={handleTeacherClassesSubmit}
-                  disabled={selectedClasses.length === 0 || isLoading}
-                  style={{
-                    flex: 1,
-                    padding: "14px",
-                    background:
-                      selectedClasses.length === 0 || isLoading
-                        ? "#cbd5e1"
-                        : "#007bff",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    fontSize: "16px",
-                    cursor:
-                      selectedClasses.length === 0 || isLoading
-                        ? "not-allowed"
-                        : "pointer",
-                    opacity:
-                      selectedClasses.length === 0 || isLoading ? 0.6 : 1,
-                  }}
-                >
-                  {isLoading ? "Saving..." : "Save & Complete Signup"}
-                </button>
-                <button
-                  onClick={resetAndRedirect}
-                  disabled={isLoading}
-                  style={{
-                    flex: 1,
-                    padding: "14px",
-                    background: "#f8f9fa",
-                    border: "1px solid #ddd",
-                    borderRadius: "8px",
-                    fontSize: "16px",
-                    cursor: isLoading ? "not-allowed" : "pointer",
-                    opacity: isLoading ? 0.6 : 1,
-                  }}
-                >
-                  Cancel
-                </button>
+                    <div className="grid grid-subjects">
+                      {getSubjectsForClass(cls).map((subject) => (
+                        <label
+                          key={subject}
+                          className={`option-chip ${teacherSubjects[cls]?.includes(subject) ? "selected" : ""}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={
+                              teacherSubjects[cls]?.includes(subject) || false
+                            }
+                            onChange={() =>
+                              handleTeacherSubjectToggle(cls, subject)
+                            }
+                          />
+                          <span>{subject}</span>
+                        </label>
+                      ))}
+                    </div>
+
+                    <p className="subject-count">
+                      Selected: {teacherSubjects[cls]?.length || 0} subject(s)
+                    </p>
+                  </div>
+                ))}
               </div>
+            )}
+
+            <div className="dialog-actions">
+              <button
+                className="btn-primary"
+                onClick={handleTeacherClassesSubmit}
+                disabled={selectedClasses.length === 0 || isLoading}
+              >
+                {isLoading ? "Saving..." : "Save & Complete Signup"}
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={resetAndRedirect}
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

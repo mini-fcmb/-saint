@@ -975,7 +975,7 @@ function TextContentPane({
           alignItems: "center",
           gap: "8px",
           background: "#eff6ff",
-          color: "#007bff",
+          color: "#2",
           fontSize: "13px",
           fontWeight: 700,
           letterSpacing: "0.05em",
@@ -1036,7 +1036,7 @@ function TextContentPane({
               transition: `opacity 0.35s ease ${0.08 + i * 0.06}s, transform 0.35s ease ${0.08 + i * 0.06}s`,
             }}
           >
-            <CheckCircle2 size={18} color="#007bff" style={{ flexShrink: 0 }} />
+            <CheckCircle2 size={18} color="#2563eb" style={{ flexShrink: 0 }} />
             {b}
           </li>
         ))}
@@ -1048,7 +1048,7 @@ function TextContentPane({
             display: "inline-flex",
             alignItems: "center",
             gap: "10px",
-            background: "#007bff",
+            background: "#1A1D21",
             color: "#fff",
             fontSize: "0.95rem",
             fontWeight: 700,
@@ -1058,16 +1058,16 @@ function TextContentPane({
             cursor: "pointer",
             width: "fit-content",
             transition: "background 0.2s, transform 0.15s, box-shadow 0.2s",
-            boxShadow: "0 4px 16px rgba(0,123,255,0.3)",
+            boxShadow: "0 4px 16px #2B2E33",
             opacity: isAnimating ? 0 : 1,
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "#0056b3";
+            (e.currentTarget as HTMLButtonElement).style.background = "#2B2E33";
             (e.currentTarget as HTMLButtonElement).style.transform =
               "scale(1.04)";
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "#007bff";
+            (e.currentTarget as HTMLButtonElement).style.background = "#1A1D21";
             (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
           }}
         >
@@ -1792,7 +1792,7 @@ function PartnershipSection() {
                 width: "150px",
                 height: "150px",
                 borderRadius: "50%",
-                background: "linear-gradient(135deg, #4299E1, #2563eb)",
+                background: "linear-gradient(135deg, #2563eb, #4299E1, )",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
@@ -1857,7 +1857,7 @@ function PartnershipSection() {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "8px",
-                color: "#4299E1",
+                color: "#2563eb",
                 fontSize: "13px",
                 fontWeight: 700,
                 letterSpacing: "0.08em",
@@ -1935,7 +1935,7 @@ function PartnershipSection() {
                       flexShrink: 0,
                     }}
                   >
-                    <feature.icon size={20} color="#4299E1" />
+                    <feature.icon size={20} color="#2563eb" />
                   </div>
                   <div>
                     <div
@@ -2020,7 +2020,7 @@ function PartnershipSection() {
                       height: "8px",
                       borderRadius: "20px",
                       border: "none",
-                      background: i === activeIndex ? "#4299E1" : "#dbeafe",
+                      background: i === activeIndex ? "#2563EB" : "#dbeafe",
                       cursor: "pointer",
                       padding: 0,
                       transition:
@@ -2715,7 +2715,7 @@ function NavDropdown({
     >
       <button
         className={`flex items-center gap-1.5 text-[15px] font-medium transition-all duration-200 whitespace-nowrap group ${
-          isOpen ? "text-blue-600" : "text-gray-500 hover:text-blue-600"
+          isOpen ? "text-[#2563EB]" : "text-gray-500 hover:text-[#2563EB]"
         }`}
       >
         <item.icon
@@ -2724,7 +2724,7 @@ function NavDropdown({
         />
         <span className="relative">
           <span
-            className={`absolute -bottom-1 left-0 h-[2px] bg-blue-600 transition-all duration-300 ${
+            className={`absolute -bottom-1 left-0 h-[2px] bg-[#2563EB] transition-all duration-300 ${
               isOpen ? "w-full" : "w-0 group-hover:w-full"
             }`}
           />
@@ -2832,8 +2832,8 @@ function NavDropdown({
                     {/* Card Content */}
                     <div className="relative z-10 flex flex-col flex-1">
                       {/* Icon */}
-                      <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4 group-hover/card:scale-110 transition-transform duration-300">
-                        <card.icon size={28} className="text-blue-400" />
+                      <div className="w-12 h-12 rounded-xl bg-[#2563EB]/10 flex items-center justify-center mb-4 group-hover/card:scale-110 transition-transform duration-300">
+                        <card.icon size={28} className="text-[#2563EB]" />
                       </div>
 
                       {/* Title */}
@@ -2855,7 +2855,7 @@ function NavDropdown({
                           >
                             <CheckCircle2
                               size={14}
-                              className="text-blue-400 flex-shrink-0"
+                              className="text-[#2563eb] flex-shrink-0"
                             />
                             <span>{feature}</span>
                           </li>
@@ -2865,7 +2865,7 @@ function NavDropdown({
                       {/* CTA */}
                       <motion.a
                         href=""
-                        className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-blue-400 group/link w-fit"
+                        className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-[#2563eb] group/link w-fit"
                         whileHover={{ x: 4 }}
                         transition={{ duration: 0.2 }}
                       >
@@ -3017,7 +3017,7 @@ function HomepageContent({
                   </button>
                 </Link>
                 <Link to="/signup">
-                  <button className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full text-[15px] transition-all duration-200 hover:scale-105 active:scale-95 group">
+                  <button className="flex items-center gap-2 px-5 py-2.5 bg-[#1A1D21] hover:bg-blue-700 text-white font-semibold rounded-full text-[15px] transition-all duration-200 hover:scale-105 active:scale-95 group">
                     Get Started
                   </button>
                 </Link>
@@ -3063,7 +3063,7 @@ function HomepageContent({
                     <a
                       key={index}
                       href={dropdownItem.href}
-                      className="flex items-center gap-3 text-sm text-gray-600 py-2 px-4 hover:text-blue-600 transition-colors"
+                      className="flex items-center gap-3 text-sm text-gray-600 py-2 px-4 hover:text-[#2563eb] transition-colors"
                       onClick={() => setMobileOpen(false)}
                     >
                       <dropdownItem.icon size={14} />
@@ -3079,7 +3079,7 @@ function HomepageContent({
                 onClick={() => {
                   setMobileOpen(false);
                 }}
-                className="flex items-center justify-center gap-2 mt-4 px-6 py-3 rounded-xl text-white bg-blue-600 hover:bg-blue-700 font-semibold"
+                className="flex items-center justify-center gap-2 mt-4 px-6 py-3 rounded-xl text-white bg-[#1A1D21] hover:bg-[#2B2E33] font-semibold"
               >
                 Get Started
                 <ArrowRight size={18} />
@@ -3163,7 +3163,7 @@ function HomepageContent({
                   showCursor={true}
                   cursorCharacter="|"
                   cursorBlinkDuration={0.5}
-                  className="text-blue-600 inline-block"
+                  className="text-[#2563EB] inline-block"
                   textColors={["#2563EB"]}
                 />
               </span>
@@ -3188,7 +3188,7 @@ function HomepageContent({
             {/* CTAs */}
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <Link to="/signup">
-                <button className="group flex items-center gap-2 px-7 py-3.5 bg-blue-600 border border-blue-600 hover:border-blue-700 text-white font-semibold rounded-full text-[15px] transition-all duration-300">
+                <button className="group flex items-center gap-2 px-7 py-3.5 bg-[#1A1D21] border border-[#1A1D21] hover:border-[#2B2E33] text-white font-semibold rounded-full text-[15px] transition-all duration-300">
                   <ArrowRight
                     size={18}
                     className="text-white transition-transform duration-300 ease-out group-hover:scale-125 group-hover:rotate-12"
@@ -3199,7 +3199,7 @@ function HomepageContent({
               <button className="group flex items-center gap-2 px-7 py-3.5 bg-white border border-gray-200 hover:border-gray-300 text-gray-800 font-semibold rounded-full text-[15px] transition-all duration-300">
                 <PlayCircle
                   size={18}
-                  className="text-blue-600 transition-transform duration-300 ease-out group-hover:scale-125 group-hover:rotate-12"
+                  className="text-[#2563EB] transition-transform duration-300 ease-out group-hover:scale-125 group-hover:rotate-12"
                 />
                 Watch Demo
               </button>

@@ -1363,7 +1363,8 @@ const StrictQuizInterface: React.FC<{
   // State declarations
   const [timeLeft, setTimeLeft] = useState(quiz.duration * 60);
   const [quizStarted, setQuizStarted] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<{ [key: number]: number }>({});
