@@ -24,12 +24,8 @@ import {
   Circle,
   TrendingUp,
   Zap,
-  GraduationCap,
-  School,
-  UsersRound,
 } from "lucide-react";
 import Logo from "../../assets/logo.png";
-import DefaultProfile from "../../assets/default.jpg";
 
 // ============================================
 // DATA
@@ -84,27 +80,12 @@ const ACTIVITY = [
 // ============================================
 
 // Stat Card
-const StatCard = ({
-  value,
-  label,
-  icon: Icon,
-}: {
-  value: string;
-  label: string;
-  icon: React.ElementType;
-}) => (
-  <div className="min-w-0 flex items-center gap-3">
-    <div className="grid h-10 w-10 place-items-center rounded-full bg-[#F4F7FB]">
-      <Icon className="h-5 w-5 text-[#1A1D21]" />
-    </div>
-
-    <div>
-      <p className="text-3xl font-semibold tracking-tight text-[#1A1D21]">
-        {value}
-      </p>
-
-      <p className="truncate text-[11px] text-[#6B7280]">{label}</p>
-    </div>
+const StatCard = ({ value, label }: { value: string; label: string }) => (
+  <div className="min-w-0">
+    <p className="text-3xl font-semibold tracking-tight text-[#1A1D21]">
+      <span className="text-[#6B7280]/60">≈</span> {value}
+    </p>
+    <p className="truncate text-[11px] text-[#6B7280]">{label}</p>
   </div>
 );
 
@@ -144,11 +125,9 @@ const DashboardControls = () => (
     </div>
 
     <div className="flex shrink-0 items-end gap-10 pb-[1px]">
-      <StatCard value="18" label="Classes" icon={School} />
-
-      <StatCard value="620" label="Students" icon={GraduationCap} />
-
-      <StatCard value="42" label="Teachers" icon={UsersRound} />
+      <StatCard value="92" label="Projects" />
+      <StatCard value="75" label="Members" />
+      <StatCard value="315" label="Tasks done" />
     </div>
   </div>
 );
@@ -219,115 +198,41 @@ const WelcomeSection = () => (
 );
 
 // Profile Card - 360x270
-const ProfileCard = () => {
-  const [showStats, setShowStats] = React.useState(false);
-
-  // Replace these later with Firebase values
-  const profileImage = DefaultProfile;
-  const name = "Adam Miller";
-  const role = "Administrator";
-
-  const students = 620;
-  const teachers = 42;
-
-  const totalUsers = students + teachers;
-
-  return (
-    <div className="group relative w-[360px] h-[270px] overflow-hidden rounded-[40px] shadow-sm hover:shadow-xl transition-all duration-500">
-      {/* Background Image */}
-      <img
-        src={profileImage}
-        alt={name}
-        className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-      />
-
-      {/* Dark Gradient */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
-
-      {/* Slight dark tint */}
-      <div className="absolute inset-0 bg-black/10" />
-
-      {/* Bottom Content */}
-      <div className="absolute bottom-[20px] left-[5px] right-[8px] flex items-end justify-between">
-        {/* Name + Role */}
-        <div className="px-3">
-          <h2 className="text-[22px] font-semibold text-white leading-none drop-shadow">
-            {name}
-          </h2>
-
-          <p className="mt-1 text-[13px] text-white/75">{role}</p>
-        </div>
-
-        {/* User Count Button */}
-        <div className="relative">
-          <button
-            onClick={() => setShowStats(!showStats)}
-            className="
-    group
-    flex
-    h-[36px]
-    min-w-[120px]
-    max-w-[145px]
-    items-center
-    justify-center
-    gap-2
-    rounded-full
-    border
-    border-white/70
-    bg-white/10
-    px-4
-    text-white/95
-    backdrop-blur-md
-    shadow-lg
-    transition-all
-    duration-300
-    ease-out
-    hover:bg-white/20
-    hover:border-white
-    hover:shadow-2xl
-    hover:scale-105
-    active:scale-95
-  "
-          >
-            <Users className="h-4 w-4 text-white/90 transition-transform duration-300 group-hover:rotate-6" />
-
-            <span className="text-[12px] font-medium tracking-wide">
-              {totalUsers}
-            </span>
-          </button>
-
-          {/* Dropdown */}
-          {showStats && (
-            <div className="absolute bottom-10 right-0 w-[170px] rounded-2xl bg-white p-4 shadow-2xl">
-              <p className="mb-3 text-sm font-semibold text-[#1A1D21]">
-                Total Users
-              </p>
-
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-[#6B7280]">Students</span>
-                  <span className="font-semibold">{students}</span>
-                </div>
-
-                <div className="flex justify-between text-sm">
-                  <span className="text-[#6B7280]">Teachers</span>
-                  <span className="font-semibold">{teachers}</span>
-                </div>
-
-                <div className="my-2 border-t border-[#E5E7EB]" />
-
-                <div className="flex justify-between text-sm font-semibold">
-                  <span>Total</span>
-                  <span>{totalUsers}</span>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+const ProfileCard = () => (
+  <div className="w-[360px] h-[270px] rounded-[40px] border border-[#E8EAF0] bg-white p-6 shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col">
+    <div className="relative h-[150px] w-full overflow-hidden rounded-2xl bg-gradient-to-br from-blue-100 to-blue-200">
+      <div className="absolute inset-0 flex items-center justify-center">
+        <img
+          src="https://ui-avatars.com/api/?name=Adam+Miller&size=80&background=007BFF&color=fff&bold=true"
+          alt="Profile"
+          className="h-20 w-20 rounded-full border-2 border-white shadow-md"
+        />
       </div>
     </div>
-  );
-};
+    <div className="mt-4 flex items-center justify-between">
+      <div className="min-w-0">
+        <p className="truncate text-base font-semibold text-[#1A1D21]">
+          Adam Miller
+        </p>
+        <p className="truncate text-sm text-[#6B7280]">Product Designer</p>
+      </div>
+      <span className="shrink-0 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-[#007BFF]">
+        Active
+      </span>
+    </div>
+    <div className="mt-auto flex items-center gap-6 border-t border-[#E8EAF0] pt-4">
+      <div>
+        <p className="text-sm font-semibold text-[#1A1D21]">12</p>
+        <p className="text-[11px] text-[#6B7280]">Projects</p>
+      </div>
+      <div>
+        <p className="text-sm font-semibold text-[#1A1D21]">8</p>
+        <p className="text-[11px] text-[#6B7280]">Tasks</p>
+      </div>
+    </div>
+  </div>
+);
+
 // Progress Card - 360x270
 const ProgressCard = () => (
   <div className="w-[360px] h-[270px] rounded-[40px] border border-[#E8EAF0] bg-white p-6 shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col">
@@ -514,357 +419,28 @@ const FilesCard = () => (
 );
 
 // Team Activity Card - 720x270
-// ============================================
-// ATTENDANCE CARD (PART 1)
-// ============================================
-
-// ============================================
-// ATTENDANCE CARD (PART 2)
-// DATA + HELPERS
-// ============================================
-
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-// Generate previous/current/next month names
-const getVisibleMonths = (monthIndex: number) => {
-  const previous = MONTHS[(monthIndex - 1 + 12) % 12];
-
-  const current = MONTHS[monthIndex];
-
-  const next = MONTHS[(monthIndex + 1) % 12];
-
-  return {
-    previous,
-    current,
-    next,
-  };
-};
-
-// Calendar days generator
-const generateWeekDays = (monthIndex: number, selectedDay: number) => {
-  const days = [];
-
-  const year = new Date().getFullYear();
-
-  const totalDays = new Date(year, monthIndex + 1, 0).getDate();
-
-  /*
-    Creates a Monday-Saturday view.
-    Later this can connect directly
-    with Firebase attendance dates.
-  */
-
-  const week = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-
-  let startDate = selectedDay - 2;
-
-  if (startDate < 1) {
-    startDate = 1;
-  }
-
-  for (let i = 0; i < 5; i++) {
-    let date = startDate + i;
-
-    if (date > totalDays) {
-      date = date - totalDays;
-    }
-
-    days.push({
-      day: week[i],
-      date,
-    });
-  }
-
-  return days;
-};
-
-// ============================================
-// ATTENDANCE DATA
-// Replace this later with Firebase
-// ============================================
-
-const ATTENDANCE_DATA = [
-  {
-    date: 24,
-
-    teachers: [
-      {
-        name: "John Miller",
-        class: "SS3 Science",
-        id: "1fx***92",
-        image: "https://i.pravatar.cc/100?img=12",
-      },
-
-      {
-        name: "Sarah Adams",
-        class: "JSS2 Gold",
-        id: "4ab***81",
-        image: "https://i.pravatar.cc/100?img=32",
-      },
-
-      {
-        name: "Michael James",
-        class: "SS1 Blue",
-        id: "7cd***44",
-        image: "https://i.pravatar.cc/100?img=15",
-      },
-
-      {
-        name: "David Paul",
-        class: "JSS3 Green",
-        id: "9ef***21",
-        image: "https://i.pravatar.cc/100?img=20",
-      },
-    ],
-
-    students: [
-      {
-        name: "Daniel Smith",
-        class: "SS2 Red",
-        id: "stu***81",
-        image: "https://i.pravatar.cc/100?img=5",
-      },
-
-      {
-        name: "Mary Johnson",
-        class: "SS1 Blue",
-        id: "stu***92",
-        image: "https://i.pravatar.cc/100?img=44",
-      },
-
-      {
-        name: "Chris Adams",
-        class: "JSS3 Gold",
-        id: "stu***45",
-        image: "https://i.pravatar.cc/100?img=8",
-      },
-
-      {
-        name: "Peter James",
-        class: "SS3 Science",
-        id: "stu***77",
-        image: "https://i.pravatar.cc/100?img=14",
-      },
-    ],
-  },
-
-  {
-    date: 25,
-
-    teachers: [
-      {
-        name: "Grace Wilson",
-        class: "SS2 Arts",
-        id: "2aa***54",
-        image: "https://i.pravatar.cc/100?img=47",
-      },
-    ],
-
-    students: [
-      {
-        name: "Samuel Peter",
-        class: "SS1 Science",
-        id: "stu***33",
-        image: "https://i.pravatar.cc/100?img=60",
-      },
-    ],
-  },
-];
-
-const TeamActivityCard = () => {
-  const [selectedMonth, setSelectedMonth] = React.useState(
-    new Date().getMonth(),
-  );
-  const [selectedDay, setSelectedDay] = React.useState(new Date().getDate());
-
-  const [showTeachers, setShowTeachers] = React.useState(false);
-  const [showStudents, setShowStudents] = React.useState(false);
-
-  // These will come from Part 2
-  const monthData = getVisibleMonths(selectedMonth);
-  const calendarDays = generateWeekDays(selectedMonth, selectedDay);
-
-  const attendance =
-    ATTENDANCE_DATA.find((item) => item.date === selectedDay) ||
-    ATTENDANCE_DATA[0];
-
-  return (
-    <div className="w-[720px] h-[270px] rounded-[40px] border border-[#E8EAF0] bg-white p-5 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col">
-      {/* ================================================= */}
-      {/* ROW 1 */}
-      {/* ================================================= */}
-
-      <div className="h-[105px] rounded-3xl bg-[#F8FAFC] px-4 py-3">
-        {/* Month Navigation */}
-
-        <div className="relative flex items-center justify-center  h-8">
-          <button
-            onClick={() => setSelectedMonth((m) => Math.max(0, m - 1))}
-            className="absolute left-0 rounded-full px-3 py-1 text-sm font-medium text-[#6B7280] transition-all hover:bg-white hover:text-[#007BFF]"
-          >
-            {monthData.previous}
-          </button>
-
-          <button className="rounded-full bg-transparent border border-[#1A1D21] px-5 py-1 text-sm font-semibold text-[#1A1D21]">
-            {monthData.current}
-          </button>
-
-          <button
-            onClick={() => setSelectedMonth((m) => Math.min(11, m + 1))}
-            className="absolute right-0 rounded-full px-3 py-1 text-sm font-medium text-[#6B7280] transition-all hover:bg-white hover:text-[#007BFF]"
-          >
-            {monthData.next}
-          </button>
-        </div>
-
-        {/* Calendar */}
-
-        <div className="mt-2 grid grid-cols-5 gap-1">
-          {calendarDays.map((day) => (
-            <button
-              key={day.date}
-              onClick={() => setSelectedDay(day.date)}
-              className={`rounded-xl py-1 transition-all duration-300 hover:scale-105 ${
-                day.date === selectedDay
-                  ? "bg-[#1A1D21] border border-[#ffff] text-[#ffff]"
-                  : "hover:bg-white"
-              }`}
-            >
-              <p
-                className={`text-[11px] ${
-                  day.date === selectedDay ? "text-white/80" : "text-[#6B7280]"
-                }`}
-              >
-                {day.day}
-              </p>
-
-              <p className="mt-1 text-[17px] font-semibold">{day.date}</p>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ================================================= */}
-      {/* ROW 2 */}
-      {/* ================================================= */}
-
-      <div className="mt-2 rounded-2xl border border-[#EEF2F7] px-3 py-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img
-              src={attendance.teachers[0].image}
-              className="h-8 w-8 rounded-full object-cover border border-[#E8EAF0]"
+const TeamActivityCard = () => (
+  <div className="w-[720px] h-[270px] rounded-[40px] border border-[#E8EAF0] bg-white p-6 shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col">
+    <p className="text-[13px] font-medium text-[#6B7280]">Team activity</p>
+    <div className="mt-5 space-y-4 flex-1">
+      {ACTIVITY.map((item) => (
+        <div key={item.name}>
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium text-[#1A1D21]">{item.name}</span>
+            <span className="text-sm text-[#6B7280]">{item.value}%</span>
+          </div>
+          <div className="mt-1.5 h-1.5 w-full rounded-full bg-[#F3F4F6]">
+            <div
+              className="h-1.5 rounded-full bg-gradient-to-r from-[#38BDF8] via-[#007BFF] to-[#0056B3] transition-all duration-1000"
+              style={{ width: `${item.value}%` }}
             />
-
-            <div className="min-w-0">
-              <p className="truncate text-xs font-semibold text-[#1A1D21]">
-                {attendance.teachers[0].name}
-                <span className="font-normal text-[#6B7280]">
-                  {" "}
-                  · {attendance.teachers[0].class} · {attendance.teachers[0].id}
-                </span>
-              </p>
-            </div>
           </div>
-
-          <button
-            onClick={() => setShowTeachers(!showTeachers)}
-            className="rounded-full bg-[#F4F7FB] px-4 py-2 text-xs font-semibold transition hover:bg-[#007BFF] hover:text-white"
-          >
-            +{attendance.teachers.length - 1}
-          </button>
         </div>
-
-        {showTeachers && (
-          <div className="mt-4 max-h-[120px] overflow-y-auto space-y-3 border-t border-[#EEF2F7] pt-4">
-            {attendance.teachers.map((teacher) => (
-              <div key={teacher.id} className="flex items-center gap-3">
-                <img
-                  src={teacher.image}
-                  className="h-9 w-9 rounded-full object-cover"
-                />
-
-                <div>
-                  <p className="text-sm font-medium">{teacher.name}</p>
-
-                  <p className="text-[11px] text-[#6B7280]">{teacher.class}</p>
-
-                  <p className="text-[10px] text-[#9CA3AF]">{teacher.id}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ================================================= */}
-      {/* ROW 3 */}
-      {/* ================================================= */}
-
-      <div className="mt-2 rounded-2xl border border-[#EEF2F7] px-3 py-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img
-              src={attendance.students[0].image}
-              className="h-8 w-8 rounded-full object-cover border border-[#E8EAF0]"
-            />
-
-            <div className="min-w-0">
-              <p className="truncate text-xs font-semibold text-[#1A1D21]">
-                {attendance.students[0].name}
-                <span className="font-normal text-[#6B7280]">
-                  {" "}
-                  · {attendance.students[0].class} · {attendance.students[0].id}
-                </span>
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setShowStudents(!showStudents)}
-            className="rounded-full bg-[#F4F7FB] px-4 py-2 text-xs font-semibold transition hover:bg-[#007BFF] hover:text-white"
-          >
-            +{attendance.students.length - 1}
-          </button>
-        </div>
-
-        {showStudents && (
-          <div className="mt-4 max-h-[120px] overflow-y-auto space-y-3 border-t border-[#EEF2F7] pt-4">
-            {attendance.students.map((student) => (
-              <div key={student.id} className="flex items-center gap-3">
-                <img
-                  src={student.image}
-                  className="h-9 w-9 rounded-full object-cover"
-                />
-
-                <div>
-                  <p className="text-sm font-medium">{student.name}</p>
-
-                  <p className="text-[11px] text-[#6B7280]">{student.class}</p>
-
-                  <p className="text-[10px] text-[#9CA3AF]">{student.id}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      ))}
     </div>
-  );
-};
+  </div>
+);
+
 // ============================================
 // MAIN DASHBOARD
 // ============================================

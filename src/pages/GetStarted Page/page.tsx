@@ -1,623 +1,438 @@
 // src/pages/signup.tsx
-import { useState, FormEvent } from "react";
+import { useState, useEffect, useRef, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff, ArrowLeft, Check } from "lucide-react";
+import { Eye, EyeOff, CheckCircle2, AlertCircle, X } from "lucide-react";
 import {
   createUserWithEmailAndPassword,
-  signInWithPopup,
-  sendEmailVerification,
   fetchSignInMethodsForEmail,
+  sendEmailVerification,
+  signInWithPopup,
   updateProfile,
+  User,
 } from "firebase/auth";
-import { doc, setDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db, googleProvider, appleProvider } from "../../firebase/config";
 import auth_wallpaper from "../../assets/auth_wallpaper.mp4";
 import Logo from "../../assets/logo.png";
 
-const ADMIN_CODE = "mini-fcmb";
-const MAX_ADMIN_ATTEMPTS = 3;
-const ATTEMPT_KEY = "adminCodeAttempts";
+/**
+ * ── Admin dashboard destination ──
+ * Update this to match your project's actual admin dashboard route if it
+ * differs from this placeholder.
+ */
+const ADMIN_DASHBOARD_ROUTE = "/admin/dashboard";
 
-const DASHBOARD_ROUTES = {
-  teacher: "/teachers",
-  student: "/students",
-} as const;
+/** Minimum seconds between resend-verification-email requests. */
+const RESEND_COOLDOWN_SECONDS = 60;
 
-// Helper function to normalize class names
-const normalizeClassName = (className: string): string => {
-  if (!className) return "";
-  const trimmed = className.trim();
-  const match = trimmed.match(/^([A-Za-z]+)(\d+)$/);
-  if (match) {
-    return `${match[1]} ${match[2]}`;
+interface FormErrors {
+  schoolName?: string;
+  adminName?: string;
+  phone?: string;
+  email?: string;
+  password?: string;
+  adminCode?: string;
+  general?: string;
+}
+
+type ToastType = "success" | "error";
+
+interface ToastState {
+  message: string;
+  type: ToastType;
+}
+
+const ADMIN_REFERENCE_CODE = "mini-fcmb";
+
+async function validateAdminCode(
+  code: string,
+): Promise<{ valid: boolean; error?: string }> {
+  const trimmed = code.trim();
+  if (!trimmed)
+    return { valid: false, error: "Admin reference code is required." };
+
+  if (trimmed !== ADMIN_REFERENCE_CODE) {
+    return { valid: false, error: "Invalid admin reference code." };
   }
-  return trimmed;
-};
 
-// Subjects configuration based on class levels
-const SUBJECTS_BY_LEVEL = {
-  "Primary 5-6": [
-    "Mathematics",
-    "English Language",
-    "Basic Science",
-    "Igbo Language",
-    "Basic Digital Literacy",
-    "History",
-    "CCA (Creative & Cultural Arts)",
-    "Social and Citizenship Education",
-    "CRS (Christian Religious Studies)",
-    "Prevocational Studies (PVS)",
-    "French",
-    "Music",
-    "PHE (Physical & Health Education)",
-  ],
-  "JSS 1-3": [
-    "Mathematics",
-    "English Language",
-    "Basic Science",
-    "Basic Technology",
-    "French",
-    "Igbo Language",
-    "Music",
-    "CCA (Creative & Cultural Arts)",
-    "PHE (Physical & Health Education)",
-    "Social Studies",
-    "Business Studies",
-    "CRS (Christian Religious Studies)",
-    "Computer Studies",
-    "History",
-    "Agricultural Science",
-    "Civic Education",
-    "Home Economics",
-    "Livestock Farming",
-    "Literature in English",
-    "Test of Orals",
-  ],
-  "SSS 1-3": [
-    "Mathematics",
-    "English Language",
-    "Physics",
-    "Chemistry",
-    "Biology",
-    "Further Mathematics",
-    "Literature in English",
-    "Igbo Language",
-    "French",
-    "Geography",
-    "CRS (Christian Religious Studies)",
-    "Economics",
-    "Marketing",
-    "Government",
-    "Computer Science",
-    "Civic Education",
-    "Accounting",
-    "Agricultural Science",
-    "Test of Orals",
-  ],
-};
+  return { valid: true };
+}
 
-const ALL_CLASSES = [
-  "Primary 5",
-  "Primary 6",
-  "JSS 1",
-  "JSS 2",
-  "JSS 3",
-  "SSS 1",
-  "SSS 2",
-  "SSS 3",
-];
+/** Returns true if an account already exists for this email. */
+async function checkEmailExists(email: string): Promise<boolean> {
+  const methods = await fetchSignInMethodsForEmail(auth, email);
+  return methods.length > 0;
+}
+
+interface SchoolAdminProfileData {
+  schoolName: string;
+  adminName: string;
+  phone: string;
+  email: string;
+}
+
+async function writeSchoolAdminDocuments(
+  uid: string,
+  data: SchoolAdminProfileData,
+): Promise<string> {
+  const schoolId = uid;
+  const { schoolName, adminName, phone, email } = data;
+
+  await setDoc(doc(db, "schools", schoolId), {
+    schoolName,
+    adminName,
+    phone,
+    email,
+    adminUid: uid,
+    createdAt: serverTimestamp(),
+  });
+
+  await setDoc(doc(db, "users", uid), {
+    uid,
+    fullName: adminName,
+    email,
+    phone,
+    role: "admin",
+    schoolId,
+    schoolName,
+    createdAt: serverTimestamp(),
+  });
+
+  return schoolId;
+}
+
+interface SchoolAdminSignupData extends SchoolAdminProfileData {
+  password: string;
+}
+
+/** Full email/password school-admin signup: auth user + Firestore docs + verification email. */
+async function createSchoolAdminAccount(
+  data: SchoolAdminSignupData,
+): Promise<User> {
+  const { schoolName, adminName, phone, email, password } = data;
+
+  const credential = await createUserWithEmailAndPassword(
+    auth,
+    email,
+    password,
+  );
+  const user = credential.user;
+
+  await updateProfile(user, { displayName: adminName });
+  await writeSchoolAdminDocuments(user.uid, {
+    schoolName,
+    adminName,
+    phone,
+    email,
+  });
+  await sendEmailVerification(user);
+
+  return user;
+}
 
 export default function Signup() {
   const navigate = useNavigate();
 
   // ───── Form State ─────
-  const [userType, setUserType] = useState<"teacher" | "student">("teacher");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [schoolName, setSchoolName] = useState("");
+  const [adminName, setAdminName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [className, setClassName] = useState("");
   const [adminCodeInput, setAdminCodeInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
 
-  // ───── Custom Select State ─────
-  const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [socialSchoolName, setSocialSchoolName] = useState("");
+  const [socialPhone, setSocialPhone] = useState("");
+  const [socialAdminCode, setSocialAdminCode] = useState("");
+  const [socialInfo, setSocialInfo] = useState({ adminName: "", email: "" });
+  const [socialError, setSocialError] = useState("");
 
-  // ───── Google/Apple Info Modal ─────
-  const [showInfoModal, setShowInfoModal] = useState(false);
-  const [info, setInfo] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
-    className: "",
-  });
+  const [signupComplete, setSignupComplete] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [checkingVerification, setCheckingVerification] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
-  // ───── Admin Modal (only for social signup) ─────
-  const [showAdminModal, setShowAdminModal] = useState(false);
-  const [adminAttempts, setAdminAttempts] = useState(() => {
-    const saved = localStorage.getItem(ATTEMPT_KEY);
-    return saved ? parseInt(saved, 10) : 0;
-  });
+  // ───── Toast ─────
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ───── Subject Selection Modal ─────
-  const [showSubjectsModal, setShowSubjectsModal] = useState(false);
-  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
-  const [tempUserData, setTempUserData] = useState<any>(null);
-
-  // ───── Teacher Classes & Subjects Modal ─────
-  const [showTeacherClassesModal, setShowTeacherClassesModal] = useState(false);
-  const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
-  const [teacherSubjects, setTeacherSubjects] = useState<{
-    [key: string]: string[];
-  }>({});
-
-  const fullName = `${firstName} ${lastName}`.trim();
-
-  // ───── Helper: Get subjects based on class ─────
-  const getSubjectsForClass = (className: string) => {
-    if (className.includes("Primary")) {
-      return SUBJECTS_BY_LEVEL["Primary 5-6"];
-    } else if (className.includes("JSS")) {
-      return SUBJECTS_BY_LEVEL["JSS 1-3"];
-    } else if (className.includes("SSS")) {
-      return SUBJECTS_BY_LEVEL["SSS 1-3"];
-    }
-    return [];
+  const showToast = (message: string, type: ToastType = "success") => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ message, type });
+    toastTimerRef.current = setTimeout(() => setToast(null), 7000);
   };
 
-  // ───── Helper: Get class level ─────
-  const getClassLevel = (className: string): keyof typeof SUBJECTS_BY_LEVEL => {
-    if (className.includes("Primary")) return "Primary 5-6";
-    if (className.includes("JSS")) return "JSS 1-3";
-    if (className.includes("SSS")) return "SSS 1-3";
-    return "Primary 5-6";
+  const closeToast = () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(null);
   };
 
-  const saveUserToFirestore = async (uid: string, data: any) => {
-    const collection = userType === "teacher" ? "teachers" : "students";
-
-    const normalizedData = {
-      ...data,
-      className: data.className ? normalizeClassName(data.className) : "",
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
+  }, []);
 
-    await setDoc(doc(db, collection, uid), normalizedData);
-    console.log(
-      `[Firestore] Saved ${userType} ${uid} with className: ${normalizedData.className}`,
+  // Countdown for the resend-verification cooldown, ticking once per second.
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = setTimeout(
+      () => setResendCooldown((s) => Math.max(0, s - 1)),
+      1000,
     );
-  };
+    return () => clearTimeout(id);
+  }, [resendCooldown]);
 
-  // ───── Teacher Classes Selection Handlers ─────
-  const handleTeacherClassToggle = (className: string) => {
-    setSelectedClasses((prev) => {
-      const newClasses = prev.includes(className)
-        ? prev.filter((c) => c !== className)
-        : [...prev, className];
+  const validateForm = (): boolean => {
+    const next: FormErrors = {};
 
-      const newTeacherSubjects = { ...teacherSubjects };
-      if (!prev.includes(className)) {
-        newTeacherSubjects[className] = [];
-      } else {
-        delete newTeacherSubjects[className];
-      }
-      setTeacherSubjects(newTeacherSubjects);
+    if (!schoolName.trim()) next.schoolName = "School name is required.";
+    if (!adminName.trim()) next.adminName = "Admin full name is required.";
+    if (!phone.trim()) next.phone = "Phone number is required.";
+    if (!email.trim()) next.email = "Email address is required.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      next.email = "Enter a valid email address.";
+    if (!password) next.password = "Password is required.";
+    else if (password.length < 8)
+      next.password = "Password must be at least 8 characters.";
+    if (!adminCodeInput.trim())
+      next.adminCode = "Admin reference code is required.";
 
-      return newClasses;
-    });
-  };
-
-  const handleSelectAllClasses = () => {
-    if (selectedClasses.length === ALL_CLASSES.length) {
-      setSelectedClasses([]);
-      setTeacherSubjects({});
-    } else {
-      setSelectedClasses(ALL_CLASSES);
-      const newTeacherSubjects: { [key: string]: string[] } = {};
-      ALL_CLASSES.forEach((cls) => {
-        newTeacherSubjects[cls] = [];
-      });
-      setTeacherSubjects(newTeacherSubjects);
-    }
-  };
-
-  const handleTeacherSubjectToggle = (className: string, subject: string) => {
-    setTeacherSubjects((prev) => {
-      const currentSubjects = prev[className] || [];
-      const newSubjects = currentSubjects.includes(subject)
-        ? currentSubjects.filter((s) => s !== subject)
-        : [...currentSubjects, subject];
-
-      return {
-        ...prev,
-        [className]: newSubjects,
-      };
-    });
-  };
-
-  const handleSelectAllSubjectsForClass = (className: string) => {
-    const availableSubjects = getSubjectsForClass(className);
-    const currentSubjects = teacherSubjects[className] || [];
-
-    setTeacherSubjects((prev) => ({
-      ...prev,
-      [className]:
-        currentSubjects.length === availableSubjects.length
-          ? []
-          : availableSubjects,
-    }));
-  };
-
-  const handleTeacherClassesSubmit = async () => {
-    if (selectedClasses.length === 0) {
-      alert("Please select at least one class to teach.");
-      return;
-    }
-
-    for (const className of selectedClasses) {
-      if (
-        !teacherSubjects[className] ||
-        teacherSubjects[className].length === 0
-      ) {
-        alert(`Please select at least one subject for ${className}`);
-        return;
-      }
-    }
-
-    setIsLoading(true);
-    try {
-      if (tempUserData && tempUserData.type === "email") {
-        const { email, password, userData } = tempUserData;
-
-        const cred = await createUserWithEmailAndPassword(
-          auth,
-          email,
-          password,
-        );
-        const user = cred.user;
-
-        await updateProfile(user, { displayName: userData.fullName });
-
-        const teacherData = {
-          ...userData,
-          classes: selectedClasses,
-          subjects: teacherSubjects,
-          createdAt: serverTimestamp(),
-        };
-
-        await saveUserToFirestore(user.uid, teacherData);
-
-        await sendEmailVerification(user);
-        console.log("[Email] Verification email sent");
-
-        alert(
-          "Teacher account created! Check your inbox to verify your email, then log in.",
-        );
-        setShowTeacherClassesModal(false);
-        setTempUserData(null);
-        navigate("/login");
-        return;
-      }
-
-      const user = auth.currentUser;
-      if (!user) {
-        alert("Session expired. Please try again.");
-        navigate("/login");
-        return;
-      }
-
-      await updateDoc(doc(db, "teachers", user.uid), {
-        classes: selectedClasses,
-        subjects: teacherSubjects,
-        updatedAt: serverTimestamp(),
-      });
-
-      console.log(
-        "[Firestore] Updated classes and subjects for teacher",
-        user.uid,
-      );
-
-      setShowTeacherClassesModal(false);
-      setSelectedClasses([]);
-      setTeacherSubjects({});
-
-      if (user.emailVerified) {
-        navigate(DASHBOARD_ROUTES.teacher);
-      } else {
-        alert("Please verify your email before accessing the dashboard.");
-        navigate("/login");
-      }
-    } catch (error: any) {
-      console.error("[Teacher Classes] Save failed:", error);
-      alert("Failed to save classes and subjects: " + error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ───── Student Subject Selection Handlers ─────
-  const handleSubjectToggle = (subject: string) => {
-    setSelectedSubjects((prev) =>
-      prev.includes(subject)
-        ? prev.filter((s) => s !== subject)
-        : [...prev, subject],
-    );
-  };
-
-  const handleSelectAllSubjects = () => {
-    const currentLevel = getClassLevel(className);
-    const availableSubjects = SUBJECTS_BY_LEVEL[currentLevel];
-
-    if (selectedSubjects.length === availableSubjects.length) {
-      setSelectedSubjects([]);
-    } else {
-      setSelectedSubjects([...availableSubjects]);
-    }
-  };
-
-  const handleSubjectsSubmit = async () => {
-    if (selectedSubjects.length === 0) {
-      alert("Please select at least one subject.");
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      if (tempUserData && tempUserData.type === "email") {
-        const { email, password, userData } = tempUserData;
-
-        const cred = await createUserWithEmailAndPassword(
-          auth,
-          email,
-          password,
-        );
-        const user = cred.user;
-
-        await updateProfile(user, { displayName: userData.fullName });
-
-        await saveUserToFirestore(user.uid, {
-          ...userData,
-          subjects: selectedSubjects,
-          createdAt: serverTimestamp(),
-        });
-
-        await sendEmailVerification(user);
-        console.log("[Email] Verification email sent");
-
-        alert(
-          "Account created! Check your inbox to verify your email, then log in.",
-        );
-        setShowSubjectsModal(false);
-        setTempUserData(null);
-        navigate("/login");
-        return;
-      }
-
-      const user = auth.currentUser;
-      if (!user) {
-        alert("Session expired. Please try again.");
-        navigate("/login");
-        return;
-      }
-
-      await updateDoc(doc(db, "students", user.uid), {
-        subjects: selectedSubjects,
-        updatedAt: serverTimestamp(),
-      });
-
-      console.log("[Firestore] Updated subjects for student", user.uid);
-
-      setShowSubjectsModal(false);
-      setSelectedSubjects([]);
-
-      if (user.emailVerified) {
-        navigate(DASHBOARD_ROUTES.student);
-      } else {
-        alert("Please verify your email before accessing the dashboard.");
-        navigate("/login");
-      }
-    } catch (error: any) {
-      console.error("[Subjects] Save failed:", error);
-      alert("Failed to save subjects: " + error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ───── Admin Code Handlers (only for social signup) ─────
-  const handleWrongAdminCode = () => {
-    const next = adminAttempts + 1;
-    setAdminAttempts(next);
-    localStorage.setItem(ATTEMPT_KEY, next.toString());
-    setAdminCodeInput("");
-
-    if (next >= MAX_ADMIN_ATTEMPTS) {
-      alert("Too many attempts. Try again later.");
-      resetAndRedirect();
-    } else {
-      alert(`Invalid code. ${MAX_ADMIN_ATTEMPTS - next} attempt(s) left.`);
-    }
-  };
-
-  const confirmAdminCode = async () => {
-    if (adminCodeInput !== ADMIN_CODE) {
-      handleWrongAdminCode();
-      return;
-    }
-
-    setShowAdminModal(false);
-    setShowTeacherClassesModal(true);
-  };
-
-  const resetAndRedirect = () => {
-    localStorage.removeItem(ATTEMPT_KEY);
-    setAdminAttempts(0);
-    setShowAdminModal(false);
-    setShowInfoModal(false);
-    setShowSubjectsModal(false);
-    setShowTeacherClassesModal(false);
-    setAdminCodeInput("");
-    setSelectedSubjects([]);
-    setSelectedClasses([]);
-    setTeacherSubjects({});
-    setTempUserData(null);
-    auth.signOut();
-    navigate("/signup", { replace: true });
-  };
-
-  // ───── Google / Apple Provider Handler ─────
-  const handleProvider = async (
-    provider: typeof googleProvider | typeof appleProvider,
-  ) => {
-    try {
-      const res = await signInWithPopup(auth, provider);
-      const user = res.user;
-
-      const methods = await fetchSignInMethodsForEmail(auth, user.email!);
-
-      if (methods.length > 0) {
-        alert("This email is already registered. Please sign in instead.");
-        await auth.signOut();
-        navigate("/login");
-        return;
-      }
-
-      const [first = "", ...lastParts] = (user.displayName ?? "").split(" ");
-      const last = lastParts.join(" ");
-      setFirstName(first);
-      setLastName(last);
-      setEmail(user.email ?? "");
-      setPhone(user.phoneNumber ?? "");
-      setInfo({
-        fullName: user.displayName ?? "",
-        email: user.email ?? "",
-        phone: user.phoneNumber ?? "",
-        className: "",
-      });
-      setShowInfoModal(true);
-    } catch (err: any) {
-      if (err.code !== "auth/popup-closed-by-user") {
-        console.error("[Provider] Error:", err);
-        alert(err.message || "Sign in failed.");
-      }
-    }
-  };
-
-  // ───── Confirm Google/Apple Info ─────
-  const confirmInfo = async () => {
-    const user = auth.currentUser;
-    if (!user) {
-      alert("Session lost. Please try again.");
-      navigate("/login");
-      return;
-    }
-
-    const baseData = {
-      fullName: info.fullName,
-      email: info.email,
-      phone: info.phone,
-      className: normalizeClassName(info.className),
-      createdAt: serverTimestamp(),
-    };
-
-    try {
-      await saveUserToFirestore(user.uid, baseData);
-      console.log("[Provider] Profile saved to Firestore");
-
-      if (!user.emailVerified) {
-        await sendEmailVerification(user);
-        console.log("[Provider] Verification email sent");
-      }
-
-      setShowInfoModal(false);
-
-      if (userType === "teacher") {
-        const normalizedClass = normalizeClassName(info.className);
-        setSelectedClasses([normalizedClass]);
-        setTeacherSubjects({
-          [normalizedClass]: [],
-        });
-        setShowAdminModal(true);
-        return;
-      }
-
-      setClassName(info.className);
-      setShowSubjectsModal(true);
-    } catch (err: any) {
-      console.error("[Provider] Save failed:", err);
-      alert("Failed to save profile: " + err.message);
-    }
+    setErrors(next);
+    return Object.keys(next).length === 0;
   };
 
   // ───── Email/Password Signup ─────
   const handleEmailSignup = async (e: FormEvent) => {
     e.preventDefault();
+    setErrors({});
+
+    if (!validateForm()) return;
+
     setIsLoading(true);
 
     try {
-      const methods = await fetchSignInMethodsForEmail(auth, email);
-
-      if (methods.length > 0) {
-        alert("This email is already registered. Please sign in instead.");
-        navigate("/login");
+      // 1. Validate the admin/reference code first.
+      const codeCheck = await validateAdminCode(adminCodeInput);
+      if (!codeCheck.valid) {
+        setErrors({
+          adminCode: codeCheck.error || "Invalid admin reference code.",
+        });
         setIsLoading(false);
         return;
       }
-    } catch (error: any) {
-      console.error("[Email Check] Error:", error);
-    }
 
-    if (userType === "teacher") {
-      if (adminCodeInput !== ADMIN_CODE) {
-        handleWrongAdminCode();
+      // 2. Make sure the email isn't already registered.
+      const emailExists = await checkEmailExists(email);
+      if (emailExists) {
+        setErrors({
+          email: "This email is already registered. Please sign in instead.",
+        });
         setIsLoading(false);
         return;
       }
-    }
 
-    try {
-      const userData = {
-        fullName,
-        email,
-        phone,
-        className: normalizeClassName(className),
-        createdAt: serverTimestamp(),
-        subjects: userType === "student" ? [] : undefined,
-      };
-      if (userType === "teacher") {
-        const normalizedClass = normalizeClassName(className);
-        setSelectedClasses([normalizedClass]);
-        setTeacherSubjects({
-          [normalizedClass]: [],
-        });
+      // 3. Create the Firebase Auth user + Firestore school/admin documents,
+      //    and send the verification email.
+      const user = await createSchoolAdminAccount({
+        schoolName: schoolName.trim(),
+        adminName: adminName.trim(),
+        phone: phone.trim(),
+        email: email.trim(),
+        password,
+      });
 
-        setTempUserData({
-          type: "email",
-          email,
-          password,
-          userData,
-        });
-        setShowTeacherClassesModal(true);
-      } else {
-        setTempUserData({
-          type: "email",
-          email,
-          password,
-          userData,
-        });
-        setShowSubjectsModal(true);
-      }
+      // 4. Stay on this page — show the success toast + verification state
+      //    instead of redirecting to /login.
+      setPendingEmail(user.email || email.trim());
+      setSignupComplete(true);
+      showToast(
+        "Account created successfully. Please verify your email to continue.",
+        "success",
+      );
     } catch (err: any) {
-      console.error("[Email] Signup error:", err.code);
+      console.error("[Signup] Error:", err.code || err);
       if (err.code === "auth/email-already-in-use") {
-        alert("This email is already registered. Please sign in.");
-        navigate("/login");
+        setErrors({
+          email: "This email is already registered. Please sign in.",
+        });
+      } else if (err.code === "auth/weak-password") {
+        setErrors({ password: "Please choose a stronger password." });
+      } else if (err.code === "auth/network-request-failed") {
+        setErrors({
+          general: "Network error. Please check your connection and try again.",
+        });
       } else {
-        alert(err.message || "Signup failed. Please try again.");
+        setErrors({
+          general: err.message || "Signup failed. Please try again.",
+        });
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // ───── Google / Apple ─────
+  const handleProvider = async (
+    provider: typeof googleProvider | typeof appleProvider,
+  ) => {
+    setErrors({});
+    try {
+      const res = await signInWithPopup(auth, provider);
+      const user = res.user;
+
+      setSocialInfo({
+        adminName: user.displayName ?? "",
+        email: user.email ?? "",
+      });
+      setSocialPhone(user.phoneNumber ?? "");
+      setSocialSchoolName("");
+      setSocialAdminCode("");
+      setSocialError("");
+      setShowCompleteModal(true);
+    } catch (err: any) {
+      if (err.code !== "auth/popup-closed-by-user") {
+        console.error("[Provider] Error:", err);
+        setErrors({
+          general: err.message || "Sign in failed. Please try again.",
+        });
+      }
+    }
+  };
+
+  const cancelSocialSignup = async () => {
+    setShowCompleteModal(false);
+    // The auth account exists but no school/admin docs were written for it —
+    // remove it so it isn't left as an orphaned, role-less account.
+    try {
+      await auth.currentUser?.delete();
+    } catch (err) {
+      console.error("[Provider] Cleanup failed:", err);
+      await auth.signOut();
+    }
+  };
+
+  const confirmSocialSignup = async () => {
+    setSocialError("");
+
+    if (
+      !socialSchoolName.trim() ||
+      !socialPhone.trim() ||
+      !socialAdminCode.trim()
+    ) {
+      setSocialError("All fields are required.");
+      return;
+    }
+
+    const user = auth.currentUser;
+    if (!user || !user.email) {
+      setSocialError("Session expired. Please try signing in again.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const codeCheck = await validateAdminCode(socialAdminCode);
+      if (!codeCheck.valid) {
+        setSocialError(codeCheck.error || "Invalid admin reference code.");
+        setIsLoading(false);
+        return;
+      }
+
+      await writeSchoolAdminDocuments(user.uid, {
+        schoolName: socialSchoolName.trim(),
+        adminName: socialInfo.adminName || user.displayName || "",
+        phone: socialPhone.trim(),
+        email: user.email,
+      });
+
+      setShowCompleteModal(false);
+
+      if (user.emailVerified) {
+        // Provider account was already verified — no need to wait.
+        showToast("Account created successfully.", "success");
+        navigate("../Admin Dashboard/page");
+        return;
+      }
+
+      await sendEmailVerification(user);
+      setPendingEmail(user.email);
+      setSignupComplete(true);
+      showToast(
+        "Account created successfully. Please verify your email to continue.",
+        "success",
+      );
+    } catch (err: any) {
+      console.error("[Provider] Completion failed:", err);
+      setSocialError(err.message || "Something went wrong. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ───── Post-signup verification actions ─────
+  const handleCheckVerification = async () => {
+    setCheckingVerification(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        showToast("Your session has expired. Please sign in again.", "error");
+        return;
+      }
+
+      // Firebase Auth user objects can be stale — reload before checking.
+      await user.reload();
+      const refreshedUser = auth.currentUser;
+
+      if (refreshedUser?.emailVerified) {
+        navigate("../Admin Dashboard/page");
+      } else {
+        showToast(
+          "Your email hasn't been verified yet. Please check your inbox and try again.",
+          "error",
+        );
+      }
+    } catch (err: any) {
+      console.error("[Verification] Check failed:", err);
+      showToast(
+        err.message || "Could not check verification status. Please try again.",
+        "error",
+      );
+    } finally {
+      setCheckingVerification(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (resendCooldown > 0 || resending) return;
+
+    const user = auth.currentUser;
+    if (!user) {
+      showToast("Your session has expired. Please sign in again.", "error");
+      return;
+    }
+
+    setResending(true);
+    try {
+      await sendEmailVerification(user);
+      showToast(
+        "Verification email resent. Please check your inbox.",
+        "success",
+      );
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+    } catch (err: any) {
+      console.error("[Verification] Resend failed:", err);
+      showToast(
+        err.message || "Could not resend verification email. Please try again.",
+        "error",
+      );
+    } finally {
+      setResending(false);
     }
   };
 
@@ -646,8 +461,18 @@ export default function Signup() {
 
         * { box-sizing: border-box; }
 
+        .signup-page {
+          position: relative;
+          min-height: 100vh;
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+        }
+
         .modal-backdrop {
-          position: absolute;
+          position: fixed;
           inset: 0;
           background: rgba(8, 10, 30, 0.4);
           backdrop-filter: blur(8px);
@@ -661,11 +486,10 @@ export default function Signup() {
         }
 
         .signup-card {
-          position:fixed;
+          position: relative;
           display: flex;
           width: 100%;
           min-height: 640px;
-          max-height: 8vh;
           background: #ffffff;
           border-radius: var(--radius-xl);
           box-shadow: var(--shadow-card);
@@ -679,6 +503,7 @@ export default function Signup() {
           overflow-y: auto;
           display: flex;
           flex-direction: column;
+          min-width: 0;
         }
         .form-panel::-webkit-scrollbar { width: 6px; }
         .form-panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
@@ -700,42 +525,13 @@ export default function Signup() {
           cursor: pointer;
           transition: opacity 0.2s ease;
         }
-        .brand-mark:hover {
-          opacity: 0.8;
-        }
+        .brand-mark:hover { opacity: 0.8; }
         .brand-name {
           font-family: 'Plus Jakarta Sans', sans-serif;
           font-weight: 700;
           font-size: 15px;
           color: var(--ink);
           letter-spacing: 0.2px;
-        }
-
-        .tabs {
-          display: flex;
-          gap: 4px;
-          padding: 4px;
-          background: var(--field-bg);
-          border-radius: 999px;
-          margin-bottom: 26px;
-        }
-        .tab {
-          flex: 1;
-          padding: 11px 0;
-          border: none;
-          background: transparent;
-          border-radius: 999px;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-weight: 600;
-          font-size: 14px;
-          color: var(--ink-soft);
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-        .tab.active {
-          background: #1A1D21;
-          color: #fff;
-          box-shadow: 0 8px 18px -6px rgba(29, 42, 107, 0.55);
         }
 
         .signup-form h2 {
@@ -750,6 +546,7 @@ export default function Signup() {
           font-size: 14px;
           color: var(--ink-soft);
           margin: 0 0 24px;
+          line-height: 1.5;
         }
 
         .signup-form {
@@ -758,7 +555,21 @@ export default function Signup() {
           gap: 14px;
         }
 
-        .name-row { display: flex; gap: 12px; }
+        .field-group { display: flex; flex-direction: column; gap: 6px; }
+        .field-error {
+          font-size: 12px;
+          color: var(--danger);
+          margin: 0;
+        }
+        .general-error {
+          font-size: 13px;
+          color: var(--danger);
+          background: rgba(239, 68, 68, 0.08);
+          border: 1px solid rgba(239, 68, 68, 0.25);
+          border-radius: var(--radius-sm);
+          padding: 10px 12px;
+          margin: 0 0 4px;
+        }
 
         input {
           width: 100%;
@@ -779,10 +590,9 @@ export default function Signup() {
           box-shadow: 0 0 0 4px var(--accent-soft);
         }
         input:disabled { opacity: 0.6; cursor: not-allowed; }
+        input.has-error { border-color: var(--danger); }
 
-        .phone-row {
-          display: flex;
-        }
+        .phone-row { display: flex; width: 100%; }
         .country {
           display: flex;
           align-items: center;
@@ -795,9 +605,10 @@ export default function Signup() {
           white-space: nowrap;
           font-size: 14.5px;
           color: var(--ink);
+          flex-shrink: 0;
         }
         .country img { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
-        .phone-row input { border-radius: 0 var(--radius-md) var(--radius-md) 0; }
+        .phone-row input { border-radius: 0 var(--radius-md) var(--radius-md) 0; min-width: 0; }
 
         .password-input-container { position: relative; }
         .password-input-container input { padding-right: 46px; }
@@ -817,87 +628,6 @@ export default function Signup() {
           cursor: pointer;
         }
         .password-toggle:hover { background: var(--line); }
-
-        /* ───── Custom Select Styles ───── */
-        .custom-select {
-          position: relative;
-          width: 100%;
-        }
-
-        .select-trigger {
-          width: 100%;
-          padding: 14px 16px;
-          font-size: 14.5px;
-          font-family: 'Inter', sans-serif;
-          color: var(--ink);
-          background: var(--field-bg);
-          border: 1.5px solid transparent;
-          border-radius: var(--radius-md);
-          outline: none;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          cursor: pointer;
-          text-align: left;
-          transition: border-color 0.2s ease, background 0.2s ease;
-        }
-
-        
-
-        .select-trigger:focus {
-          background: #fff;
-          border-color: var(--accent);
-          box-shadow: 0 0 0 4px var(--accent-soft);
-        }
-
-        .select-trigger .arrow {
-          transition: transform 0.2s ease;
-          font-size: 16px;
-          color: var(--ink-soft);
-        }
-
-        .select-trigger .arrow.open {
-          transform: rotate(180deg);
-        }
-
-        .select-dropdown {
-          position: absolute;
-          top: calc(100% + 5px);
-          left: 0;
-          width: 100%;
-          background: white;
-          border: 1.5px solid var(--accent);
-          border-radius: var(--radius-md);
-          padding: 5px;
-          z-index: 100;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-          max-height: 200px;
-          overflow-y: auto;
-        }
-
-        .select-dropdown::-webkit-scrollbar {
-          width: 4px;
-        }
-
-        .select-dropdown::-webkit-scrollbar-thumb {
-          background: var(--line);
-          border-radius: 10px;
-        }
-
-        .select-option {
-          padding: 10px 12px;
-          border-radius: var(--radius-sm);
-          cursor: pointer;
-          font-size: 14px;
-          font-family: 'Inter', sans-serif;
-          color: var(--ink);
-          transition: all 0.15s ease;
-        }
-
-        .select-option:hover {
-          background-color: var(--accent);
-          color: white;
-        }
 
         .create-btn {
           margin-top: 6px;
@@ -963,14 +693,9 @@ export default function Signup() {
         .wallpaper-panel {
           flex: 1 1 48%;
           position: relative;
-          width:20%;
           margin: 12px;
           border-radius: 50px;
           overflow: hidden;
-          background:
-            radial-gradient(circle at 25% 20%, #6a5cf0 0%, transparent 55%),
-            radial-gradient(circle at 75% 80%, #2f3aa8 0%, transparent 55%),
-            linear-gradient(160deg, #262c8f 0%, #10143f 100%);
         }
 
         .wallpaper-media {
@@ -988,37 +713,141 @@ export default function Signup() {
           pointer-events: none;
         }
 
-        .float-controls {
-          position: absolute;
-          right: 18px;
-          bottom: 18px;
+        /* ───── Post-signup verification card ───── */
+        .verify-card {
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          align-items: center;
+          text-align: center;
+          padding: 12px 0 4px;
         }
-        .float-btn {
-          width: 42px;
-          height: 42px;
+        .verify-icon {
+          width: 64px;
+          height: 64px;
           border-radius: 50%;
-          border: none;
-          background: rgba(255, 255, 255, 0.16);
-          backdrop-filter: blur(6px);
-          color: #fff;
+          background: rgba(16, 185, 129, 0.12);
+          color: var(--success);
           display: flex;
           align-items: center;
           justify-content: center;
+          margin-bottom: 16px;
+        }
+        .verify-card h2 { margin-bottom: 8px; }
+        .verify-card .form-subtitle { margin-bottom: 28px; }
+        .verify-card .create-btn { width: 100%; }
+        .verify-resend-btn {
+          width: 100%;
+          margin-top: 12px;
+          padding: 14px;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-size: 14.5px;
+          font-weight: 700;
+          color: var(--ink);
+          background: var(--field-bg);
+          border: 1.5px solid var(--line);
+          border-radius: var(--radius-md);
           cursor: pointer;
           transition: background 0.2s ease;
         }
-        .float-btn:hover { background: rgba(255, 255, 255, 0.28); }
+        .verify-resend-btn:hover:not(:disabled) { background: #eef0f5; }
+        .verify-resend-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-        @media (max-width: 860px) {
-          .wallpaper-panel { display: none; }
-          .form-panel { flex: 1 1 100%; padding: 36px 24px; }
-          .signup-card { min-height: auto; max-height: none; }
+        /* ───── Toast ───── */
+        .toast-container {
+          position: fixed;
+          top: 24px;
+          right: 24px;
+          z-index: 2000;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          max-width: 380px;
+          width: calc(100% - 48px);
+          pointer-events: none;
+        }
+        .toast {
+          pointer-events: auto;
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          padding: 14px 16px;
+          border-radius: var(--radius-md);
+          background: #fff;
+          box-shadow: 0 20px 40px -12px rgba(10, 14, 45, 0.35);
+          border: 1.5px solid var(--line);
+          animation: toast-in 0.25s ease;
+        }
+        .toast.toast-success { border-left: 4px solid var(--success); }
+        .toast.toast-error { border-left: 4px solid var(--danger); }
+        .toast-icon { flex-shrink: 0; margin-top: 1px; }
+        .toast.toast-success .toast-icon { color: var(--success); }
+        .toast.toast-error .toast-icon { color: var(--danger); }
+        .toast-message {
+          flex: 1;
+          font-size: 13.5px;
+          color: var(--ink);
+          line-height: 1.45;
+        }
+        .toast-close {
+          flex-shrink: 0;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          color: var(--ink-soft);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 3px;
+          border-radius: 50%;
+        }
+        .toast-close:hover { background: var(--field-bg); }
+
+        @keyframes toast-in {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
         }
 
-        /* ───── Shared dialog styles (info / admin / subjects / teacher classes) ───── */
+        /* ───── Responsive breakpoints ───── */
+
+        /* Tablet */
+        @media (max-width: 1024px) {
+          .form-panel { padding: 40px; }
+          .wallpaper-panel { border-radius: 34px; margin: 10px; }
+        }
+
+        /* Small tablet / large phone: drop the wallpaper, form takes full width */
+        @media (max-width: 860px) {
+          .signup-page { padding: 16px; align-items: flex-start; }
+          .wallpaper-panel { display: none; }
+          .signup-card { flex-direction: column; min-height: auto; }
+          .form-panel { flex: 1 1 100%; padding: 32px 24px; }
+        }
+
+        /* Mobile */
+        @media (max-width: 480px) {
+          .signup-page { padding: 10px; }
+          .form-panel { padding: 26px 18px; }
+          .signup-form h2 { font-size: 22px; }
+          .name-row, .phone-row { flex-direction: column; }
+          .country {
+            border-right: none;
+            border-bottom: 1px solid var(--line);
+            border-radius: var(--radius-md) var(--radius-md) 0 0;
+            padding: 10px 14px;
+          }
+          .phone-row input { border-radius: 0 0 var(--radius-md) var(--radius-md); }
+          .social-row { gap: 10px; }
+          .social { width: 46px; height: 46px; }
+          .toast-container { top: 12px; right: 12px; left: 12px; max-width: none; width: auto; }
+        }
+
+        /* Very small screens */
+        @media (max-width: 360px) {
+          .form-panel { padding: 20px 14px; }
+          input, .create-btn { padding: 12px 14px; font-size: 14px; }
+        }
+
+        /* ───── Complete-registration dialog (social sign-in) ───── */
         .dialog-card {
           position: relative;
           width: 100%;
@@ -1030,9 +859,6 @@ export default function Signup() {
           overflow-y: auto;
         }
         .dialog-card.dialog-sm { max-width: 440px; }
-        .dialog-card.dialog-md { max-width: 520px; }
-        .dialog-card.dialog-lg { max-width: 860px; }
-        .dialog-card.dialog-xl { max-width: 1040px; }
 
         .dialog-title {
           font-family: 'Plus Jakarta Sans', sans-serif;
@@ -1080,104 +906,39 @@ export default function Signup() {
         .btn-secondary:hover:not(:disabled) { background: #eef0f5; }
         .btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }
 
-        .section-block {
-          padding: 18px;
-          border-radius: var(--radius-md);
-          border: 1px solid var(--line);
-          background: var(--field-bg);
-          margin-bottom: 18px;
+        @media (max-width: 480px) {
+          .dialog-card { padding: 22px; }
         }
-        .section-head {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 14px;
-          flex-wrap: wrap;
-          gap: 10px;
-        }
-        .section-head span { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 14.5px; color: var(--ink); }
-        .chip-btn {
-          padding: 8px 14px;
-          font-size: 12.5px;
-          font-weight: 700;
-          color: #fff;
-          background: var(--accent);
-          border: none;
-          border-radius: 999px;
-          cursor: pointer;
-        }
-        .chip-btn.alt { background: var(--success); }
-
-        .grid { display: grid; gap: 10px; }
-        .grid-subjects { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); max-height: 360px; overflow-y: auto; padding: 4px; }
-        .grid-classes { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
-
-        .option-chip {
-          position: relative;
-          display: flex;
-          align-items: center;
-          gap: 9px;
-          padding: 12px;
-          border-radius: var(--radius-sm);
-          border: 1.5px solid var(--line);
-          background: #fff;
-          cursor: pointer;
-          transition: all 0.15s ease;
-          font-size: 13.5px;
-          font-weight: 500;
-          color: var(--ink);
-        }
-        .option-chip:hover { border-color: #c7cbe6; }
-        .option-chip.selected {
-          background: var(--accent-soft);
-          border-color: var(--accent);
-        }
-        .option-chip input { width: 15px; height: 15px; margin: 0; padding: 0; flex-shrink: 0; accent-color: var(--accent); }
-
-        .class-chip {
-          flex-direction: column;
-          justify-content: center;
-          text-align: center;
-          min-height: 62px;
-          gap: 6px;
-        }
-        .class-chip.selected { background: var(--accent-soft); border-color: var(--accent); }
-        .class-chip .pin-badge {
-          position: absolute;
-          top: -8px;
-          right: -8px;
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          background: var(--success);
-          color: #fff;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .selection-note {
-          text-align: center;
-          font-size: 12.5px;
-          color: var(--ink-soft);
-          margin-top: 14px;
-        }
-        .selection-note .ok { color: var(--success); font-weight: 600; margin-left: 6px; }
-
-        .subject-block {
-          margin-bottom: 16px;
-          padding: 16px;
-          border-radius: var(--radius-md);
-          border: 1px solid var(--line);
-          background: #fff;
-        }
-        .subject-block:last-child { margin-bottom: 0; }
-        .subject-block .grid-subjects { max-height: none; overflow: visible; }
-        .subject-count { text-align: right; font-size: 12px; color: var(--ink-soft); margin-top: 10px; }
       `}</style>
 
-      {/* MAIN SIGNUP FORM */}
+      {/* TOAST NOTIFICATION */}
+      {toast && (
+        <div className="toast-container">
+          <div
+            className={`toast toast-${toast.type}`}
+            role="status"
+            aria-live="polite"
+          >
+            <span className="toast-icon">
+              {toast.type === "success" ? (
+                <CheckCircle2 size={20} />
+              ) : (
+                <AlertCircle size={20} />
+              )}
+            </span>
+            <span className="toast-message">{toast.message}</span>
+            <button
+              className="toast-close"
+              onClick={closeToast}
+              aria-label="Dismiss notification"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
+      {/* MAIN SIGNUP FORM */}
       <div className="signup-page">
         <div className="signup-modal">
           <div className="signup-card">
@@ -1204,173 +965,203 @@ export default function Signup() {
                 <span className="brand-name">SXaint</span>
               </div>
 
-              <div className="tabs">
-                <button
-                  className={`tab ${userType === "teacher" ? "active" : ""}`}
-                  onClick={() => setUserType("teacher")}
-                  type="button"
-                >
-                  Teacher
-                </button>
-                <button
-                  className={`tab ${userType === "student" ? "active" : ""}`}
-                  onClick={() => setUserType("student")}
-                  type="button"
-                >
-                  Student
-                </button>
-              </div>
-
-              <form onSubmit={handleEmailSignup} className="signup-form">
-                <h2>Create an account</h2>
-                <p className="form-subtitle">
-                  Please enter your details to get started.
-                </p>
-
-                <div className="name-row">
-                  <input
-                    placeholder="First name"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    required
-                    disabled={isLoading}
-                  />
-                  <input
-                    placeholder="Last name"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    required
-                    disabled={isLoading}
-                  />
-                </div>
-
-                <input
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={isLoading}
-                />
-
-                <div className="phone-row">
-                  <div className="country">
-                    <img src="/flags/ng.svg" alt="NG" />
-                    <span>+234</span>
+              {signupComplete ? (
+                /* ───── Post-signup verification state ───── */
+                <div className="verify-card">
+                  <div className="verify-icon">
+                    <CheckCircle2 size={32} />
                   </div>
-                  <input
-                    type="tel"
-                    placeholder="775-351-6501"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    disabled={isLoading}
-                  />
-                </div>
+                  <h2>Account created successfully</h2>
+                  <p className="form-subtitle">
+                    We've sent a verification link to{" "}
+                    <strong>{pendingEmail}</strong>. Verify your email before
+                    continuing to your admin dashboard.
+                  </p>
 
-                <div className="password-input-container">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={isLoading}
-                  />
                   <button
                     type="button"
-                    className="password-toggle"
-                    onClick={() => setShowPassword(!showPassword)}
-                    tabIndex={-1}
-                    aria-label={
-                      showPassword ? "Hide password" : "Show password"
-                    }
+                    className="create-btn"
+                    onClick={handleCheckVerification}
+                    disabled={checkingVerification}
                   >
-                    {showPassword ? (
-                      <EyeOff size={18} color="#6b7280" />
-                    ) : (
-                      <Eye size={18} color="#6b7280" />
-                    )}
+                    {checkingVerification
+                      ? "Checking..."
+                      : "I've verified my email — Continue to Dashboard"}
                   </button>
-                </div>
 
-                {/* Custom Class Selection Dropdown */}
-                <div className="custom-select">
                   <button
                     type="button"
-                    className="select-trigger"
-                    onClick={() => setIsClassDropdownOpen(!isClassDropdownOpen)}
-                    disabled={isLoading}
+                    className="verify-resend-btn"
+                    onClick={handleResendVerification}
+                    disabled={resending || resendCooldown > 0}
                   >
-                    {className || "Select Class"}
-                    <span
-                      className={`arrow ${isClassDropdownOpen ? "open" : ""}`}
-                    ></span>
+                    {resending
+                      ? "Resending..."
+                      : resendCooldown > 0
+                        ? `Resend available in ${resendCooldown}s`
+                        : "Resend verification email"}
                   </button>
+                </div>
+              ) : (
+                <form
+                  onSubmit={handleEmailSignup}
+                  className="signup-form"
+                  noValidate
+                >
+                  <h2>Create your school account</h2>
+                  <p className="form-subtitle">
+                    Register your school to manage classes, teachers, subjects,
+                    and students from one platform.
+                  </p>
 
-                  {isClassDropdownOpen && (
-                    <div className="select-dropdown">
-                      {ALL_CLASSES.map((c) => (
-                        <div
-                          key={c}
-                          className="select-option"
-                          onClick={() => {
-                            setClassName(c);
-                            setIsClassDropdownOpen(false);
-                          }}
-                        >
-                          {c}
-                        </div>
-                      ))}
-                    </div>
+                  {errors.general && (
+                    <p className="general-error">{errors.general}</p>
                   )}
-                </div>
 
-                {/* Admin Code Input (only for teachers) */}
-                {userType === "teacher" && (
-                  <input
-                    type="password"
-                    placeholder="Admin Code"
-                    value={adminCodeInput}
-                    onChange={(e) => setAdminCodeInput(e.target.value)}
-                    required
+                  <div className="field-group">
+                    <input
+                      placeholder="School name"
+                      value={schoolName}
+                      onChange={(e) => setSchoolName(e.target.value)}
+                      disabled={isLoading}
+                      className={errors.schoolName ? "has-error" : ""}
+                    />
+                    {errors.schoolName && (
+                      <p className="field-error">{errors.schoolName}</p>
+                    )}
+                  </div>
+
+                  <div className="field-group">
+                    <input
+                      placeholder="Admin full name"
+                      value={adminName}
+                      onChange={(e) => setAdminName(e.target.value)}
+                      disabled={isLoading}
+                      className={errors.adminName ? "has-error" : ""}
+                    />
+                    {errors.adminName && (
+                      <p className="field-error">{errors.adminName}</p>
+                    )}
+                  </div>
+
+                  <div className="field-group">
+                    <div className="phone-row">
+                      <div className="country">
+                        <img src="/flags/ng.svg" alt="NG" />
+                        <span>+234</span>
+                      </div>
+                      <input
+                        type="tel"
+                        placeholder="775-351-6501"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        disabled={isLoading}
+                        className={errors.phone ? "has-error" : ""}
+                      />
+                    </div>
+                    {errors.phone && (
+                      <p className="field-error">{errors.phone}</p>
+                    )}
+                  </div>
+
+                  <div className="field-group">
+                    <input
+                      type="email"
+                      placeholder="Email address"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={isLoading}
+                      className={errors.email ? "has-error" : ""}
+                    />
+                    {errors.email && (
+                      <p className="field-error">{errors.email}</p>
+                    )}
+                  </div>
+
+                  <div className="field-group">
+                    <div className="password-input-container">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        disabled={isLoading}
+                        className={errors.password ? "has-error" : ""}
+                      />
+                      <button
+                        type="button"
+                        className="password-toggle"
+                        onClick={() => setShowPassword(!showPassword)}
+                        tabIndex={-1}
+                        aria-label={
+                          showPassword ? "Hide password" : "Show password"
+                        }
+                      >
+                        {showPassword ? (
+                          <EyeOff size={18} color="#6b7280" />
+                        ) : (
+                          <Eye size={18} color="#6b7280" />
+                        )}
+                      </button>
+                    </div>
+                    {errors.password && (
+                      <p className="field-error">{errors.password}</p>
+                    )}
+                  </div>
+
+                  <div className="field-group">
+                    <input
+                      type="password"
+                      placeholder="Admin reference code"
+                      value={adminCodeInput}
+                      onChange={(e) => setAdminCodeInput(e.target.value)}
+                      disabled={isLoading}
+                      className={errors.adminCode ? "has-error" : ""}
+                    />
+                    {errors.adminCode && (
+                      <p className="field-error">{errors.adminCode}</p>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="create-btn"
                     disabled={isLoading}
-                  />
-                )}
+                  >
+                    {isLoading ? "Creating Account..." : "Create Admin Account"}
+                  </button>
+                </form>
+              )}
 
-                <button
-                  type="submit"
-                  className="create-btn"
-                  disabled={isLoading}
-                >
-                  {isLoading ? "Creating Account..." : "Create Account"}
-                </button>
-              </form>
+              {!signupComplete && (
+                <>
+                  <div className="divider">OR SIGN UP WITH</div>
 
-              <div className="divider">OR SIGN UP WITH</div>
+                  <div className="social-row">
+                    <button
+                      onClick={() => handleProvider(googleProvider)}
+                      className="social"
+                      disabled={isLoading}
+                      aria-label="Sign up with Google"
+                    >
+                      <img src="/icons/google.svg" alt="Google" />
+                    </button>
+                    <button
+                      onClick={() => handleProvider(appleProvider)}
+                      className="social"
+                      disabled={isLoading}
+                      aria-label="Sign up with Apple"
+                    >
+                      <img src="/icons/apple.svg" alt="Apple" />
+                    </button>
+                  </div>
 
-              <div className="social-row">
-                <button
-                  onClick={() => handleProvider(googleProvider)}
-                  className="social"
-                  disabled={isLoading}
-                  aria-label="Sign up with Google"
-                >
-                  <img src="/icons/google.svg" alt="Google" />
-                </button>
-                <button
-                  onClick={() => handleProvider(appleProvider)}
-                  className="social"
-                  disabled={isLoading}
-                  aria-label="Sign up with Apple"
-                >
-                  <img src="/icons/apple.svg" alt="Apple" />
-                </button>
-              </div>
-
-              <p className="terms">
-                By creating an account, you agree to our{" "}
-                <a href="#">Terms &amp; Service</a>
-              </p>
+                  <p className="terms">
+                    By creating an account, you agree to our{" "}
+                    <a href="#">Terms &amp; Service</a>
+                  </p>
+                </>
+              )}
             </div>
 
             {/* Right: media / wallpaper panel */}
@@ -1384,306 +1175,75 @@ export default function Signup() {
                 src={auth_wallpaper}
               />
               <div className="wallpaper-fade" />
-              <div className="float-controls"></div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* GOOGLE/APPLE INFO MODAL */}
-      {showInfoModal && (
-        <div className="signup-page" style={{ zIndex: 1100 }}>
+      {/* COMPLETE SCHOOL REGISTRATION MODAL (Google/Apple sign-in) */}
+      {showCompleteModal && (
+        <div
+          className="signup-page"
+          style={{ position: "fixed", inset: 0, zIndex: 1100 }}
+        >
           <div className="modal-backdrop" />
-          <div className="dialog-card dialog-sm">
-            <h3 className="dialog-title">Confirm your details</h3>
+          <div className="dialog-card dialog-sm" style={{ zIndex: 1 }}>
+            <h3 className="dialog-title">Complete School Registration</h3>
             <p className="dialog-subtitle">
-              We pulled this from your account. Please verify.
+              Signed in as <strong>{socialInfo.email}</strong>. Finish setting
+              up your school and enter your admin reference code to activate the
+              account.
             </p>
+
+            {socialError && <p className="general-error">{socialError}</p>}
 
             <div className="dialog-field">
               <input
                 type="text"
-                placeholder="Full name"
-                value={info.fullName}
-                onChange={(e) =>
-                  setInfo((s) => ({ ...s, fullName: e.target.value }))
-                }
+                placeholder="School name"
+                value={socialSchoolName}
+                onChange={(e) => setSocialSchoolName(e.target.value)}
+                disabled={isLoading}
               />
             </div>
             <div className="dialog-field">
-              <input
-                type="email"
-                placeholder="Email"
-                value={info.email}
-                onChange={(e) =>
-                  setInfo((s) => ({ ...s, email: e.target.value }))
-                }
-              />
-            </div>
-            <div className="phone-row dialog-field">
-              <div className="country">
-                <img src="/flags/ng.svg" alt="NG" />
-                <span>+234</span>
+              <div className="phone-row">
+                <div className="country">
+                  <img src="/flags/ng.svg" alt="NG" />
+                  <span>+234</span>
+                </div>
+                <input
+                  type="tel"
+                  placeholder="775-351-6501"
+                  value={socialPhone}
+                  onChange={(e) => setSocialPhone(e.target.value)}
+                  disabled={isLoading}
+                />
               </div>
-              <input
-                type="tel"
-                placeholder="775-351-6501"
-                value={info.phone}
-                onChange={(e) =>
-                  setInfo((s) => ({ ...s, phone: e.target.value }))
-                }
-              />
             </div>
-            <div className="dialog-field">
-              <select
-                value={info.className}
-                onChange={(e) =>
-                  setInfo((s) => ({ ...s, className: e.target.value }))
-                }
-                required
-              >
-                <option value="">Select Class</option>
-                {ALL_CLASSES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="dialog-actions">
-              <button className="btn-primary" onClick={confirmInfo}>
-                Confirm
-              </button>
-              <button className="btn-secondary" onClick={resetAndRedirect}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ADMIN CODE MODAL (only for social signup teachers) */}
-      {showAdminModal && (
-        <div className="signup-page" style={{ zIndex: 1200 }}>
-          <div className="modal-backdrop" />
-          <div className="dialog-card dialog-sm" style={{ maxWidth: 420 }}>
-            <h3 className="dialog-title">Admin Access Required</h3>
-            <p className="dialog-subtitle">
-              Enter the admin code to complete teacher signup.
-            </p>
-
             <div className="dialog-field">
               <input
                 type="password"
-                placeholder="Admin Code"
-                value={adminCodeInput}
-                onChange={(e) => setAdminCodeInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && confirmAdminCode()}
+                placeholder="Admin reference code"
+                value={socialAdminCode}
+                onChange={(e) => setSocialAdminCode(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && confirmSocialSignup()}
+                disabled={isLoading}
                 autoFocus
               />
             </div>
 
             <div className="dialog-actions">
-              <button className="btn-primary" onClick={confirmAdminCode}>
-                Confirm
-              </button>
-              <button className="btn-secondary" onClick={resetAndRedirect}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* STUDENT SUBJECT SELECTION MODAL */}
-      {showSubjectsModal && (
-        <div className="signup-page" style={{ zIndex: 1300 }}>
-          <div className="modal-backdrop" />
-          <div className="dialog-card dialog-lg">
-            <h3 className="dialog-title">Select Your Subjects</h3>
-            <p className="dialog-subtitle">
-              Choose the subjects you offer for <strong>{className}</strong>.
-              You can change this later in your profile.
-            </p>
-
-            <div className="section-head">
-              <span>Available subjects for {getClassLevel(className)}</span>
-              <button
-                className="chip-btn"
-                onClick={handleSelectAllSubjects}
-                type="button"
-              >
-                {selectedSubjects.length ===
-                getSubjectsForClass(className).length
-                  ? "Deselect All"
-                  : "Select All"}
-              </button>
-            </div>
-
-            <div
-              className="grid grid-subjects"
-              style={{
-                border: "1px solid var(--line)",
-                borderRadius: "var(--radius-md)",
-                padding: 14,
-                marginBottom: 18,
-              }}
-            >
-              {getSubjectsForClass(className).map((subject) => (
-                <label
-                  key={subject}
-                  className={`option-chip ${selectedSubjects.includes(subject) ? "selected" : ""}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedSubjects.includes(subject)}
-                    onChange={() => handleSubjectToggle(subject)}
-                  />
-                  <span>{subject}</span>
-                </label>
-              ))}
-            </div>
-
-            <p className="selection-note">
-              Selected: {selectedSubjects.length} subject(s)
-            </p>
-
-            <div className="dialog-actions">
               <button
                 className="btn-primary"
-                onClick={handleSubjectsSubmit}
-                disabled={selectedSubjects.length === 0 || isLoading}
-              >
-                {isLoading ? "Saving..." : "Save Subjects & Continue"}
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={resetAndRedirect}
+                onClick={confirmSocialSignup}
                 disabled={isLoading}
               >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TEACHER CLASSES & SUBJECTS MODAL */}
-      {showTeacherClassesModal && (
-        <div className="signup-page" style={{ zIndex: 1400 }}>
-          <div className="modal-backdrop" />
-          <div className="dialog-card dialog-xl">
-            <h3 className="dialog-title">Select Classes You Teach</h3>
-            <p className="dialog-subtitle">
-              <strong>Note:</strong> Your selected class "{className}" is
-              already pre-selected.
-              <br />
-              You can add more classes or remove it if needed.
-            </p>
-
-            <div className="section-block">
-              <div className="section-head">
-                <span>Available Classes</span>
-                <button
-                  className="chip-btn"
-                  onClick={handleSelectAllClasses}
-                  type="button"
-                >
-                  {selectedClasses.length === ALL_CLASSES.length
-                    ? "Deselect All Classes"
-                    : "Select All Classes"}
-                </button>
-              </div>
-
-              <div className="grid grid-classes">
-                {ALL_CLASSES.map((cls) => (
-                  <label
-                    key={cls}
-                    className={`option-chip class-chip ${selectedClasses.includes(cls) ? "selected" : ""}`}
-                  >
-                    {cls === className && selectedClasses.includes(cls) && (
-                      <span className="pin-badge">
-                        <Check size={12} />
-                      </span>
-                    )}
-                    <input
-                      type="checkbox"
-                      checked={selectedClasses.includes(cls)}
-                      onChange={() => handleTeacherClassToggle(cls)}
-                    />
-                    <span>{cls}</span>
-                  </label>
-                ))}
-              </div>
-
-              <p className="selection-note">
-                Selected: {selectedClasses.length} class(es)
-                {selectedClasses.includes(className) && (
-                  <span className="ok">✓ Includes your selected class</span>
-                )}
-              </p>
-            </div>
-
-            {selectedClasses.length > 0 && (
-              <div
-                style={{ maxHeight: 360, overflowY: "auto", marginBottom: 20 }}
-              >
-                {selectedClasses.map((cls) => (
-                  <div key={cls} className="subject-block">
-                    <div className="section-head">
-                      <span>Subjects for {cls}</span>
-                      <button
-                        className="chip-btn alt"
-                        onClick={() => handleSelectAllSubjectsForClass(cls)}
-                        type="button"
-                      >
-                        {teacherSubjects[cls]?.length ===
-                        getSubjectsForClass(cls).length
-                          ? "Deselect All"
-                          : "Select All"}
-                      </button>
-                    </div>
-
-                    <div className="grid grid-subjects">
-                      {getSubjectsForClass(cls).map((subject) => (
-                        <label
-                          key={subject}
-                          className={`option-chip ${teacherSubjects[cls]?.includes(subject) ? "selected" : ""}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={
-                              teacherSubjects[cls]?.includes(subject) || false
-                            }
-                            onChange={() =>
-                              handleTeacherSubjectToggle(cls, subject)
-                            }
-                          />
-                          <span>{subject}</span>
-                        </label>
-                      ))}
-                    </div>
-
-                    <p className="subject-count">
-                      Selected: {teacherSubjects[cls]?.length || 0} subject(s)
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="dialog-actions">
-              <button
-                className="btn-primary"
-                onClick={handleTeacherClassesSubmit}
-                disabled={selectedClasses.length === 0 || isLoading}
-              >
-                {isLoading ? "Saving..." : "Save & Complete Signup"}
+                {isLoading ? "Verifying..." : "Complete Registration"}
               </button>
               <button
                 className="btn-secondary"
-                onClick={resetAndRedirect}
+                onClick={cancelSocialSignup}
                 disabled={isLoading}
               >
                 Cancel

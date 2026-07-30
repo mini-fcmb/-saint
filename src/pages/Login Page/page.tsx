@@ -378,10 +378,7 @@ export default function Login() {
           margin: 10px;
           border-radius: 50px;
           overflow: hidden;
-          background:
-            radial-gradient(circle at 25% 20%, #6a5cf0 0%, transparent 55%),
-            radial-gradient(circle at 75% 80%, #2f3aa8 0%, transparent 55%),
-            linear-gradient(160deg, #262c8f 0%, #10143f 100%);
+          
         }
 
         .wallpaper-media {
