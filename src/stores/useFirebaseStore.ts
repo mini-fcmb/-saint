@@ -2,12 +2,7 @@
 "use client";
 
 import { create } from "zustand";
-import {
-  onAuthStateChanged,
-  User,
-  Unsubscribe,
-  signOut,
-} from "firebase/auth";
+import { onAuthStateChanged, User, Unsubscribe, signOut } from "firebase/auth";
 import {
   collection,
   doc,
@@ -41,12 +36,12 @@ export interface Student {
 }
 
 interface UserData {
-  role: "teacher" | "student";
+  role: "admin" | "teacher" | "student";
   fullName: string;
   email: string;
   className?: string;
   enrollmentNo?: string;
-  classes?: string[]; 
+  classes?: string[];
   course?: string;
   session?: string;
   semester?: string;
@@ -62,7 +57,7 @@ interface FirebaseStore {
   error: string | null;
   debug: string[];
   authInitialized: boolean;
-  
+
   // Auth functions (from FIXED version)
   initializeAuth: () => void;
   cleanupAuth: () => void;
@@ -70,39 +65,54 @@ interface FirebaseStore {
   clearError: () => void;
   signOutUser: () => Promise<void>;
   forceReset: () => void;
-  
+
   // Admin functions (from OLD version)
-  updateTeacherProfile: (teacherId: string, data: Partial<Record<string, any>>) => Promise<{ success: boolean; error?: string }>;
-  switchTeacherClass: (teacherId: string, newClass: string) => Promise<{ success: boolean; error?: string }>;
-  promoteStudents: (oldClass: string, newClass: string) => Promise<{ success: boolean; error?: string }>;
-  updateStudentClass: (studentId: string, newClass: string) => Promise<{ success: boolean; error?: string }>;
+  updateTeacherProfile: (
+    teacherId: string,
+    data: Partial<Record<string, any>>,
+  ) => Promise<{ success: boolean; error?: string }>;
+  switchTeacherClass: (
+    teacherId: string,
+    newClass: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  promoteStudents: (
+    oldClass: string,
+    newClass: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  updateStudentClass: (
+    studentId: string,
+    newClass: string,
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 /* ------------------------------------------------------------------ */
 const splitName = (fullName = "", email = "") => {
   // If no fullName, try to extract from email
   if (!fullName || !fullName.trim()) {
-    const emailPart = email?.split('@')[0] || 'student';
+    const emailPart = email?.split("@")[0] || "student";
     // Clean up email part (remove numbers, dots, underscores)
     const nameFromEmail = emailPart
-      .replace(/[0-9._-]/g, ' ')
-      .replace(/\s+/g, ' ')
+      .replace(/[0-9._-]/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
-    
-    const parts = nameFromEmail.split(' ');
+
+    const parts = nameFromEmail.split(" ");
     if (parts.length >= 2) {
-      return { first: parts[0] || 'Student', last: parts.slice(1).join(' ') || 'Name' };
+      return {
+        first: parts[0] || "Student",
+        last: parts.slice(1).join(" ") || "Name",
+      };
     } else if (parts.length === 1) {
-      return { first: parts[0] || 'Student', last: 'Student' };
+      return { first: parts[0] || "Student", last: "Student" };
     } else {
-      return { first: 'Student', last: 'Name' };
+      return { first: "Student", last: "Name" };
     }
   }
-  
+
   // Normal fullName processing
   const parts = fullName.trim().split(/\s+/);
-  const first = parts[0] || 'Student';
-  const last = parts.slice(1).join(' ') || 'Name';
+  const first = parts[0] || "Student";
+  const last = parts.slice(1).join(" ") || "Name";
   return { first, last };
 };
 
@@ -115,24 +125,48 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
   const log = (msg: string) => {
     const time = new Date().toISOString().slice(11, 19);
     console.log("[FB-Store]", msg);
-    set((state) => ({ debug: [...state.debug.slice(-50), `[${time}] ${msg}`] }));
+    set((state) => ({
+      debug: [...state.debug.slice(-50), `[${time}] ${msg}`],
+    }));
   };
 
-  const loadUserData = async (uid: string): Promise<{ userData: UserData; role: "teacher" | "student" }> => {
+  const loadUserData = async (
+    uid: string,
+  ): Promise<{ userData: UserData; role: "admin" | "teacher" | "student" }> => {
     if (currentUserId === uid && get().userData) {
       log(`User data already loaded for UID: ${uid}`);
       return { userData: get().userData!, role: get().userData!.role };
     }
 
     log(`Loading user data for UID: ${uid}`);
-    
+
+    // Check "users" collection first for admin role — this matches
+    // Login.tsx's handleStaffLogin, which treats users/{uid} with
+    // role === "admin" as the source of truth for admin accounts.
+    const userRef = doc(db, "users", uid);
+    const userSnap = await getDoc(userRef);
+
+    if (userSnap.exists() && userSnap.data()?.role === "admin") {
+      const data = userSnap.data()!;
+      log(`Admin data found: ${JSON.stringify(data)}`);
+
+      const userData: UserData = {
+        role: "admin",
+        fullName: data.fullName || "",
+        email: data.email || "",
+      };
+
+      currentUserId = uid;
+      return { userData, role: "admin" };
+    }
+
     const teacherRef = doc(db, "teachers", uid);
     const teacherSnap = await getDoc(teacherRef);
 
     if (teacherSnap.exists()) {
       const data = teacherSnap.data()!;
       log(`Teacher data found: ${JSON.stringify(data)}`);
-      
+
       const userData: UserData = {
         role: "teacher",
         fullName: data.fullName || "",
@@ -141,7 +175,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         className: data.className || "",
         classes: data.classes || [],
       };
-      
+
       currentUserId = uid;
       return { userData, role: "teacher" };
     }
@@ -152,7 +186,7 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
     if (studentSnap.exists()) {
       const data = studentSnap.data()!;
       log(`Student data found: ${JSON.stringify(data)}`);
-      
+
       const userData: UserData = {
         role: "student",
         fullName: data.fullName || "",
@@ -163,103 +197,106 @@ export const useFirebaseStore = create<FirebaseStore>((set, get) => {
         session: data.session || "2023-2024",
         semester: data.semester || "IV",
       };
-      
+
       currentUserId = uid;
       return { userData, role: "student" };
     }
 
-    log("User document not found in teachers or students collection");
+    log("User document not found in users, teachers, or students collection");
     throw new Error("User profile not found");
   };
   // Add this function INSIDE the store creation, after the existing loadUserData function
 
-const loadStudentClassmates = async (studentClass: string, excludeEmail: string): Promise<Student[]> => {
-  try {
-    if (!studentClass.trim()) {
-      log("No student class provided for classmates query");
+  const loadStudentClassmates = async (
+    studentClass: string,
+    excludeEmail: string,
+  ): Promise<Student[]> => {
+    try {
+      if (!studentClass.trim()) {
+        log("No student class provided for classmates query");
+        return [];
+      }
+
+      log(`Loading classmates for class: "${studentClass}"`);
+
+      const q = query(
+        collection(db, "students"),
+        where("className", "==", studentClass),
+      );
+
+      const snapshot = await getDocs(q);
+      const classmates: Student[] = [];
+
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+
+        // Skip current student (exclude by email)
+        if (data.email === excludeEmail) return;
+
+        // Use the existing splitName function
+        const { first, last } = splitName(data.fullName, data.email);
+
+        classmates.push({
+          id: doc.id,
+          first,
+          last,
+          email: data.email || "",
+          progress: typeof data.progress === "number" ? data.progress : 0,
+          className: data.className || studentClass,
+          enrollmentNo: data.enrollmentNo,
+          course: data.course,
+          session: data.session,
+          semester: data.semester,
+        });
+      });
+
+      log(`Loaded ${classmates.length} classmates for class "${studentClass}"`);
+      return classmates;
+    } catch (error: any) {
+      log(`Error loading classmates: ${error.message}`);
       return [];
     }
-
-    log(`Loading classmates for class: "${studentClass}"`);
-    
-    const q = query(
-      collection(db, "students"),
-      where("className", "==", studentClass)
-    );
-    
-    const snapshot = await getDocs(q);
-    const classmates: Student[] = [];
-    
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      
-      // Skip current student (exclude by email)
-      if (data.email === excludeEmail) return;
-      
-      // Use the existing splitName function
-      const { first, last } = splitName(data.fullName, data.email);
-      
-      classmates.push({
-        id: doc.id,
-        first,
-        last,
-        email: data.email || "",
-        progress: typeof data.progress === "number" ? data.progress : 0,
-        className: data.className || studentClass,
-        enrollmentNo: data.enrollmentNo,
-        course: data.course,
-        session: data.session,
-        semester: data.semester,
-      });
-    });
-    
-    log(`Loaded ${classmates.length} classmates for class "${studentClass}"`);
-    return classmates;
-  } catch (error: any) {
-    log(`Error loading classmates: ${error.message}`);
-    return [];
-  }
-};
+  };
 
   const loadTeacherClasses = (userData: UserData): TeacherClass[] => {
     if (userData.role !== "teacher") return [];
-    
+
     const classes: TeacherClass[] = [];
-    
+
     // Check teaching array first
     if (userData.teaching && Array.isArray(userData.teaching)) {
       userData.teaching.forEach((item) => {
         const classLevel = item?.classLevel || item?.className || "";
         if (classLevel && typeof classLevel === "string") {
           const trimmed = classLevel.trim();
-          if (trimmed && !classes.find(c => c.id === trimmed)) {
+          if (trimmed && !classes.find((c) => c.id === trimmed)) {
             classes.push({ id: trimmed, name: trimmed });
           }
         }
       });
     }
-    
+
     // Check className as fallback
     if (userData.className && typeof userData.className === "string") {
       const trimmed = userData.className.trim();
-      if (trimmed && !classes.find(c => c.id === trimmed)) {
+      if (trimmed && !classes.find((c) => c.id === trimmed)) {
         classes.push({ id: trimmed, name: trimmed });
       }
     }
-    
+
     // Check classes array
     if (userData.classes && Array.isArray(userData.classes)) {
       userData.classes.forEach((className) => {
         if (className && typeof className === "string") {
           const trimmed = className.trim();
-          if (trimmed && !classes.find(c => c.id === trimmed)) {
+          if (trimmed && !classes.find((c) => c.id === trimmed)) {
             classes.push({ id: trimmed, name: trimmed });
           }
         }
       });
     }
-    
-    log(`Loaded teacher classes: ${classes.map(c => c.name).join(", ")}`);
+
+    log(`Loaded teacher classes: ${classes.map((c) => c.name).join(", ")}`);
     return classes;
   };
 
@@ -268,35 +305,38 @@ const loadStudentClassmates = async (studentClass: string, excludeEmail: string)
       studentUnsub();
       studentUnsub = null;
     }
-  
+
     const clean = classLevels.map((l) => l.trim()).filter(Boolean);
-  
+
     if (!clean.length) {
       log("No class levels → empty student list");
       set({ students: [], loading: false });
       return;
     }
-  
+
     // SIMPLIFY: Use ONLY the original class names (no variations)
     const classNames = [...clean];
-    
+
     // Remove duplicates
     const uniqueClassNames = [...new Set(classNames)];
-  
+
     log(`Query students WHERE className IN [${uniqueClassNames.join(", ")}]`);
-    
+
     // DEBUG: Check what we're querying
     console.log("[FB-Store] DEBUG - Final query classes:", uniqueClassNames);
-    console.log("[FB-Store] DEBUG - Includes SS2?", uniqueClassNames.includes("SS2"));
-  
+    console.log(
+      "[FB-Store] DEBUG - Includes SS2?",
+      uniqueClassNames.includes("SS2"),
+    );
+
     // Should be exactly 8 classes, well within the 10-item limit
     // No need to truncate to 10!
-  
+
     const q = query(
       collection(db, "students"),
-      where("className", "in", uniqueClassNames)
+      where("className", "in", uniqueClassNames),
     );
-  
+
     const unsub = onSnapshot(
       q,
       (snap) => {
@@ -316,26 +356,29 @@ const loadStudentClassmates = async (studentClass: string, excludeEmail: string)
             semester: data.semester,
           };
         });
-  
+
         students.sort((a, b) =>
-          `${a.first} ${a.last}`.localeCompare(`${b.first} ${b.last}`)
+          `${a.first} ${a.last}`.localeCompare(`${b.first} ${b.last}`),
         );
-  
+
         log(`Students loaded: ${students.length}`);
-        console.log("📋 Loaded students details:", students.map(s => ({
-          name: `${s.first} ${s.last}`,
-          class: s.className,
-          email: s.email
-        })));
-  
+        console.log(
+          "📋 Loaded students details:",
+          students.map((s) => ({
+            name: `${s.first} ${s.last}`,
+            class: s.className,
+            email: s.email,
+          })),
+        );
+
         set({ students, loading: false, error: null });
       },
       (err) => {
         log(`Student listener error: ${err.message}`);
         set({ error: "Failed to load students", loading: false });
-      }
+      },
     );
-  
+
     studentUnsub = unsub;
   };
 
@@ -358,10 +401,10 @@ const loadStudentClassmates = async (studentClass: string, excludeEmail: string)
       }
 
       log("Initializing auth listener...");
-      
+
       const unsub = onAuthStateChanged(auth, async (user) => {
-        log(`Auth state changed: ${user ? `User ${user.uid}` : 'No user'}`);
-        
+        log(`Auth state changed: ${user ? `User ${user.uid}` : "No user"}`);
+
         const currentUser = get().user;
         if (user?.uid === currentUser?.uid && !get().loading) {
           log("Same user, skipping state update");
@@ -375,7 +418,7 @@ const loadStudentClassmates = async (studentClass: string, excludeEmail: string)
             studentUnsub = null;
           }
           currentUserId = null;
-          
+
           set({
             user: null,
             userData: null,
@@ -393,7 +436,7 @@ const loadStudentClassmates = async (studentClass: string, excludeEmail: string)
 
         try {
           const { userData, role } = await loadUserData(user.uid);
-         
+
           const currentState = get();
           if (currentState.user?.uid !== user.uid) {
             log("User changed during data load, skipping update");
@@ -406,30 +449,39 @@ const loadStudentClassmates = async (studentClass: string, excludeEmail: string)
             const classes = loadTeacherClasses(userData);
             set({ teacherClasses: classes });
             startStudentListener(classes.map((c) => c.id));
-          } else {
+          } else if (role === "student") {
             // ✅ For students, load their classmates
             const classmates = await loadStudentClassmates(
-              userData.className || "", 
-              user.email || ""
+              userData.className || "",
+              user.email || "",
             );
-            
+
             // Sort classmates alphabetically
             classmates.sort((a, b) =>
-              `${a.first} ${a.last}`.localeCompare(`${b.first} ${b.last}`)
+              `${a.first} ${a.last}`.localeCompare(`${b.first} ${b.last}`),
             );
-            
-            set({ 
-              teacherClasses: [],
-              students: classmates,  // ✅ Now populated with classmates!
-              loading: false 
-            });
-            
-            log(`Student ${user.email} has ${classmates.length} classmates in class "${userData.className}"`);
-          }
 
+            set({
+              teacherClasses: [],
+              students: classmates, // ✅ Now populated with classmates!
+              loading: false,
+            });
+
+            log(
+              `Student ${user.email} has ${classmates.length} classmates in class "${userData.className}"`,
+            );
+          } else {
+            // Admin: no classes/classmates to load
+            set({
+              teacherClasses: [],
+              students: [],
+              loading: false,
+            });
+            log(`Admin ${user.email} logged in`);
+          }
         } catch (error: any) {
           log(`Error loading user data: ${error.message}`);
-          
+
           const currentState = get();
           if (currentState.user?.uid === user.uid) {
             set({
@@ -463,7 +515,7 @@ const loadStudentClassmates = async (studentClass: string, excludeEmail: string)
 
     forceReset: () => {
       log("🔄 FORCE RESET: Manually resetting entire store");
-      
+
       if (authUnsubscribe) {
         authUnsubscribe();
         authUnsubscribe = null;
@@ -473,7 +525,7 @@ const loadStudentClassmates = async (studentClass: string, excludeEmail: string)
         studentUnsub = null;
       }
       currentUserId = null;
-      
+
       set({
         user: null,
         userData: null,
@@ -497,21 +549,21 @@ const loadStudentClassmates = async (studentClass: string, excludeEmail: string)
     signOutUser: async () => {
       try {
         log("🚪 Signing out user...");
-        
+
         if (studentUnsub) {
           studentUnsub();
           studentUnsub = null;
         }
-        
+
         await signOut(auth);
         log("✅ Sign-out successful");
-        
+
         if (authUnsubscribe) {
           authUnsubscribe();
           authUnsubscribe = null;
         }
         currentUserId = null;
-        
+
         set({
           user: null,
           userData: null,
@@ -521,12 +573,11 @@ const loadStudentClassmates = async (studentClass: string, excludeEmail: string)
           error: null,
           authInitialized: false,
         });
-        
+
         log("🔄 Store fully reset after sign out");
-        
       } catch (err: any) {
         log(`❌ Sign-out error: ${err.message}`);
-        
+
         set({
           user: null,
           userData: null,
@@ -536,13 +587,16 @@ const loadStudentClassmates = async (studentClass: string, excludeEmail: string)
           error: err.message,
           authInitialized: false,
         });
-        
+
         throw err;
       }
     },
 
     // ✅ Admin functions from OLD version
-    updateTeacherProfile: async (teacherId: string, data: Partial<Record<string, any>>) => {
+    updateTeacherProfile: async (
+      teacherId: string,
+      data: Partial<Record<string, any>>,
+    ) => {
       try {
         const teacherRef = doc(db, "teachers", teacherId);
         await updateDoc(teacherRef, data);
@@ -569,10 +623,12 @@ const loadStudentClassmates = async (studentClass: string, excludeEmail: string)
 
         // If teaching array changed, reload teacherClasses
         if (Array.isArray(data.teaching) && data.teaching.length > 0) {
-          const classes = (data.teaching as any[]).map((t) => {
-            const id = (t.classLevel ?? t.className ?? "").toString().trim();
-            return id ? { id, name: id } : null;
-          }).filter(Boolean) as TeacherClass[];
+          const classes = (data.teaching as any[])
+            .map((t) => {
+              const id = (t.classLevel ?? t.className ?? "").toString().trim();
+              return id ? { id, name: id } : null;
+            })
+            .filter(Boolean) as TeacherClass[];
           if (classes.length) set({ teacherClasses: classes });
           // restart listener with updated classes
           const { refreshStudents } = get();
@@ -602,7 +658,10 @@ const loadStudentClassmates = async (studentClass: string, excludeEmail: string)
     promoteStudents: async (oldClass: string, newClass: string) => {
       try {
         log(`Promoting students from ${oldClass} → ${newClass}`);
-        const q = query(collection(db, "students"), where("className", "==", oldClass));
+        const q = query(
+          collection(db, "students"),
+          where("className", "==", oldClass),
+        );
         const snapshot = await getDocs(q);
 
         if (snapshot.empty) {

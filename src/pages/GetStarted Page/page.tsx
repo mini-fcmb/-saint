@@ -20,7 +20,7 @@ import Logo from "../../assets/logo.png";
  * Update this to match your project's actual admin dashboard route if it
  * differs from this placeholder.
  */
-const ADMIN_DASHBOARD_ROUTE = "/admin/dashboard";
+const ADMIN_DASHBOARD_ROUTE = "/admin";
 
 /** Minimum seconds between resend-verification-email requests. */
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -356,7 +356,7 @@ export default function Signup() {
       if (user.emailVerified) {
         // Provider account was already verified — no need to wait.
         showToast("Account created successfully.", "success");
-        navigate("../Admin Dashboard/page");
+        navigate("/admin");
         return;
       }
 
@@ -390,7 +390,7 @@ export default function Signup() {
       const refreshedUser = auth.currentUser;
 
       if (refreshedUser?.emailVerified) {
-        navigate("../Admin Dashboard/page");
+        navigate("/admin");
       } else {
         showToast(
           "Your email hasn't been verified yet. Please check your inbox and try again.",

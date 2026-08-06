@@ -1,9 +1,8 @@
-// src/App.tsx - FIXED VERSION
+// src/App.tsx - FIXED VERSION (role-based admin checks)
 "use client";
 
 import React from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-//import Home from "./pages/Home";
 import Signup from "./pages/GetStarted Page/page";
 import Login from "./pages/Login Page/page";
 import TeacherDashboard from "./pages/Teachers Dashboard/page";
@@ -93,8 +92,10 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Email verification check
-  const isAdmin = user?.email === "minibossfcmb@proton.me";
+  // FIXED: role-based admin check instead of hardcoded email.
+  // Admins skip the email-verification gate on teacher/student routes too,
+  // not just on /admin.
+  const isAdmin = userData?.role === "admin";
   if (user && !user.emailVerified && !isAdmin) {
     console.log("📧 PrivateRoute: Email not verified");
     return (
@@ -202,6 +203,11 @@ function SmartRedirect() {
   // Redirect based on role
   console.log(`✅ SmartRedirect: User is ${userData.role}, redirecting`);
 
+  // FIXED: check role, not a hardcoded email, so it works for any admin
+  if (userData.role === "admin") {
+    return <Navigate to="/admin" replace />;
+  }
+
   if (userData.role === "teacher") {
     return <Navigate to="/teachers" replace />;
   }
@@ -210,17 +216,12 @@ function SmartRedirect() {
     return <Navigate to="/students" replace />;
   }
 
-  // Admin check
-  if (user.email === "minibossfcmb@proton.me") {
-    return <Navigate to="/admin" replace />;
-  }
-
   // Fallback - go home
   console.warn("⚠️ SmartRedirect: Unknown role, going home");
   return <Navigate to="/" replace />;
 }
 
-// FIXED: Admin-specific route
+// FIXED: Admin-specific route now checks Firestore role, not a hardcoded email
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, userData, loading } = useFirebaseStore();
 
@@ -228,7 +229,20 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  if (user.email !== "minibossfcmb@proton.me") {
+  // userData hasn't loaded yet - show a loading state rather than
+  // prematurely rendering "Access Denied"
+  if (!userData) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4">Loading your profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (userData.role !== "admin") {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center p-8 bg-red-50 rounded-lg border border-red-200 max-w-md">
@@ -260,8 +274,7 @@ export default function App() {
       <AuthInitializer />
 
       <Routes>
-        {/* Public routes */}
-        <Route path="/" element={<AdminDashboard />} />
+        <Route path="/" element={<Homepage />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
 

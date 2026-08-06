@@ -2,19 +2,21 @@
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
-import {
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  reload,
-} from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "../../firebase/config";
 import auth_wallpaper from "../../assets/auth_wallpaper.mp4";
 import Logo from "../../assets/logo.png";
 
-const ADMIN_EMAIL = "minibossfcmb@proton.me"; // admin email
-const ADMIN_CODE = "971566510072"; // admin code
-const TEACHER_CODE = "mini-fcmb"; // teacher code
+/**
+ * Shared access code for the "Teacher" tab, which now covers BOTH admins
+ * and teachers (they log in the same way). This is the same code
+ * signup.tsx calls ADMIN_REFERENCE_CODE — kept as one constant here so the
+ * two files can't drift out of sync. If you want separate codes for admins
+ * vs teachers later, split this into two constants and branch on role
+ * before comparing.
+ */
+const STAFF_ACCESS_CODE = "mini-fcmb";
 
 const DASHBOARD_ROUTES = {
   admin: "/admin",
@@ -32,6 +34,66 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  /**
+   * Handles the "Teacher" tab, which now covers admins AND teachers.
+   * 1. Validate the shared staff access code.
+   * 2. Look up users/{uid} — if role === "admin", that's an admin account
+   *    (written by signup.tsx). Send them to the admin dashboard.
+   * 3. Otherwise look up teachers/{uid} — if it exists, that's a teacher
+   *    account (written by admin.tsx's invite flow). Send them there.
+   * 4. If neither doc exists, this Auth user has no staff profile at all.
+   */
+  const handleStaffLogin = async (uid: string, emailVerified: boolean) => {
+    if (adminCode !== STAFF_ACCESS_CODE) {
+      alert("Invalid access code.");
+      await auth.signOut();
+      return;
+    }
+
+    const userDocSnap = await getDoc(doc(db, "users", uid));
+    if (userDocSnap.exists() && userDocSnap.data().role === "admin") {
+      if (!emailVerified) {
+        alert("Please verify your email before logging in.");
+        await auth.signOut();
+        return;
+      }
+      navigate(DASHBOARD_ROUTES.admin);
+      return;
+    }
+
+    const teacherDocSnap = await getDoc(doc(db, "teachers", uid));
+    if (!teacherDocSnap.exists()) {
+      alert(
+        "No profile found for this account. Please sign up, or ask your admin to invite you.",
+      );
+      await auth.signOut();
+      navigate("/signup");
+      return;
+    }
+    if (!emailVerified) {
+      alert("Please verify your email before logging in.");
+      await auth.signOut();
+      return;
+    }
+    navigate(DASHBOARD_ROUTES.teacher);
+  };
+
+  const handleStudentLogin = async (uid: string, emailVerified: boolean) => {
+    const docSnap = await getDoc(doc(db, "students", uid));
+    if (!docSnap.exists()) {
+      alert("No student profile found. Please sign up.");
+      await auth.signOut();
+      navigate("/signup");
+      return;
+    }
+    if (!emailVerified) {
+      alert("Please verify your email before logging in.");
+      await auth.signOut();
+      return;
+    }
+    navigate(DASHBOARD_ROUTES.student);
+  };
+
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -39,50 +101,18 @@ export default function Login() {
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const user = cred.user;
-
-      await reload(user);
+      await user.reload();
       const refreshedUser = auth.currentUser;
       if (!refreshedUser) throw new Error("User not found after reload");
 
-      const isAdmin = email === ADMIN_EMAIL && adminCode === ADMIN_CODE;
-
-      // Skip email verification for admin only
-      if (!refreshedUser.emailVerified && !isAdmin) {
-        alert("Please verify your email before logging in.");
-        await auth.signOut();
-        setIsLoading(false);
-        return;
+      if (userType === "teacher") {
+        await handleStaffLogin(refreshedUser.uid, refreshedUser.emailVerified);
+      } else {
+        await handleStudentLogin(
+          refreshedUser.uid,
+          refreshedUser.emailVerified,
+        );
       }
-
-      // Teacher admin code validation
-      if (userType === "teacher" && !isAdmin && adminCode !== TEACHER_CODE) {
-        alert("Invalid Admin Code for Teacher!");
-        await auth.signOut();
-        setIsLoading(false);
-        return;
-      }
-
-      // Direct admin login
-      if (isAdmin) {
-        navigate(DASHBOARD_ROUTES.admin);
-        setIsLoading(false);
-        return;
-      }
-
-      // Check Firestore profile for teacher/student
-      const collection = userType === "teacher" ? "teachers" : "students";
-      const docSnap = await getDoc(doc(db, collection, user.uid));
-
-      if (!docSnap.exists()) {
-        alert(`No ${userType} profile found. Please sign up.`);
-        await auth.signOut();
-        navigate("/signup");
-        setIsLoading(false);
-        return;
-      }
-
-      // SUCCESS: go to the right dashboard
-      navigate(DASHBOARD_ROUTES[userType]);
     } catch (err: any) {
       alert(err.message || "Login failed.");
     } finally {
@@ -95,47 +125,22 @@ export default function Login() {
     try {
       const res = await signInWithPopup(auth, googleProvider);
       const user = res.user;
-      await reload(user);
+      await user.reload();
       const refreshedUser = auth.currentUser;
       if (!refreshedUser) throw new Error("User not found after reload");
 
-      const isAdmin = email === ADMIN_EMAIL && adminCode === ADMIN_CODE;
-
-      if (!refreshedUser.emailVerified && !isAdmin) {
-        alert("Google account email is not verified.");
-        await auth.signOut();
-        setIsLoading(false);
-        return;
+      if (userType === "teacher") {
+        await handleStaffLogin(refreshedUser.uid, refreshedUser.emailVerified);
+      } else {
+        await handleStudentLogin(
+          refreshedUser.uid,
+          refreshedUser.emailVerified,
+        );
       }
-
-      if (userType === "teacher" && !isAdmin && adminCode !== TEACHER_CODE) {
-        alert("Invalid Admin Code for Teacher!");
-        await auth.signOut();
-        setIsLoading(false);
-        return;
-      }
-
-      if (isAdmin) {
-        navigate(DASHBOARD_ROUTES.admin);
-        setIsLoading(false);
-        return;
-      }
-
-      const collection = userType === "teacher" ? "teachers" : "students";
-      const docSnap = await getDoc(doc(db, collection, user.uid));
-
-      if (!docSnap.exists()) {
-        alert(`No ${userType} profile linked to this Google account.`);
-        await auth.signOut();
-        navigate("/signup");
-        setIsLoading(false);
-        return;
-      }
-
-      navigate(DASHBOARD_ROUTES[userType]);
     } catch (err: any) {
-      if (err.code !== "auth/popup-closed-by-user")
+      if (err.code !== "auth/popup-closed-by-user") {
         alert(err.message || "Google login failed.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -165,26 +170,24 @@ export default function Login() {
 
         * { box-sizing: border-box; }
 
-       
-
         .login-modal {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100vh;
-  z-index: 1;
-}
+          position: fixed;
+          inset: 0;
+          width: 100%;
+          height: 100vh;
+          z-index: 1;
+        }
 
-.login-card {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  min-height: 100vh;
-  background: #ffffff;
-  border-radius: 0;
-  box-shadow: none;
-  overflow: hidden;
-}
+        .login-card {
+          display: flex;
+          width: 100%;
+          height: 100%;
+          min-height: 100vh;
+          background: #ffffff;
+          border-radius: 0;
+          box-shadow: none;
+          overflow: hidden;
+        }
 
         /* ───── Left panel: form ───── */
         .form-panel {
@@ -378,7 +381,6 @@ export default function Login() {
           margin: 10px;
           border-radius: 50px;
           overflow: hidden;
-          
         }
 
         .wallpaper-media {
@@ -490,7 +492,7 @@ export default function Login() {
                 {userType === "teacher" && (
                   <input
                     type="password"
-                    placeholder="Admin Code"
+                    placeholder="Admin code"
                     value={adminCode}
                     onChange={(e) => setAdminCode(e.target.value)}
                     required
