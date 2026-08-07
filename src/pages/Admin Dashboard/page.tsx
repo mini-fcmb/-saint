@@ -59,6 +59,8 @@ import {
   CheckCheck,
   Camera,
   ShieldAlert,
+  Ban,
+  KeyRound,
 } from "lucide-react";
 
 import { db, storage } from "../../firebase/config";
@@ -118,6 +120,11 @@ interface StudentDoc {
   status: Status;
   passwordChanged: boolean;
   schoolId: string;
+  profilePhoto?: string;
+  parentName?: string;
+  parentPhone?: string;
+  parentEmail?: string;
+  address?: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -469,6 +476,404 @@ const RemovableChip: React.FC<{
 );
 
 /* ============================================================================
+   PERSON PILL — notification / Dynamic-Island style list row
+   Reference: rounded pill, avatar left, name/subtitle/id stacked in the
+   middle, circular icon actions on the right. Entire row opens the profile
+   drawer; the action buttons never do.
+============================================================================ */
+
+interface PillAction {
+  key: string;
+  label: string;
+  icon: React.ReactNode;
+  tone: "warn" | "danger" | "neutral";
+  onClick: () => void;
+}
+
+const pillToneCls: Record<string, string> = {
+  warn: "text-[#B9790A] hover:bg-[#FDF1DE]",
+  danger: "text-[#C53030] hover:bg-[#FDEAEA]",
+  neutral: "text-[#6B7280] hover:bg-[#F4F7FB]",
+};
+
+const PersonPill: React.FC<{
+  photo?: string;
+  name: string;
+  line2: string;
+  line3: string;
+  status: Status;
+  actions: PillAction[];
+  onOpen: () => void;
+}> = ({ photo, name, line2, line3, status, actions, onOpen }) => {
+  const [mobileMenu, setMobileMenu] = useState(false);
+
+  return (
+    <div
+      onClick={onOpen}
+      className="group relative flex cursor-pointer items-center gap-3 sm:gap-4 rounded-full border border-[#ECECEC] bg-white px-4 py-3 shadow-[0_1px_2px_rgba(16,24,40,0.06)] transition-all duration-200 hover:-translate-y-[1px] hover:scale-[1.01] hover:shadow-[0_10px_28px_rgba(16,24,40,0.10)]"
+      style={{ minHeight: 76 }}
+    >
+      {/* left: avatar */}
+      <div className="h-[54px] w-[54px] sm:h-[60px] sm:w-[60px] shrink-0 overflow-hidden rounded-full bg-[#F4F7FB]">
+        {photo ? (
+          <img src={photo} className="h-full w-full object-cover" />
+        ) : (
+          <div
+            className="grid h-full w-full place-items-center text-sm font-bold text-white"
+            style={{ background: BRAND_PRIMARY }}
+          >
+            {initialsOf(name)}
+          </div>
+        )}
+      </div>
+
+      {/* middle: identity */}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[14px] sm:text-[15px] font-semibold text-[#1A1D21]">
+          {name}
+        </p>
+        <p className="truncate text-[12.5px] text-[#6B7280]">{line2}</p>
+        <p className="truncate text-[11.5px] text-[#9CA3AF]">{line3}</p>
+      </div>
+
+      {/* status */}
+      <div className="hidden sm:block shrink-0">
+        <Pill tone={statusTone(status)}>{status}</Pill>
+      </div>
+
+      {/* right: circular icon actions (desktop/tablet) */}
+      <div className="hidden sm:flex shrink-0 items-center gap-1.5">
+        {actions.map((a) => (
+          <button
+            key={a.key}
+            title={a.label}
+            onClick={(e) => {
+              e.stopPropagation();
+              a.onClick();
+            }}
+            className={`grid h-9 w-9 place-items-center rounded-full transition-colors ${pillToneCls[a.tone]}`}
+          >
+            {a.icon}
+          </button>
+        ))}
+      </div>
+
+      {/* mobile: collapse into a single "more" menu */}
+      <div className="sm:hidden shrink-0">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setMobileMenu((v) => !v);
+          }}
+          className="grid h-9 w-9 place-items-center rounded-full text-[#6B7280] hover:bg-[#F4F7FB]"
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </button>
+        {mobileMenu && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="absolute right-2 top-[calc(100%+6px)] z-30 w-44 overflow-hidden rounded-2xl border border-[#EEF2F7] bg-white p-1.5 shadow-2xl"
+          >
+            {actions.map((a) => (
+              <button
+                key={a.key}
+                onClick={() => {
+                  a.onClick();
+                  setMobileMenu(false);
+                }}
+                className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium ${
+                  a.tone === "danger"
+                    ? "text-[#C53030] hover:bg-[#FDEAEA]"
+                    : a.tone === "warn"
+                      ? "text-[#B9790A] hover:bg-[#FDF1DE]"
+                      : "text-[#1A1D21] hover:bg-[#F7F8FC]"
+                }`}
+              >
+                {a.icon}
+                {a.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ============================================================================
+   PROFILE CARD — ONE centered, floating card that morphs between VIEW and
+   EDIT states (never a side drawer, never a second modal). In VIEW mode the
+   person's own photo fills the whole card as a background with a gradient
+   overlay, matching the reference. Clicking Edit morphs the same card: the
+   photo shrinks upward into a small avatar and an editable, sectioned form
+   expands underneath.
+============================================================================ */
+
+const DrawerFieldInput: React.FC<{
+  label: string;
+  value: string;
+  onChange?: (v: string) => void;
+  type?: string;
+  readOnly?: boolean;
+}> = ({ label, value, onChange, type = "text", readOnly }) => (
+  <Field label={label}>
+    <input
+      type={type}
+      className={inputCls + (readOnly ? " bg-[#F7F8FC] text-[#9CA3AF]" : "")}
+      value={value}
+      readOnly={readOnly}
+      onChange={(e) => onChange && onChange(e.target.value)}
+    />
+  </Field>
+);
+
+const DrawerFieldSelect: React.FC<{
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}> = ({ label, value, onChange, options }) => (
+  <Field label={label}>
+    <select
+      className={inputCls}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  </Field>
+);
+
+const DrawerToggle: React.FC<{
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}> = ({ label, checked, onChange }) => (
+  <div className="flex items-center justify-between rounded-xl border border-[#E8EAF0] px-3 py-2.5">
+    <span className="text-xs font-semibold text-[#6B7280]">{label}</span>
+    <button
+      onClick={() => onChange(!checked)}
+      className="relative h-6 w-11 shrink-0 rounded-full transition-colors"
+      style={{ background: checked ? BRAND_PRIMARY : "#E5E7EB" }}
+    >
+      <span
+        className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all"
+        style={{ left: checked ? 22 : 2 }}
+      />
+    </button>
+  </div>
+);
+
+interface DrawerSection {
+  title: string;
+  fields: React.ReactNode;
+}
+
+const ProfileCard: React.FC<{
+  personId: string; // reset view/edit state whenever this changes
+  photo?: string;
+  name: string;
+  subtitle: string;
+  idLabel: string;
+  status: Status;
+  onClose: () => void;
+  sections: DrawerSection[];
+  onSave: () => void;
+  saving?: boolean;
+  onSuspend: () => void;
+  suspendLabel: string;
+  onDelete: () => void;
+}> = ({
+  personId,
+  photo,
+  name,
+  subtitle,
+  idLabel,
+  status,
+  onClose,
+  sections,
+  onSave,
+  saving,
+  onSuspend,
+  suspendLabel,
+  onDelete,
+}) => {
+  const [mounted, setMounted] = useState(false);
+  const [mode, setMode] = useState<"view" | "edit">("view");
+
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(t);
+  }, []);
+
+  // Reset to view mode whenever a different person is opened.
+  useEffect(() => {
+    setMode("view");
+  }, [personId]);
+
+  const handleClose = () => {
+    setMounted(false);
+    setTimeout(onClose, 220);
+  };
+
+  const handleCancel = () => setMode("view");
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handleClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const isEdit = mode === "edit";
+
+  return (
+    <div
+      className={`fixed inset-0 z-[110] flex items-center justify-center bg-[#0B0F2E]/55 backdrop-blur-sm p-4 transition-opacity duration-300 ${
+        mounted ? "opacity-100" : "opacity-0"
+      }`}
+      onMouseDown={(e) => e.target === e.currentTarget && handleClose()}
+    >
+      <div
+        className={`flex w-full sm:w-[420px] flex-col overflow-hidden rounded-[50px] bg-white shadow-2xl transition-all duration-300 ease-in-out ${
+          mounted ? "opacity-100 scale-100" : "opacity-0 scale-95"
+        }`}
+        style={{
+          maxHeight: "90vh",
+          height: isEdit ? "min(78vh, 720px)" : "25vh",
+          minHeight: isEdit ? 420 : 220,
+        }}
+      >
+        {/* photo area — fills the card in VIEW mode, shrinks to a small
+            header strip with an overlapping avatar in EDIT mode */}
+        <div
+          className="relative shrink-0 overflow-hidden transition-all duration-300 ease-in-out"
+          style={{ height: isEdit ? 96 : "100%" }}
+        >
+          <img
+            src={photo || DefaultProfile}
+            className="absolute inset-0 h-full w-full object-cover transition-opacity duration-300"
+            style={{ opacity: isEdit ? 0.18 : 1 }}
+          />
+          <div
+            className=" absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-black/0 transition-opacity duration-300"
+            style={{ opacity: isEdit ? 0 : 1 }}
+          />
+          {isEdit && (
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "linear-gradient(180deg, rgba(255,255,255,0.4), #ffffff)",
+              }}
+            />
+          )}
+
+          <button
+            onClick={handleClose}
+            className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full backdrop-blur-md transition-colors"
+            style={
+              isEdit
+                ? { background: "#F4F7FB", color: "#6B7280" }
+                : { background: "rgba(255,255,255,0.15)", color: "#fff" }
+            }
+          >
+            <X className="h-4 w-4" />
+          </button>
+
+          {!isEdit && (
+            <div className="absolute inset-x-5 bottom-5 flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="truncate text-[19px] font-semibold leading-none text-white drop-shadow">
+                    {name}
+                  </h2>
+                  <Pill tone={statusTone(status)}>{status}</Pill>
+                </div>
+                <p className="mt-1.5 truncate text-[12.5px] text-white/80">
+                  {subtitle} &middot; {idLabel}
+                </p>
+              </div>
+              <button
+                onClick={() => setMode("edit")}
+                className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-semibold text-[#1A1D21] shadow-lg transition-transform hover:scale-105 active:scale-95"
+              >
+                Edit
+              </button>
+            </div>
+          )}
+
+          {isEdit && (
+            <div className="absolute inset-x-0 bottom-0 z-[1] flex translate-y-1/2 flex-col items-center">
+              <div className="h-16 w-16 overflow-hidden rounded-full border-4 border-white bg-[#F4F7FB] shadow-md">
+                <img
+                  src={photo || DefaultProfile}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* editable body — collapsed to nothing in VIEW mode, expands in
+            EDIT mode */}
+        <div
+          className="flex flex-1 flex-col overflow-hidden transition-all duration-300 ease-in-out"
+          style={{
+            opacity: isEdit ? 1 : 0,
+            maxHeight: isEdit ? 2000 : 0,
+          }}
+        >
+          <div className="flex flex-col items-center pt-9 pb-2 px-6 text-center">
+            <h2 className="text-[17px] font-semibold text-[#1A1D21]">{name}</h2>
+            <p className="mt-0.5 text-[12px] text-[#6B7280]">
+              {subtitle} &middot; {idLabel}
+            </p>
+            <div className="mt-1.5">
+              <Pill tone={statusTone(status)}>{status}</Pill>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-6 pb-4 pt-2">
+            <div className="flex flex-col gap-6">
+              {sections.map((sec) => (
+                <div key={sec.title}>
+                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[#9CA3AF]">
+                    {sec.title}
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {sec.fields}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-[#EEF2F7] bg-white px-6 py-4">
+            <PrimaryBtn
+              onClick={onSave}
+              disabled={saving}
+              className="flex-1 min-w-[130px]"
+            >
+              {saving ? "Saving..." : "Save changes"}
+            </PrimaryBtn>
+            <GhostBtn onClick={handleCancel}>Cancel</GhostBtn>
+            <GhostBtn onClick={onSuspend}>{suspendLabel}</GhostBtn>
+            <DangerBtn onClick={onDelete}>Delete</DangerBtn>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ============================================================================
    MAIN COMPONENT
 ============================================================================ */
 
@@ -714,6 +1119,23 @@ const AdminDashboard: React.FC = () => {
     await batch.commit();
     await logActivity("Teacher Removed", `${t.fullname} removed`);
   };
+  const toggleTeacherStatus = async (t: TeacherDoc) => {
+    const next: Status = t.status === "Active" ? "Inactive" : "Active";
+    await patchTeacher(t, { status: next });
+    await logActivity("Teacher Status Changed", `${t.fullname} marked ${next}`);
+  };
+  const resetTeacherPassword = async (t: TeacherDoc) => {
+    try {
+      await sendInviteEmail(t.email);
+      await logActivity(
+        "Password Reset Sent",
+        `Reset link sent to ${t.fullname}`,
+      );
+      alert(`Password reset email sent to ${t.email}`);
+    } catch (err: any) {
+      alert(err?.message ?? "Could not send reset email.");
+    }
+  };
   const ARMS = ["A", "B", "C", "D"];
   const toggleTeacherArm = (t: TeacherDoc, arm: string) =>
     patchTeacher(t, {
@@ -799,6 +1221,12 @@ const AdminDashboard: React.FC = () => {
       setStudentBusy(false);
     }
   };
+  const patchStudent = async (s: StudentDoc, patch: Partial<StudentDoc>) => {
+    await updateDoc(doc(db, "students", s.id), {
+      ...patch,
+      updatedAt: serverTimestamp(),
+    });
+  };
   const deleteStudent = async (s: StudentDoc) => {
     if (!confirm(`Remove ${s.fullname}?`)) return;
     await deleteDoc(doc(db, "students", s.id));
@@ -818,6 +1246,15 @@ const AdminDashboard: React.FC = () => {
       updatedAt: serverTimestamp(),
     });
     await logActivity("Student Status Changed", `${s.fullname} marked ${next}`);
+  };
+  const resetStudentPassword = async (s: StudentDoc) => {
+    if (!confirm(`Reset ${s.fullname}'s password to the school default?`))
+      return;
+    await patchStudent(s, { passwordChanged: false });
+    await logActivity("Password Reset", `${s.fullname}'s password was reset`);
+    alert(
+      `${s.fullname}'s password has been reset to the default school password.`,
+    );
   };
   const transferStudent = async (s: StudentDoc, newClassId: string) => {
     if (!newClassId || newClassId === s.classId) return;
@@ -1032,6 +1469,9 @@ const AdminDashboard: React.FC = () => {
   const [showStats, setShowStats] = useState(false);
   const [studentSearch, setStudentSearch] = useState("");
   const [studentClassFilter, setStudentClassFilter] = useState("all");
+  const [studentStatusFilter, setStudentStatusFilter] = useState("all");
+  const [studentSort, setStudentSort] = useState<"name" | "recent">("name");
+  const [teacherSearch, setTeacherSearch] = useState("");
 
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [profileDraft, setProfileDraft] = useState({
@@ -1131,6 +1571,82 @@ const AdminDashboard: React.FC = () => {
   };
 
   /* ============================================================================
+     PROFILE DRAWER STATE — teacher / student
+  ============================================================================ */
+  const [openTeacherId, setOpenTeacherId] = useState<ID | null>(null);
+  const [openStudentId, setOpenStudentId] = useState<ID | null>(null);
+  const openTeacher = openTeacherId ? teacherById.get(openTeacherId) : null;
+  const openStudent = openStudentId
+    ? students.find((s) => s.id === openStudentId)
+    : null;
+
+  const [teacherEditDraft, setTeacherEditDraft] = useState<Partial<TeacherDoc>>(
+    {},
+  );
+  const [studentEditDraft, setStudentEditDraft] = useState<Partial<StudentDoc>>(
+    {},
+  );
+  const [drawerSaving, setDrawerSaving] = useState(false);
+
+  useEffect(() => {
+    if (openTeacher) {
+      setTeacherEditDraft({
+        fullname: openTeacher.fullname,
+        email: openTeacher.email,
+        phone: openTeacher.phone ?? "",
+      });
+    }
+  }, [openTeacherId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (openStudent) {
+      setStudentEditDraft({
+        fullname: openStudent.fullname,
+        registrationNumber: openStudent.registrationNumber,
+        gender: openStudent.gender ?? "Male",
+        dateOfBirth: openStudent.dateOfBirth ?? "",
+        classId: openStudent.classId ?? "",
+        parentName: openStudent.parentName ?? "",
+        parentPhone: openStudent.parentPhone ?? "",
+        parentEmail: openStudent.parentEmail ?? "",
+        address: openStudent.address ?? "",
+      });
+    }
+  }, [openStudentId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveTeacherDrawer = async () => {
+    if (!openTeacher) return;
+    setDrawerSaving(true);
+    try {
+      await patchTeacher(openTeacher, teacherEditDraft);
+      await logActivity(
+        "Teacher Updated",
+        `${openTeacher.fullname}'s profile updated`,
+      );
+    } finally {
+      setDrawerSaving(false);
+    }
+  };
+  const saveStudentDrawer = async () => {
+    if (!openStudent) return;
+    setDrawerSaving(true);
+    try {
+      const prevClassId = openStudent.classId;
+      const nextClassId = studentEditDraft.classId ?? prevClassId;
+      await patchStudent(openStudent, studentEditDraft);
+      if (nextClassId && nextClassId !== prevClassId) {
+        await transferStudent(openStudent, nextClassId);
+      }
+      await logActivity(
+        "Student Updated",
+        `${openStudent.fullname}'s profile updated`,
+      );
+    } finally {
+      setDrawerSaving(false);
+    }
+  };
+
+  /* ============================================================================
      GUARD: not signed in yet
   ============================================================================ */
   if (!ready) {
@@ -1169,7 +1685,7 @@ const AdminDashboard: React.FC = () => {
           className="h-[42px] w-[42px] sm:h-[50px] sm:w-[50px] rounded-full object-cover"
         />
         <span className="text-[18px] sm:text-[20px] font-semibold tracking-tight text-[#1A1D21]">
-          {currentSchoolName}
+          Sxaint
         </span>
       </div>
 
@@ -1424,8 +1940,8 @@ const AdminDashboard: React.FC = () => {
     </div>
   );
 
-  const ProfileCard = (
-    <div className="group relative h-[240px] sm:h-[270px] w-full lg:w-[360px] overflow-hidden rounded-[32px] sm:rounded-[40px] shadow-sm hover:shadow-xl transition-all duration-500">
+  const AdminProfileSummaryCard = (
+    <div className="group relative h-[500px] sm:h-[500px] w-full lg:w-[360px] overflow-hidden rounded-[32px] sm:rounded-[40px] shadow-sm hover:shadow-xl transition-all duration-500">
       <img
         src={currentAdminPhoto || DefaultProfile}
         className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
@@ -1672,7 +2188,7 @@ const AdminDashboard: React.FC = () => {
       <div className="flex flex-col lg:flex-row gap-[10px]">
         <div className="flex flex-col gap-[10px]">
           <div className="flex flex-col sm:flex-row gap-[10px]">
-            {ProfileCard}
+            {AdminProfileSummaryCard}
             {ProgressCard}
             {TimeTrackedCard}
           </div>
@@ -1686,7 +2202,16 @@ const AdminDashboard: React.FC = () => {
     </div>
   );
 
-  /* ---- TEACHERS ---- */
+  /* ---- TEACHERS (notification-pill list) ---- */
+  const filteredTeachers = teachers.filter((t) => {
+    const term = teacherSearch.trim().toLowerCase();
+    if (!term) return true;
+    return (
+      t.fullname.toLowerCase().includes(term) ||
+      t.email.toLowerCase().includes(term)
+    );
+  });
+
   const TeachersView = (
     <div className="rounded-[32px] border border-[#E8EAF0] bg-white p-5 sm:p-6 shadow-sm">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -1695,258 +2220,87 @@ const AdminDashboard: React.FC = () => {
           <Plus className="h-4 w-4" /> Invite teacher
         </PrimaryBtn>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-        {teachers.map((t) => (
-          <div
+
+      <div className="mb-4 flex min-w-[220px] max-w-sm items-center gap-2 rounded-full border border-[#E8EAF0] bg-[#F7F8FC] px-4 py-2.5">
+        <Search className="h-4 w-4 text-[#6B7280]" />
+        <input
+          placeholder="Search teachers"
+          value={teacherSearch}
+          onChange={(e) => setTeacherSearch(e.target.value)}
+          className="flex-1 bg-transparent text-sm outline-none"
+        />
+      </div>
+
+      <div className="flex flex-col gap-2.5">
+        {filteredTeachers.map((t) => (
+          <PersonPill
             key={t.id}
-            className="flex flex-col gap-3 rounded-2xl border border-[#EEF2F7] bg-[#FAFBFD] p-4 transition-shadow hover:shadow-md"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-3 min-w-0">
-                <span
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
-                  style={{ background: BRAND_PRIMARY }}
-                >
-                  {initialsOf(t.fullname)}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-[#1A1D21]">
-                    {t.fullname}
-                  </p>
-                  <p className="truncate text-[11px] text-[#6B7280]">
-                    {t.email}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => deleteTeacher(t)}
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#6B7280] hover:bg-[#FDEAEA] hover:text-[#C53030]"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-            <Pill tone={statusTone(t.status)}>{t.status}</Pill>
-
-            <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase text-[#9CA3AF]">
-                Classes
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {t.classes.length === 0 && (
-                  <span className="text-[11px] text-[#9CA3AF]">None</span>
-                )}
-                {t.classes.map((cid) => (
-                  <RemovableChip
-                    key={cid}
-                    label={classLabel(classById.get(cid))}
-                    onRemove={() =>
-                      patchTeacher(t, {
-                        classes: t.classes.filter((id) => id !== cid),
-                      })
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-            <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase text-[#9CA3AF]">
-                Subjects
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {t.subjects.length === 0 && (
-                  <span className="text-[11px] text-[#9CA3AF]">None</span>
-                )}
-                {t.subjects.map((sid) => (
-                  <RemovableChip
-                    key={sid}
-                    alt
-                    label={subjectById.get(sid)?.name ?? sid}
-                    onRemove={() =>
-                      patchTeacher(t, {
-                        subjects: t.subjects.filter((id) => id !== sid),
-                      })
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-            <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase text-[#9CA3AF]">
-                Arms
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {ARMS.map((arm) => {
-                  const active = t.arms.includes(arm);
-                  return (
-                    <button
-                      key={arm}
-                      onClick={() => toggleTeacherArm(t, arm)}
-                      className="h-7 w-7 rounded-full text-[11px] font-semibold transition-colors"
-                      style={
-                        active
-                          ? { background: BRAND_PRIMARY, color: "#fff" }
-                          : { background: "#EEF1F6", color: "#6B7280" }
-                      }
-                    >
-                      {arm}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="mt-1 grid grid-cols-2 gap-2">
-              <select
-                className={inputCls + " text-xs"}
-                value=""
-                onChange={(e) =>
-                  e.target.value &&
-                  patchTeacher(t, {
-                    classes: Array.from(
-                      new Set([...t.classes, e.target.value]),
-                    ),
-                  })
-                }
-              >
-                <option value="">+ Assign class</option>
-                {classes
-                  .filter((c) => !t.classes.includes(c.id))
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {classLabel(c)}
-                    </option>
-                  ))}
-              </select>
-              <select
-                className={inputCls + " text-xs"}
-                value=""
-                onChange={(e) =>
-                  e.target.value &&
-                  patchTeacher(t, {
-                    subjects: Array.from(
-                      new Set([...t.subjects, e.target.value]),
-                    ),
-                  })
-                }
-              >
-                <option value="">+ Assign subject</option>
-                {subjects
-                  .filter((s) => !t.subjects.includes(s.id))
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-          </div>
+            photo={t.profilePhoto}
+            name={t.fullname}
+            line2={
+              t.subjects.length > 0
+                ? t.subjects
+                    .map((sid) => subjectById.get(sid)?.name ?? sid)
+                    .join(", ")
+                : "No subjects assigned"
+            }
+            line3={t.email}
+            status={t.status}
+            onOpen={() => setOpenTeacherId(t.id)}
+            actions={[
+              {
+                key: "suspend",
+                label: t.status === "Active" ? "Suspend" : "Activate",
+                icon: <Ban className="h-4 w-4" />,
+                tone: "warn",
+                onClick: () => toggleTeacherStatus(t),
+              },
+              {
+                key: "delete",
+                label: "Delete",
+                icon: <Trash2 className="h-4 w-4" />,
+                tone: "danger",
+                onClick: () => deleteTeacher(t),
+              },
+              {
+                key: "more",
+                label: "Reset password",
+                icon: <KeyRound className="h-4 w-4" />,
+                tone: "neutral",
+                onClick: () => resetTeacherPassword(t),
+              },
+            ]}
+          />
         ))}
-        {teachers.length === 0 && (
-          <p className="col-span-full py-10 text-center text-sm text-[#9CA3AF]">
-            No teachers yet — invite your first one.
+        {filteredTeachers.length === 0 && (
+          <p className="py-10 text-center text-sm text-[#9CA3AF]">
+            {teachers.length === 0
+              ? "No teachers yet — invite your first one."
+              : "No teachers match your search."}
           </p>
         )}
       </div>
     </div>
   );
 
-  /* ---- CLASSES ---- */
-  const ClassesView = (
-    <div className="rounded-[32px] border border-[#E8EAF0] bg-white p-5 sm:p-6 shadow-sm">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-base font-semibold text-[#1A1D21]">Classes</h3>
-        <PrimaryBtn
-          onClick={() => {
-            setClassDraft({
-              level: CLASS_LEVELS[0],
-              arm: "A",
-              session: "2025/2026",
-            });
-            setClassModal({ mode: "create" });
-          }}
-        >
-          <Plus className="h-4 w-4" /> Create class
-        </PrimaryBtn>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-        {classes.map((c) => (
-          <div
-            key={c.id}
-            className="flex flex-col gap-3 rounded-2xl border border-[#EEF2F7] bg-[#FAFBFD] p-4 transition-shadow hover:shadow-md"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold text-[#1A1D21]">
-                  {classLabel(c)}
-                </p>
-                <p className="text-[11px] text-[#6B7280]">{c.session}</p>
-              </div>
-              <button
-                onClick={() => deleteClassDoc(c)}
-                className="grid h-8 w-8 place-items-center rounded-lg text-[#6B7280] hover:bg-[#FDEAEA] hover:text-[#C53030]"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-[#6B7280]">Class teacher</span>
-              <select
-                className={inputCls + " w-auto text-xs"}
-                value={c.classTeacher ?? ""}
-                onChange={(e) => setClassTeacher(c, e.target.value || null)}
-              >
-                <option value="">Unassigned</option>
-                {teachers.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.fullname}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-[#6B7280]">Students</span>
-              <Pill tone="blue">{c.students.length}</Pill>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {subjects.map((s) => {
-                const active = c.subjects.includes(s.id);
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => toggleClassSubject(c, s.id)}
-                    className="rounded-full px-2 py-1 text-[10px] font-semibold transition-colors"
-                    style={
-                      active
-                        ? { background: BRAND_PRIMARY, color: "#fff" }
-                        : { background: "#EEF1F6", color: "#6B7280" }
-                    }
-                  >
-                    {s.code}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-        {classes.length === 0 && (
-          <p className="col-span-full py-10 text-center text-sm text-[#9CA3AF]">
-            No classes yet — create JSS1, JSS2, etc.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-
-  /* ---- STUDENTS ---- */
-  const filteredStudents = students.filter((s) => {
-    const term = studentSearch.toLowerCase();
-    const matches =
-      s.fullname.toLowerCase().includes(term) ||
-      s.registrationNumber.toLowerCase().includes(term);
-    const inClass =
-      studentClassFilter === "all" || s.classId === studentClassFilter;
-    return matches && inClass;
-  });
+  /* ---- STUDENTS (notification-pill list) ---- */
+  const filteredStudents = students
+    .filter((s) => {
+      const term = studentSearch.toLowerCase();
+      const matches =
+        s.fullname.toLowerCase().includes(term) ||
+        s.registrationNumber.toLowerCase().includes(term);
+      const inClass =
+        studentClassFilter === "all" || s.classId === studentClassFilter;
+      const inStatus =
+        studentStatusFilter === "all" || s.status === studentStatusFilter;
+      return matches && inClass && inStatus;
+    })
+    .sort((a, b) =>
+      studentSort === "name"
+        ? a.fullname.localeCompare(b.fullname)
+        : (b.updatedAt?.toMillis?.() ?? 0) - (a.updatedAt?.toMillis?.() ?? 0),
+    );
 
   const StudentsView = (
     <div className="rounded-[32px] border border-[#E8EAF0] bg-white p-5 sm:p-6 shadow-sm">
@@ -1956,8 +2310,8 @@ const AdminDashboard: React.FC = () => {
           <Plus className="h-4 w-4" /> Add student
         </PrimaryBtn>
       </div>
-      <div className="mb-4 flex flex-wrap gap-2">
-        <div className="flex min-w-[220px] flex-1 items-center gap-2 rounded-xl border border-[#E8EAF0] bg-[#F7F8FC] px-3 py-2">
+      <div className="mb-5 flex flex-wrap gap-2">
+        <div className="flex min-w-[220px] flex-1 items-center gap-2 rounded-full border border-[#E8EAF0] bg-[#F7F8FC] px-4 py-2.5">
           <Search className="h-4 w-4 text-[#6B7280]" />
           <input
             placeholder="Search by name or reg. number"
@@ -1967,7 +2321,7 @@ const AdminDashboard: React.FC = () => {
           />
         </div>
         <select
-          className={inputCls + " w-auto"}
+          className={inputCls + " w-auto rounded-full"}
           value={studentClassFilter}
           onChange={(e) => setStudentClassFilter(e.target.value)}
         >
@@ -1978,74 +2332,67 @@ const AdminDashboard: React.FC = () => {
             </option>
           ))}
         </select>
+        <select
+          className={inputCls + " w-auto rounded-full"}
+          value={studentStatusFilter}
+          onChange={(e) => setStudentStatusFilter(e.target.value)}
+        >
+          <option value="all">All statuses</option>
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+        <select
+          className={inputCls + " w-auto rounded-full"}
+          value={studentSort}
+          onChange={(e) => setStudentSort(e.target.value as "name" | "recent")}
+        >
+          <option value="name">Sort: Name</option>
+          <option value="recent">Sort: Recently updated</option>
+        </select>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[620px] text-sm">
-          <thead>
-            <tr className="text-left text-[11px] font-semibold uppercase text-[#6B7280]">
-              <th className="pb-3">Student</th>
-              <th className="pb-3">Reg. number</th>
-              <th className="pb-3">Class</th>
-              <th className="pb-3">Password</th>
-              <th className="pb-3">Status</th>
-              <th className="pb-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {filteredStudents.map((s) => (
-              <tr key={s.id} className="border-t border-[#EEF2F7]">
-                <td className="py-3 font-medium text-[#1A1D21]">
-                  {s.fullname}
-                </td>
-                <td className="py-3 text-[#6B7280]">{s.registrationNumber}</td>
-                <td className="py-3">
-                  <select
-                    className={inputCls + " w-auto text-xs"}
-                    value={s.classId ?? ""}
-                    onChange={(e) => transferStudent(s, e.target.value)}
-                  >
-                    {classes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {classLabel(c)}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td className="py-3">
-                  <Pill tone={s.passwordChanged ? "green" : "amber"}>
-                    {s.passwordChanged ? "Changed" : "Default"}
-                  </Pill>
-                </td>
-                <td className="py-3">
-                  <Pill
-                    tone={statusTone(s.status)}
-                    onClick={() => toggleStudentStatus(s)}
-                  >
-                    {s.status}
-                  </Pill>
-                </td>
-                <td className="py-3 text-right">
-                  <button
-                    onClick={() => deleteStudent(s)}
-                    className="grid h-8 w-8 place-items-center rounded-lg text-[#6B7280] hover:bg-[#FDEAEA] hover:text-[#C53030]"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {filteredStudents.length === 0 && (
-              <tr>
-                <td
-                  colSpan={6}
-                  className="py-10 text-center text-sm text-[#9CA3AF]"
-                >
-                  No students match.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+
+      <div className="flex flex-col gap-2.5">
+        {filteredStudents.map((s) => (
+          <PersonPill
+            key={s.id}
+            photo={s.profilePhoto}
+            name={s.fullname}
+            line2={classLabel(classById.get(s.classId ?? ""))}
+            line3={s.registrationNumber}
+            status={s.status}
+            onOpen={() => setOpenStudentId(s.id)}
+            actions={[
+              {
+                key: "suspend",
+                label: s.status === "Active" ? "Suspend" : "Activate",
+                icon: <Ban className="h-4 w-4" />,
+                tone: "warn",
+                onClick: () => toggleStudentStatus(s),
+              },
+              {
+                key: "delete",
+                label: "Delete",
+                icon: <Trash2 className="h-4 w-4" />,
+                tone: "danger",
+                onClick: () => deleteStudent(s),
+              },
+              {
+                key: "more",
+                label: "Reset password",
+                icon: <KeyRound className="h-4 w-4" />,
+                tone: "neutral",
+                onClick: () => resetStudentPassword(s),
+              },
+            ]}
+          />
+        ))}
+        {filteredStudents.length === 0 && (
+          <p className="py-10 text-center text-sm text-[#9CA3AF]">
+            {students.length === 0
+              ? "No students yet — add your first one."
+              : "No students match."}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -2140,6 +2487,93 @@ const AdminDashboard: React.FC = () => {
           <span className="text-xs text-[#B9790A]">
             This is the highest level — no further promotion possible.
           </span>
+        )}
+      </div>
+    </div>
+  );
+
+  /* ---- CLASSES ---- */
+  const ClassesView = (
+    <div className="rounded-[32px] border border-[#E8EAF0] bg-white p-5 sm:p-6 shadow-sm">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-base font-semibold text-[#1A1D21]">Classes</h3>
+        <PrimaryBtn
+          onClick={() => {
+            setClassDraft({
+              level: CLASS_LEVELS[0],
+              arm: "A",
+              session: "2025/2026",
+            });
+            setClassModal({ mode: "create" });
+          }}
+        >
+          <Plus className="h-4 w-4" /> Create class
+        </PrimaryBtn>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        {classes.map((c) => (
+          <div
+            key={c.id}
+            className="flex flex-col gap-3 rounded-2xl border border-[#EEF2F7] bg-[#FAFBFD] p-4 transition-shadow hover:shadow-md"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-[#1A1D21]">
+                  {classLabel(c)}
+                </p>
+                <p className="text-[11px] text-[#6B7280]">{c.session}</p>
+              </div>
+              <button
+                onClick={() => deleteClassDoc(c)}
+                className="grid h-8 w-8 place-items-center rounded-lg text-[#6B7280] hover:bg-[#FDEAEA] hover:text-[#C53030]"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[#6B7280]">Class teacher</span>
+              <select
+                className={inputCls + " w-auto text-xs"}
+                value={c.classTeacher ?? ""}
+                onChange={(e) => setClassTeacher(c, e.target.value || null)}
+              >
+                <option value="">Unassigned</option>
+                {teachers.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.fullname}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[#6B7280]">Students</span>
+              <Pill tone="blue">{c.students.length}</Pill>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {subjects.map((s) => {
+                const active = c.subjects.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => toggleClassSubject(c, s.id)}
+                    className="rounded-full px-2 py-1 text-[10px] font-semibold transition-colors"
+                    style={
+                      active
+                        ? { background: BRAND_PRIMARY, color: "#fff" }
+                        : { background: "#EEF1F6", color: "#6B7280" }
+                    }
+                  >
+                    {s.code}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        {classes.length === 0 && (
+          <p className="col-span-full py-10 text-center text-sm text-[#9CA3AF]">
+            No classes yet — create JSS1, JSS2, etc.
+          </p>
         )}
       </div>
     </div>
@@ -2750,6 +3184,311 @@ const AdminDashboard: React.FC = () => {
             </PrimaryBtn>
           </div>
         </Modal>
+      )}
+
+      {/* ---------------- Teacher profile card (centered, view <-> edit) ---------------- */}
+      {openTeacher && (
+        <ProfileCard
+          personId={openTeacher.id}
+          photo={openTeacher.profilePhoto}
+          name={openTeacher.fullname}
+          subtitle={
+            openTeacher.classes.length > 0
+              ? openTeacher.classes
+                  .map((cid) => classLabel(classById.get(cid)))
+                  .join(", ")
+              : "No classes assigned"
+          }
+          idLabel={openTeacher.email}
+          status={openTeacher.status}
+          saving={drawerSaving}
+          onClose={() => setOpenTeacherId(null)}
+          onSave={saveTeacherDrawer}
+          onSuspend={() => toggleTeacherStatus(openTeacher)}
+          suspendLabel={
+            openTeacher.status === "Active"
+              ? "Suspend teacher"
+              : "Activate teacher"
+          }
+          onDelete={() => {
+            deleteTeacher(openTeacher);
+            setOpenTeacherId(null);
+          }}
+          sections={[
+            {
+              title: "Personal information",
+              fields: (
+                <>
+                  <DrawerFieldInput
+                    label="Full name"
+                    value={teacherEditDraft.fullname ?? ""}
+                    onChange={(v) =>
+                      setTeacherEditDraft((d) => ({ ...d, fullname: v }))
+                    }
+                  />
+                  <DrawerFieldInput
+                    label="Email"
+                    value={teacherEditDraft.email ?? ""}
+                    onChange={(v) =>
+                      setTeacherEditDraft((d) => ({ ...d, email: v }))
+                    }
+                  />
+                  <DrawerFieldInput
+                    label="Phone"
+                    value={teacherEditDraft.phone ?? ""}
+                    onChange={(v) =>
+                      setTeacherEditDraft((d) => ({ ...d, phone: v }))
+                    }
+                  />
+                </>
+              ),
+            },
+            {
+              title: "Teaching assignment",
+              fields: (
+                <>
+                  <div className="col-span-full">
+                    <p className="mb-1.5 text-xs font-semibold text-[#6B7280]">
+                      Classes
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {openTeacher.classes.length === 0 && (
+                        <span className="text-[11px] text-[#9CA3AF]">None</span>
+                      )}
+                      {openTeacher.classes.map((cid) => (
+                        <RemovableChip
+                          key={cid}
+                          label={classLabel(classById.get(cid))}
+                          onRemove={() =>
+                            patchTeacher(openTeacher, {
+                              classes: openTeacher.classes.filter(
+                                (id) => id !== cid,
+                              ),
+                            })
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="col-span-full">
+                    <p className="mb-1.5 text-xs font-semibold text-[#6B7280]">
+                      Subjects
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {openTeacher.subjects.length === 0 && (
+                        <span className="text-[11px] text-[#9CA3AF]">None</span>
+                      )}
+                      {openTeacher.subjects.map((sid) => (
+                        <RemovableChip
+                          key={sid}
+                          alt
+                          label={subjectById.get(sid)?.name ?? sid}
+                          onRemove={() =>
+                            patchTeacher(openTeacher, {
+                              subjects: openTeacher.subjects.filter(
+                                (id) => id !== sid,
+                              ),
+                            })
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="col-span-full">
+                    <p className="mb-1.5 text-xs font-semibold text-[#6B7280]">
+                      Arms
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ARMS.map((arm) => {
+                        const active = openTeacher.arms.includes(arm);
+                        return (
+                          <button
+                            key={arm}
+                            onClick={() => toggleTeacherArm(openTeacher, arm)}
+                            className="h-7 w-7 rounded-full text-[11px] font-semibold transition-colors"
+                            style={
+                              active
+                                ? { background: BRAND_PRIMARY, color: "#fff" }
+                                : { background: "#EEF1F6", color: "#6B7280" }
+                            }
+                          >
+                            {arm}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              ),
+            },
+            {
+              title: "System information",
+              fields: (
+                <>
+                  <DrawerFieldInput
+                    label="Teacher ID"
+                    value={openTeacher.id}
+                    readOnly
+                  />
+                  <DrawerFieldInput
+                    label="Invite accepted"
+                    value={openTeacher.inviteAccepted ? "Yes" : "Pending"}
+                    readOnly
+                  />
+                </>
+              ),
+            },
+          ]}
+        />
+      )}
+
+      {/* ---------------- Student profile card (centered, view <-> edit) ---------------- */}
+      {openStudent && (
+        <ProfileCard
+          personId={openStudent.id}
+          photo={openStudent.profilePhoto}
+          name={openStudent.fullname}
+          subtitle={classLabel(classById.get(openStudent.classId ?? ""))}
+          idLabel={openStudent.registrationNumber}
+          status={openStudent.status}
+          saving={drawerSaving}
+          onClose={() => setOpenStudentId(null)}
+          onSave={saveStudentDrawer}
+          onSuspend={() => toggleStudentStatus(openStudent)}
+          suspendLabel={
+            openStudent.status === "Active"
+              ? "Suspend student"
+              : "Activate student"
+          }
+          onDelete={() => {
+            deleteStudent(openStudent);
+            setOpenStudentId(null);
+          }}
+          sections={[
+            {
+              title: "Personal information",
+              fields: (
+                <>
+                  <DrawerFieldInput
+                    label="Full name"
+                    value={studentEditDraft.fullname ?? ""}
+                    onChange={(v) =>
+                      setStudentEditDraft((d) => ({ ...d, fullname: v }))
+                    }
+                  />
+                  <DrawerFieldSelect
+                    label="Gender"
+                    value={studentEditDraft.gender ?? "Male"}
+                    onChange={(v) =>
+                      setStudentEditDraft((d) => ({ ...d, gender: v as any }))
+                    }
+                    options={[
+                      { value: "Male", label: "Male" },
+                      { value: "Female", label: "Female" },
+                    ]}
+                  />
+                  <DrawerFieldInput
+                    label="Date of birth"
+                    type="date"
+                    value={studentEditDraft.dateOfBirth ?? ""}
+                    onChange={(v) =>
+                      setStudentEditDraft((d) => ({ ...d, dateOfBirth: v }))
+                    }
+                  />
+                  <DrawerFieldInput
+                    label="Home address"
+                    value={studentEditDraft.address ?? ""}
+                    onChange={(v) =>
+                      setStudentEditDraft((d) => ({ ...d, address: v }))
+                    }
+                  />
+                </>
+              ),
+            },
+            {
+              title: "Academic information",
+              fields: (
+                <>
+                  <DrawerFieldInput
+                    label="Registration number"
+                    value={studentEditDraft.registrationNumber ?? ""}
+                    onChange={(v) =>
+                      setStudentEditDraft((d) => ({
+                        ...d,
+                        registrationNumber: v,
+                      }))
+                    }
+                  />
+                  <DrawerFieldSelect
+                    label="Class"
+                    value={studentEditDraft.classId ?? ""}
+                    onChange={(v) =>
+                      setStudentEditDraft((d) => ({ ...d, classId: v }))
+                    }
+                    options={classes.map((c) => ({
+                      value: c.id,
+                      label: classLabel(c),
+                    }))}
+                  />
+                  <div className="col-span-full">
+                    <DrawerToggle
+                      label="Password changed by student"
+                      checked={!!openStudent.passwordChanged}
+                      onChange={(v) =>
+                        patchStudent(openStudent, { passwordChanged: v })
+                      }
+                    />
+                  </div>
+                </>
+              ),
+            },
+            {
+              title: "Parent / guardian information",
+              fields: (
+                <>
+                  <DrawerFieldInput
+                    label="Parent / guardian name"
+                    value={studentEditDraft.parentName ?? ""}
+                    onChange={(v) =>
+                      setStudentEditDraft((d) => ({ ...d, parentName: v }))
+                    }
+                  />
+                  <DrawerFieldInput
+                    label="Parent / guardian phone"
+                    value={studentEditDraft.parentPhone ?? ""}
+                    onChange={(v) =>
+                      setStudentEditDraft((d) => ({ ...d, parentPhone: v }))
+                    }
+                  />
+                  <DrawerFieldInput
+                    label="Parent / guardian email"
+                    value={studentEditDraft.parentEmail ?? ""}
+                    onChange={(v) =>
+                      setStudentEditDraft((d) => ({ ...d, parentEmail: v }))
+                    }
+                  />
+                </>
+              ),
+            },
+            {
+              title: "System information",
+              fields: (
+                <>
+                  <DrawerFieldInput
+                    label="Student UID"
+                    value={openStudent.id}
+                    readOnly
+                  />
+                  <DrawerFieldInput
+                    label="Login email (synthetic)"
+                    value={openStudent.authEmail ?? "—"}
+                    readOnly
+                  />
+                </>
+              ),
+            },
+          ]}
+        />
       )}
     </>
   );
